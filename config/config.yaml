@@ -1,0 +1,54 @@
+resolutions:
+  - 64
+  - 128
+  - 256
+  - 512
+  - 1024
+  - 2048
+  - 4096
+num_samples: 10
+
+# NetworkX pathfinding solver configuration
+# Edge weights = distance_m * (1 + weight * normalized_elevation)
+# Cardinal moves: 30m, Diagonal moves: 30*sqrt(2) ≈ 42.43m
+solver:
+  # Algorithm name - available options:
+  #   astar        - A* search with heuristic (fast, optimal) [DEFAULT]
+  #   astar_bi     - Bidirectional A* variant (same as astar, for compatibility)
+  #   dijkstra     - Dijkstra's algorithm (optimal, no heuristic)
+  #   dijkstra_bi  - Bidirectional Dijkstra (faster for long paths)
+  #   bellman_ford - Bellman-Ford algorithm (handles negative weights, slowest)
+  #   unweighted   - BFS shortest path (ignores weights, fastest)
+  name: dijkstra_bi
+
+  # Diagonal movement - controls graph connectivity:
+  #   always  - 8-connectivity (cardinal 30m + diagonal 42.43m) [DEFAULT]
+  #   never   - 4-connectivity (cardinal only: N/S/E/W, 30m each)
+  diagonal_movement: always
+
+  # Weight multiplier for elevation cost (higher = prefer flat paths)
+  # Set very high to strongly penalize high-elevation cells so the path follows valleys more aggressively.
+  # Note: this multiplies the normalized elevation term, so large values (100+) heavily favor low-elevation routes.
+  weight: 100.0
+
+  # Edge cost model:
+  #   elevation          - distance * (1 + weight * normalized_elevation) [DEFAULT]
+  #   distance           - flat distance only (ignore elevation)
+  #   slope_uphill       - penalize uphill elevation changes (distance-scaled)
+  #   energy             - distance + weight * max(0, elevation_gain)
+  #   absolute_elevation - distance * (1 + weight * normalized_abs_elevation)
+  cost_model: elevation
+
+  # Graph construction backend (NetworkX solvers only):
+  #   edges - build from edge list (fast, no sparse conversion) [DEFAULT]
+  #   scipy - build via sparse adjacency + nx.from_scipy_sparse_array
+  graph_backend: edges
+
+  # Heuristic function for A* search (only used when name=astar or astar_bi):
+  #   euclidean  - Euclidean distance in meters (best for 8-connectivity) [DEFAULT]
+  #   manhattan  - Manhattan distance in meters (best for 4-connectivity)
+  #   chebyshev  - Chebyshev distance in meters (alternative for 8-connectivity)
+  heuristic: euclidean
+
+  # Maximum retries for marker sampling before trying new elevation
+  max_marker_retries: 10
