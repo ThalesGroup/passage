@@ -15,23 +15,6 @@ PASSAGE is a tool for generating elevation-based datasets from [ALOS AW3D30 DSM]
 
 ## Installation
 
-### System Dependencies
-
-PASSAGE requires system libraries for geospatial data processing. Install them first:
-
-```bash
-# Ubuntu/Debian
-sudo apt update && sudo apt install -y \
-    libgeotiff-dev \
-    libtiff-dev \
-    libproj-dev \
-    libnetcdf-dev \
-    build-essential
-
-# macOS (with Homebrew)
-brew install proj gdal
-```
-
 ### Python Installation with uv
 
 [uv](https://github.com/astral-sh/uv) is the recommended package manager:
