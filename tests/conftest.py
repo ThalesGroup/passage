@@ -85,7 +85,7 @@ def valid_sample_files(tmp_path):
     # Create 3 valid samples (indices 0, 1, 2)
     for i in range(3):
         # Create tensor
-        tensor = np.zeros((64, 64, 2), dtype=np.float32)
+        tensor = np.zeros((64, 64, 3), dtype=np.float32)
         np.save(tensors_dir / f"{i:010d}.npy", tensor)
 
         # Create metadata
@@ -120,7 +120,7 @@ def partial_sample_files(tmp_path):
 
     # Create 2 valid samples (indices 0, 1)
     for i in range(2):
-        tensor = np.zeros((64, 64, 2), dtype=np.float32)
+        tensor = np.zeros((64, 64, 3), dtype=np.float32)
         np.save(tensors_dir / f"{i:010d}.npy", tensor)
         metadata = {"index": i, "resolution": 64}
         with open(metadata_dir / f"{i:010d}.yaml", "w") as f:
@@ -131,7 +131,7 @@ def partial_sample_files(tmp_path):
         cv2.imwrite(str(images_dir / f"{i:010d}.png"), img)
 
     # Create partial sample at index 2 (tensor only, no metadata or image)
-    tensor = np.zeros((64, 64, 2), dtype=np.float32)
+    tensor = np.zeros((64, 64, 3), dtype=np.float32)
     np.save(tensors_dir / f"{2:010d}.npy", tensor)
 
     return res_dir

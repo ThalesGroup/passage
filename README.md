@@ -182,9 +182,10 @@ outputs/
 
 ### Tensor Format
 
-Each `.npy` tensor is a `(H, W, 2)` float32 array:
+Each `.npy` tensor is a `(H, W, 3)` float32 array:
 - **Channel 0**: Normalized elevation (0-1 range using global min/max)
 - **Channel 1**: Marker channel (two pixels set to 1.0, rest 0.0)
+- **Channel 2**: Obstacles mask (1.0 for blocked, 0.0 for free)
 
 ### Metadata Format
 
@@ -214,6 +215,25 @@ source_tile:
 markers:
   - {i: 10, j: 20, elevation: 950.5}
   - {i: 50, j: 40, elevation: 1100.2}
+paths:
+  without_obstacles:
+    length: 120
+    pixels:
+      - {i: 10, j: 20}
+      - {i: 11, j: 21}
+  with_obstacles:
+    length: 135
+    pixels:
+      - {i: 10, j: 20}
+      - {i: 10, j: 21}
+obstacles:
+  enabled: true
+  ratio_max: 0.30
+  ratio_target: 0.12
+  ratio_actual: 0.11
+  size_min_ratio: 0.10
+  size_max_ratio: 0.25
+  penalty: 100000000.0
 timestamp: 2026-01-13T10:30:00
 ```
 
@@ -222,7 +242,7 @@ timestamp: 2026-01-13T10:30:00
 PNG images use BGR color mapping:
 - **Blue channel**: Elevation (normalized to 0-255)
 - **Green channel**: Markers (255 at marker positions, 0 elsewhere)
-- **Red channel**: Unused (0)
+- **Red channel**: Obstacles and path overlay (obstacles up to 180, path at 255)
 
 ## Development
 

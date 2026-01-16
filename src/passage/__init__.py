@@ -110,7 +110,7 @@ def main() -> None:
     calibrate_parser.add_argument(
         "--no-resume",
         action="store_true",
-        help="Do not resume from existing calibrate.json (recompute all tiles)",
+        help="Do not resume from existing calibrate.json (recompute all tiles and overwrite existing results)",
     )
     calibrate_parser.add_argument(
         "--num-cpus",
@@ -135,10 +135,12 @@ def main() -> None:
             force=args.force,
         )
     elif args.command == "calibrate":
+        # When --no-resume is set, user expects a full recompute: set overwrite=True
         run_calibrate(
             args.outputs_dirpath,
             args.tiles_dirpath,
             resume=not args.no_resume,
+            overwrite=args.no_resume,
             num_cpus=args.num_cpus,
         )
     elif args.command is None:

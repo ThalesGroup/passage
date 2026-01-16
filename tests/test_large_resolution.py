@@ -35,11 +35,13 @@ def test_generate_sample_large_resolution(monkeypatch, tmp_path):
     resolution = 32
 
     solver_config = {"name": "a_star", "diagonal_movement": "always", "weight": 1.0, "max_marker_retries": 10}
+    obstacle_settings = gen._resolve_obstacle_config({"obstacles": {"enabled": False}})
 
     # Call generate_sample with DataFrame and global min/max
-    idx, success, msg = gen.generate_sample(
-        (0, tiles_dir, outputs_dir, resolution, tile_stats_df, 0.0, 100.0, False, solver_config)
+    idx, success, msg, duration = gen.generate_sample(
+        (0, tiles_dir, outputs_dir, resolution, tile_stats_df, 0.0, 100.0, False, solver_config, obstacle_settings)
     )
+    assert isinstance(duration, float)
 
     assert not (msg.startswith("Error") or msg.startswith("Resolution"))
 
@@ -59,11 +61,13 @@ def test_generate_sample_skip_images(monkeypatch, tmp_path):
     resolution = 32
 
     solver_config = {"name": "a_star", "diagonal_movement": "always", "weight": 1.0, "max_marker_retries": 10}
+    obstacle_settings = gen._resolve_obstacle_config({"obstacles": {"enabled": False}})
 
     # Call generate_sample with disable_images=True
-    idx, success, msg = gen.generate_sample(
-        (0, tiles_dir, outputs_dir, resolution, tile_stats_df, 0.0, 100.0, True, solver_config)
+    idx, success, msg, duration = gen.generate_sample(
+        (0, tiles_dir, outputs_dir, resolution, tile_stats_df, 0.0, 100.0, True, solver_config, obstacle_settings)
     )
+    assert isinstance(duration, float)
 
     tensors = list((outputs_dir / str(resolution) / "tensors").glob("*.npy"))
     images = (

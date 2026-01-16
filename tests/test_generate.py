@@ -311,7 +311,7 @@ class TestCountValidSamples:
         import yaml
 
         for i in range(2):
-            np.save(tensors_dir / f"{i:010d}.npy", np.zeros((64, 64, 2)))
+            np.save(tensors_dir / f"{i:010d}.npy", np.zeros((64, 64, 3)))
             with open(metadata_dir / f"{i:010d}.yaml", "w") as f:
                 yaml.dump({"index": i}, f)
 
@@ -412,10 +412,12 @@ class TestGenerateSample:
         outputs_dir.mkdir()
 
         solver_config = {"name": "astar", "diagonal_movement": "always", "weight": 1.0, "max_marker_retries": 10}
+        obstacle_settings = gen._resolve_obstacle_config({"obstacles": {"enabled": False}})
 
-        idx, success, msg = gen.generate_sample(
-            (0, tiles_dir, outputs_dir, 8, mock_tile_stats_df, 0.0, 2000.0, False, solver_config)
+        idx, success, msg, duration = gen.generate_sample(
+            (0, tiles_dir, outputs_dir, 8, mock_tile_stats_df, 0.0, 2000.0, False, solver_config, obstacle_settings)
         )
+        assert isinstance(duration, float)
 
         # May succeed or fail based on random tile selection, check it runs
         assert idx == 0
@@ -435,10 +437,12 @@ class TestGenerateSample:
         outputs_dir.mkdir()
 
         solver_config = {"name": "astar", "diagonal_movement": "always", "weight": 1.0, "max_marker_retries": 10}
+        obstacle_settings = gen._resolve_obstacle_config({"obstacles": {"enabled": False}})
 
-        idx, success, msg = gen.generate_sample(
-            (0, tiles_dir, outputs_dir, 8, mock_tile_stats_df, 0.0, 2000.0, False, solver_config)
+        idx, success, msg, duration = gen.generate_sample(
+            (0, tiles_dir, outputs_dir, 8, mock_tile_stats_df, 0.0, 2000.0, False, solver_config, obstacle_settings)
         )
+        assert isinstance(duration, float)
 
         if success:
             import yaml
@@ -459,6 +463,9 @@ class TestGenerateSample:
             assert len(metadata["markers"]) == 2
             assert "elevation" in metadata["markers"][0]
             assert "elevation" in metadata["markers"][1]
+            assert "paths" in metadata
+            assert "without_obstacles" in metadata["paths"]
+            assert "obstacles" in metadata
 
     @pytest.mark.unit
     @pytest.mark.generate
@@ -473,10 +480,12 @@ class TestGenerateSample:
         outputs_dir.mkdir()
 
         solver_config = {"name": "astar", "diagonal_movement": "always", "weight": 1.0, "max_marker_retries": 10}
+        obstacle_settings = gen._resolve_obstacle_config({"obstacles": {"enabled": False}})
 
-        idx, success, msg = gen.generate_sample(
-            (0, tiles_dir, outputs_dir, 8, mock_tile_stats_df, 0.0, 2000.0, True, solver_config)
+        idx, success, msg, duration = gen.generate_sample(
+            (0, tiles_dir, outputs_dir, 8, mock_tile_stats_df, 0.0, 2000.0, True, solver_config, obstacle_settings)
         )
+        assert isinstance(duration, float)
 
         if success:
             # Images directory should not exist or be empty
@@ -517,6 +526,34 @@ class TestTensorToImage:
         assert image[1, 1, 1] == 255
         # Red (path) at (1,2) should be 255
         assert image[1, 2, 2] == 255
+
+    @pytest.mark.unit
+    @pytest.mark.generate
+    def test_tensor_to_image_with_obstacles_channel(self, tmp_path):
+        """Test tensor_to_image with obstacle channel and metadata paths."""
+        tensor = np.zeros((4, 4, 3), dtype=np.float32)
+        tensor[:, :, 0] = 0.25
+        tensor[0, 0, 1] = 1.0
+        tensor[1, 1, 2] = 1.0  # obstacle pixel
+
+        md = {
+            "obstacles": {"enabled": True},
+            "paths": {
+                "with_obstacles": {"pixels": [{"i": 2, "j": 2}]},
+                "without_obstacles": {"pixels": []},
+            },
+            "crop_min_elevation": 0.0,
+            "crop_max_elevation": 1.0,
+        }
+        md_path = tmp_path / "md.yaml"
+        with open(md_path, "w") as f:
+            yaml.dump(md, f)
+
+        image = gen.tensor_to_image(tensor, metadata_path=md_path)
+        # obstacle should show in red channel (>= 180)
+        assert image[1, 1, 2] >= 180
+        # path pixel should be red at (2,2)
+        assert image[2, 2, 2] == 255
 
     @pytest.mark.unit
     @pytest.mark.generate
@@ -614,11 +651,13 @@ class TestTensorToImage:
         outputs_dir.mkdir()
 
         solver_config = {"name": "astar", "diagonal_movement": "always", "weight": 1.0, "max_marker_retries": 10}
+        obstacle_settings = gen._resolve_obstacle_config({"obstacles": {"enabled": False}})
 
         # Generate with images enabled
-        idx, success, msg = gen.generate_sample(
-            (0, tiles_dir, outputs_dir, 8, mock_tile_stats_df, 0.0, 2000.0, False, solver_config)
+        idx, success, msg, duration = gen.generate_sample(
+            (0, tiles_dir, outputs_dir, 8, mock_tile_stats_df, 0.0, 2000.0, False, solver_config, obstacle_settings)
         )
+        assert isinstance(duration, float)
 
         if success:
             # Load the tensor and convert to image (pass path from metadata)
@@ -627,7 +666,10 @@ class TestTensorToImage:
             metadata_path = outputs_dir / "8" / "metadata" / "0000000000.yaml"
             with open(metadata_path) as f:
                 md = yaml.safe_load(f)
-            path_pixels = [(p["i"], p["j"]) for p in md["path"]["pixels"]]
+            path_section = md.get("paths", {}).get("without_obstacles") or md.get("paths", {}).get("with_obstacles")
+            if path_section is None:
+                path_section = md.get("path", {})
+            path_pixels = [(p["i"], p["j"]) for p in path_section.get("pixels", [])]
             reconstructed_image = gen.tensor_to_image(tensor, path_pixels=path_pixels)
 
             # Load the saved image
@@ -718,10 +760,10 @@ class TestTilesNeeded:
 
         with open(metadata_path) as f:
             md = yaml.safe_load(f)
-        assert "path" in md and "pixels" in md["path"]
+        assert "paths" in md and "without_obstacles" in md["paths"]
 
         arr = np.load(tensor_path)
-        assert arr.shape[0] == 160 and arr.shape[1] == 160 and arr.shape[2] == 2
+        assert arr.shape[0] == 160 and arr.shape[1] == 160 and arr.shape[2] == 3
 
 
 # =============================================================================
@@ -819,7 +861,12 @@ class TestMetadataCache:
     @pytest.mark.generate
     def test_tensor_to_image_reads_metadata(self, tmp_path):
         """Ensure tensor_to_image reads metadata when provided a metadata path (no global cache)."""
-        md = {"path": {"pixels": [{"i": 1, "j": 2}]}, "crop_min_elevation": 0.0, "crop_max_elevation": 100.0}
+        md = {
+            "paths": {"without_obstacles": {"pixels": [{"i": 1, "j": 2}]}, "with_obstacles": {"pixels": []}},
+            "obstacles": {"enabled": False},
+            "crop_min_elevation": 0.0,
+            "crop_max_elevation": 100.0,
+        }
         md_path = tmp_path / "0000000000.yaml"
         with open(md_path, "w") as f:
             yaml.dump(md, f)
