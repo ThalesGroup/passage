@@ -37,9 +37,13 @@ def test_grid_solvers_with_cost_models():
     crop = np.tile(np.linspace(0.0, 10.0, 8, dtype=np.float32), (8, 1))
 
     # A* (grid) should find a path
-    path_astar = gen._grid_astar(crop, (0, 0), (7, 7), weight=5.0, diagonal_movement="always", heuristic_name="euclidean", cost_model="elevation")
+    path_astar = gen._grid_astar(
+        crop, (0, 0), (7, 7), weight=5.0, diagonal_movement="always", heuristic_name="euclidean", cost_model="elevation"
+    )
     assert len(path_astar) > 0
 
     # Dijkstra (grid) should find a path
-    path_dijkstra = gen._grid_dijkstra(crop, (0, 0), (7, 7), weight=5.0, diagonal_movement="always", cost_model="absolute_elevation")
+    path_dijkstra = gen._grid_dijkstra(
+        crop, (0, 0), (7, 7), weight=5.0, diagonal_movement="always", cost_model="absolute_elevation"
+    )
     assert len(path_dijkstra) > 0
