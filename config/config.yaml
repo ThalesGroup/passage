@@ -68,28 +68,46 @@ solver:
 
   # Parameters for grid backend (all cost models supported)
   grid:
-    weight: 100.0
+    weight: 1000.0
     cost_model: elevation
     heuristic: euclidean
 
 # Obstacle generation configuration (used by obstacles notebook)
 # Overview:
 #  - `ratio_max` controls the maximum fraction of the image that can be occupied by obstacles.
-#  - `size_min_ratio` / `size_max_ratio` describe the minimum and maximum *relative* linear size
+#  - `shape.size.min_ratio` / `shape.size.max_ratio` describe the minimum and maximum *relative* linear size
 #    (width/height) for generated superellipses, expressed as fraction of the image width/height.
-#    Example: size_max_ratio: 0.5 means a superellipse may be up to half the image width/height.
+#    Example: max_ratio: 0.5 means a superellipse may be up to half the image width/height.
 #  - `generation` contains procedural tuning parameters that affect how many attempts are made
 #    to reach a target obstacle coverage and how many candidate shapes are considered per attempt.
 #  - `obstacle_penalty` is added to elevation values for cells marked as obstacles when running
 #    pathfinding; set very large to make paths avoid obstacle cells.
 obstacles:
-  # Maximum target ratio of obstacles in the image (0.0 - 1.0)
-  ratio_max: 0.20
+  # Enable obstacle generation in dataset samples
+  enabled: true
 
-  # Superellipse size ratios relative to resolution (simplified defaults)
-  # Set to sensible defaults for experiments: min 20% of the dimension, max 50%.
-  size_min_ratio: 0.05
-  size_max_ratio: 0.20
+  # Maximum target ratio of obstacles in the image (0.0 - 1.0)
+  ratio_max: 0.30
+
+  # Shape-related parameters
+  shape:
+    size:
+      # Superellipse size ratios relative to resolution (simplified defaults)
+      # Example: size_max_ratio: 0.5 means a superellipse may be up to half the image width/height.
+      min_ratio: 0.02
+      max_ratio: 0.25
+    n:
+      # Superellipse exponent 'n' controls shape (1..100)
+      # Defaults chosen to allow both round and rectangular obstacles.
+      min: 1.0
+      max: 80.0
+      # Default distribution to sample superellipse exponent 'n' across [min, max].
+      # Supported types: 'log_uniform' (default), 'uniform', 'beta', 'exponential'
+      # Example exponential: distribution: { type: exponential, lambda: 2.0 }
+      distribution:
+        # type: exponential
+        # lambda: 2.0
+        type: log_uniform
 
   # Generator tuning parameters (procedural, not shape-specific)
   generation:
@@ -99,4 +117,4 @@ obstacles:
     candidates_per_mask: 200
 
   # Penalty added to elevation of obstacle cells during pathfinding (large -> avoided)
-  obstacle_penalty: 1e6
+  obstacle_penalty: 1e8

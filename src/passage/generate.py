@@ -34,6 +34,8 @@ from loguru import logger
 from rasterio.windows import Window
 from tqdm import tqdm
 
+from passage.obstacles import sample_angle_from_config, sample_n_from_config, superellipse_mask
+
 
 class _GraphTemplate:
     """Cached graph topology for a given grid shape and connectivity."""
@@ -583,6 +585,8 @@ def find_path(
     if prebuilt_graph is not None:
         G = prebuilt_graph
         graph_time = 0.0
+        # Ensure t0 exists so timing calculations later don't raise UnboundLocalError
+        t0 = time.time()
         logger.debug("Using prebuilt NetworkX graph; skipping build_graph_from_elevation()")
     else:
         t0 = time.time()
@@ -1115,9 +1119,12 @@ def tensor_to_image(
     """
     Convert a tensor to a BGR image for visualization.
 
-    Supports either 3-channel tensors (elevation, markers, path) for backward
-    compatibility, or 2-channel tensors (elevation, markers) with the path
-    provided via `path_pixels` or `metadata_path`.
+        Supports either:
+            - 2-channel tensors (elevation, markers) with the path provided via
+                `path_pixels` or `metadata_path`.
+            - 3-channel tensors (elevation, markers, obstacles). Path is still provided
+                via `path_pixels` or `metadata_path` unless the metadata indicates the
+                third channel stores path pixels (backward compatibility).
 
     Args:
         tensor: float32 array of shape (H, W, 2) or (H, W, 3).
@@ -1147,17 +1154,42 @@ def tensor_to_image(
         except Exception:
             md = None
 
+    obstacles_channel = None
     if tensor.shape[2] == 3:
-        path_channel = tensor[:, :, 2]
+        # If metadata indicates obstacles are enabled, treat channel 2 as obstacles.
+        # Otherwise (backward compatibility), treat channel 2 as path.
+        if md is not None and md.get("obstacles", {}).get("enabled", False):
+            obstacles_channel = tensor[:, :, 2]
+            path_channel = np.zeros_like(elevation_channel, dtype=np.float32)
+        else:
+            path_channel = tensor[:, :, 2]
     else:
         path_channel = np.zeros_like(elevation_channel, dtype=np.float32)
-        # Use supplied path_pixels if provided; otherwise try to get from metadata
-        if path_pixels is None and md is not None:
-            path_pixels = [(p["i"], p["j"]) for p in md.get("path", {}).get("pixels", [])]
-        if path_pixels:
-            for pi, pj in path_pixels:
-                if 0 <= int(pi) < path_channel.shape[0] and 0 <= int(pj) < path_channel.shape[1]:
-                    path_channel[int(pi), int(pj)] = 1.0
+
+    # Use supplied path_pixels if provided; otherwise try to get from metadata
+    if path_pixels is None and md is not None:
+        if "paths" in md:
+            if md.get("obstacles", {}).get("enabled", False):
+                path_section = md.get("paths", {}).get("with_obstacles") or md.get("paths", {}).get(
+                    "without_obstacles"
+                )
+            else:
+                path_section = md.get("paths", {}).get("without_obstacles") or md.get("paths", {}).get(
+                    "with_obstacles"
+                )
+        else:
+            path_section = md.get("path")
+
+        if path_section:
+            path_pixels = [(p["i"], p["j"]) for p in path_section.get("pixels", [])]
+
+    if path_pixels:
+        for pi, pj in path_pixels:
+            if 0 <= int(pi) < path_channel.shape[0] and 0 <= int(pj) < path_channel.shape[1]:
+                path_channel[int(pi), int(pj)] = 1.0
+
+    if obstacles_channel is None:
+        obstacles_channel = np.zeros_like(elevation_channel, dtype=np.float32)
 
     # Normalize elevation using metadata crop min/max if available, otherwise use tensor min/max
     norm = None
@@ -1191,10 +1223,139 @@ def tensor_to_image(
 
     thumb_b = (norm * 255).astype(np.uint8)
     thumb_g = (marker_channel * 255).astype(np.uint8)
-    thumb_r = (path_channel * 255).astype(np.uint8)
+    obstacles_scaled = (np.clip(obstacles_channel, 0.0, 1.0) * 180).astype(np.uint8)
+    path_scaled = (path_channel * 255).astype(np.uint8)
+    thumb_r = np.maximum(obstacles_scaled, path_scaled)
 
     # Merge into BGR image (OpenCV format)
     return cv2.merge([thumb_b, thumb_g, thumb_r])
+
+
+def _resolve_obstacle_config(config: dict | None) -> dict:
+    """Normalize obstacle settings from config.yaml.
+
+    Returns a dict with keys:
+      - enabled
+      - ratio_max
+      - size_min_ratio
+      - size_max_ratio
+      - generation_cfg
+      - obstacle_penalty
+      - config (raw obstacles config)
+    """
+    config = config or {}
+    obstacles_cfg = config.get("obstacles", {}) if isinstance(config, dict) else {}
+
+    enabled = bool(obstacles_cfg.get("enabled", False))
+    ratio_max = float(obstacles_cfg.get("ratio_max", 0.0))
+
+    shape_cfg = obstacles_cfg.get("shape", {}) or {}
+    size_cfg = shape_cfg.get("size", {}) or {}
+    if not size_cfg:
+        # Backward compatibility
+        size_cfg = {
+            "min_ratio": shape_cfg.get("size_min_ratio", obstacles_cfg.get("size_min_ratio", 0.20)),
+            "max_ratio": shape_cfg.get("size_max_ratio", obstacles_cfg.get("size_max_ratio", 0.50)),
+        }
+
+    size_min_ratio = float(size_cfg.get("min_ratio", 0.20))
+    size_max_ratio = float(size_cfg.get("max_ratio", 0.50))
+
+    generation_cfg = obstacles_cfg.get("generation", {}) or {}
+    obstacle_penalty = float(obstacles_cfg.get("obstacle_penalty", 1e8))
+
+    return {
+        "enabled": enabled,
+        "ratio_max": ratio_max,
+        "size_min_ratio": size_min_ratio,
+        "size_max_ratio": size_max_ratio,
+        "generation_cfg": generation_cfg,
+        "obstacle_penalty": obstacle_penalty,
+        "config": obstacles_cfg,
+    }
+
+
+def _generate_obstacles_mask(
+    shape: tuple[int, int],
+    ratio_max: float,
+    size_min_ratio: float,
+    size_max_ratio: float,
+    obstacles_cfg: dict,
+    marker_positions: list[tuple[int, int]] | None = None,
+    rng: np.random.Generator | None = None,
+    max_attempts: int | None = None,
+    generation_cfg: dict | None = None,
+) -> tuple[np.ndarray, float]:
+    """Generate a binary obstacle mask using randomized superellipses.
+
+    Returns (mask, target_ratio).
+    """
+    rng = np.random.default_rng() if rng is None else rng
+    height, width = shape
+    ratio_max = float(max(0.0, ratio_max))
+
+    marker_positions = [] if marker_positions is None else [tuple(map(int, p)) for p in marker_positions]
+
+    gen = generation_cfg if generation_cfg is not None else obstacles_cfg.get("generation", {})
+    max_attempts = int(gen.get("max_attempts", 50)) if max_attempts is None else int(max_attempts)
+    candidates_per_mask = int(gen.get("candidates_per_mask", 200))
+
+    for _ in range(max_attempts):
+        target_ratio = float(rng.uniform(0.0, ratio_max))
+        mask = np.zeros((height, width), dtype=np.uint8)
+
+        if target_ratio <= 0.0:
+            return mask, target_ratio
+
+        size_min_ratio = float(max(0.0, size_min_ratio))
+        size_max_ratio = float(max(size_min_ratio, size_max_ratio))
+
+        min_w = max(1, int(size_min_ratio * width))
+        max_w = max(1, int(size_max_ratio * width))
+        min_h = max(1, int(size_min_ratio * height))
+        max_h = max(1, int(size_max_ratio * height))
+
+        abort_attempt = False
+        for _ in range(candidates_per_mask):
+            candidate_retry = 0
+            while True:
+                w = int(rng.integers(min_w, max_w + 1))
+                h = int(rng.integers(min_h, max_h + 1))
+                cx = int(rng.integers(0, width))
+                cy = int(rng.integers(0, height))
+                angle = float(sample_angle_from_config(rng))
+                n = float(sample_n_from_config(obstacles_cfg, rng))
+
+                a = max(w / 2.0, 1.0)
+                b = max(h / 2.0, 1.0)
+                candidate = superellipse_mask(
+                    (height, width), (cy, cx), a, b, n, angle=angle, angle_degrees=False
+                ).astype(np.uint8)
+
+                if any(candidate[i, j] == 1 for i, j in marker_positions):
+                    candidate_retry += 1
+                    if candidate_retry < 10:
+                        continue
+                    abort_attempt = True
+                    break
+
+                new_ratio = float(np.mean(mask | candidate))
+                if new_ratio > target_ratio:
+                    abort_attempt = True
+                    break
+
+                mask = np.logical_or(mask, candidate).astype(np.uint8)
+                break
+
+            if abort_attempt:
+                break
+
+        if any(mask[i, j] == 1 for i, j in marker_positions):
+            continue
+
+        return mask, target_ratio
+
+    return np.zeros((height, width), dtype=np.uint8), 0.0
 
 
 @_log_timing
@@ -1218,14 +1379,14 @@ def tiles_needed_for_resolution(resolution: int) -> tuple[int, int, int]:
 
 @_log_timing
 def generate_sample(
-    args: tuple[int, Path, Path, int, pd.DataFrame, float, float, bool, dict],
+    args: tuple[int, Path, Path, int, pd.DataFrame, float, float, bool, dict, dict],
 ) -> tuple[int, bool, str]:
     """
     Generate a single dataset sample.
 
     Args:
-        args: Tuple of (index, tiles_dirpath, outputs_dirpath, resolution,
-              tile_stats_df, global_min, global_max, disable_images, solver_config).
+          args: Tuple of (index, tiles_dirpath, outputs_dirpath, resolution,
+              tile_stats_df, global_min, global_max, disable_images, solver_config, obstacle_settings).
 
     Returns:
         Tuple of (index, success, message).
@@ -1240,9 +1401,11 @@ def generate_sample(
         global_max,
         disable_images,
         solver_config,
+        obstacle_settings,
     ) = args
 
     solver_config = _resolve_solver_config(solver_config)
+    obstacle_settings = obstacle_settings or {}
     max_marker_retries = solver_config.get("max_marker_retries", 10)
     backend, solver_name = _parse_solver_backend_and_name(solver_config)
     max_elevation_retries = 10  # Total attempts for different elevations
@@ -1339,7 +1502,7 @@ def generate_sample(
                     logger.warning(f"Failed to prebuild NetworkX graph for crop: {e}")
                     prebuilt_graph = None
 
-            path = []
+            path_without = []
             marker_attempts_used = 0
             for marker_attempt in range(max_marker_retries):
                 marker_attempts_used += 1
@@ -1349,14 +1512,46 @@ def generate_sample(
                     idx2 += 1
                 i2, j2 = divmod(idx2, w)
 
-                # Try to find path between markers
-                path = find_path(crop, (i1, j1), (i2, j2), solver_config, prebuilt_graph=prebuilt_graph)
-                if len(path) > 0:
+                # Try to find path between markers (without obstacles)
+                path_without = find_path(crop, (i1, j1), (i2, j2), solver_config, prebuilt_graph=prebuilt_graph)
+                if len(path_without) > 0:
                     break  # Found a valid path
 
-            if len(path) == 0:
+            if len(path_without) == 0:
                 logger.debug(f"No path found after {marker_attempts_used} marker attempts; retrying elevation")
                 continue  # Try another elevation
+
+            # Generate obstacles mask (if enabled) and compute path with obstacles
+            obstacles_cfg = obstacle_settings.get("config", {})
+            obstacles_enabled = bool(obstacle_settings.get("enabled", False))
+            obstacle_ratio_max = float(obstacle_settings.get("ratio_max", 0.0))
+            size_min_ratio = float(obstacle_settings.get("size_min_ratio", 0.20))
+            size_max_ratio = float(obstacle_settings.get("size_max_ratio", 0.50))
+            generation_cfg = obstacle_settings.get("generation_cfg", {})
+            obstacle_penalty = float(obstacle_settings.get("obstacle_penalty", 1e8))
+
+            marker_positions = [(i1, j1), (i2, j2)]
+            if obstacles_enabled:
+                obstacles_mask, obstacle_target_ratio = _generate_obstacles_mask(
+                    crop.shape,
+                    obstacle_ratio_max,
+                    size_min_ratio,
+                    size_max_ratio,
+                    obstacles_cfg,
+                    marker_positions=marker_positions,
+                    generation_cfg=generation_cfg,
+                )
+            else:
+                obstacles_mask = np.zeros_like(crop, dtype=np.uint8)
+                obstacle_target_ratio = 0.0
+
+            obstacle_ratio = float(np.mean(obstacles_mask))
+
+            masked_elevation = crop.copy()
+            if obstacles_enabled and obstacle_penalty > 0:
+                masked_elevation[obstacles_mask == 1] = masked_elevation.max() + obstacle_penalty
+
+            path_with = find_path(masked_elevation, (i1, j1), (i2, j2), solver_config)
 
             # Successfully found a path - proceed with sample generation
             # Normalize to float32 in [0, 1] using global_min/global_max
@@ -1372,11 +1567,6 @@ def generate_sample(
             marker_channel[i1, j1] = 1.0
             marker_channel[i2, j2] = 1.0
 
-            # Create path channel as separate data for metadata (do not include in tensor)
-            path_channel = np.zeros_like(crop_norm, dtype=np.float32)
-            for pi, pj in path:
-                path_channel[pi, pj] = 1.0
-
             # Extract elevation values before normalization for metadata
             tile_min_elev = float(selected["min"])
             tile_max_elev = float(selected["max"])
@@ -1385,8 +1575,9 @@ def generate_sample(
             marker_1_elev = float(crop[i1, j1])
             marker_2_elev = float(crop[i2, j2])
 
-            # Stack elevation and marker channels only: shape (H, W, 2)
-            crop_with_markers = np.stack([crop_norm, marker_channel], axis=-1)
+            # Stack elevation, marker, and obstacle channels: shape (H, W, 3)
+            obstacles_channel = obstacles_mask.astype(np.float32)
+            crop_with_markers = np.stack([crop_norm, marker_channel, obstacles_channel], axis=-1)
 
             # Save as .npy (3-channel float32) into 'tensors'
             tensors_dir = outputs_dirpath / str(resolution) / "tensors"
@@ -1402,7 +1593,8 @@ def generate_sample(
                 images_dir = outputs_dirpath / str(resolution) / "images"
                 images_dir.mkdir(parents=True, exist_ok=True)
                 # Convert tensor to BGR image using helper function (provide path pixels)
-                thumb_rgb = tensor_to_image(crop_with_markers, path_pixels=path)
+                path_for_image = path_with if obstacles_enabled else path_without
+                thumb_rgb = tensor_to_image(crop_with_markers, path_pixels=path_for_image)
                 image_path = images_dir / f"{index:010d}.png"
                 try:
                     cv2.imwrite(str(image_path), thumb_rgb)
@@ -1415,7 +1607,9 @@ def generate_sample(
             logger.info(
                 f"Sample {index}: success=True, elevation_attempts={elevation_attempts}, "
                 f"marker_retries={marker_attempt + 1 if 'marker_attempt' in locals() else 0}, "
-                f"path_length={len(path)}, grid_shape=({grid_h},{grid_w}), duration={duration:.2f}s"
+                f"path_length_no_obstacles={len(path_without)}, "
+                f"path_length_with_obstacles={len(path_with)}, "
+                f"grid_shape=({grid_h},{grid_w}), duration={duration:.2f}s"
             )
 
             # Calculate geographic coordinates
@@ -1464,8 +1658,27 @@ def generate_sample(
                     {"i": int(i2), "j": int(j2), "elevation": marker_2_elev},
                 ],
                 "path": {
-                    "length": len(path),
-                    "pixels": [{"i": int(pi), "j": int(pj)} for pi, pj in path],
+                    "length": len(path_without),
+                    "pixels": [{"i": int(pi), "j": int(pj)} for pi, pj in path_without],
+                },
+                "paths": {
+                    "without_obstacles": {
+                        "length": len(path_without),
+                        "pixels": [{"i": int(pi), "j": int(pj)} for pi, pj in path_without],
+                    },
+                    "with_obstacles": {
+                        "length": len(path_with),
+                        "pixels": [{"i": int(pi), "j": int(pj)} for pi, pj in path_with],
+                    },
+                },
+                "obstacles": {
+                    "enabled": obstacles_enabled,
+                    "ratio_max": obstacle_ratio_max,
+                    "ratio_target": float(obstacle_target_ratio),
+                    "ratio_actual": obstacle_ratio,
+                    "size_min_ratio": size_min_ratio,
+                    "size_max_ratio": size_max_ratio,
+                    "penalty": obstacle_penalty,
                 },
                 "solver": {
                     "backend": backend,
@@ -1660,6 +1873,17 @@ def run_generate(
         f"max_marker_retries={solver_config.get('max_marker_retries', 10)}"
     )
 
+    # Load obstacle configuration
+    obstacle_settings = _resolve_obstacle_config(config)
+    logger.info(
+        "Obstacles: enabled=%s, ratio_max=%.3f, size_min_ratio=%.3f, size_max_ratio=%.3f, penalty=%.1e",
+        obstacle_settings.get("enabled", False),
+        obstacle_settings.get("ratio_max", 0.0),
+        obstacle_settings.get("size_min_ratio", 0.0),
+        obstacle_settings.get("size_max_ratio", 0.0),
+        obstacle_settings.get("obstacle_penalty", 0.0),
+    )
+
     # Harmonized startup log
     cpus = num_cpus if num_cpus is not None else os.cpu_count()
     logger.info(
@@ -1715,7 +1939,18 @@ def run_generate(
 
         # Prepare arguments for each sample (starting from start_index)
         args_list = [
-            (i, tiles_path, outputs_path, res, tile_stats_df, global_min, global_max, disable_images, solver_config)
+            (
+                i,
+                tiles_path,
+                outputs_path,
+                res,
+                tile_stats_df,
+                global_min,
+                global_max,
+                disable_images,
+                solver_config,
+                obstacle_settings,
+            )
             for i in range(start_index, samples_count)
         ]
 

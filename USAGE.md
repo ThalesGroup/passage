@@ -13,3 +13,6 @@ passage generate --resolution 64 128 256
 ```
 
 If `--resolution` is not provided, resolutions are taken from `config/config.yaml` (the `resolutions` key).
+
+Obstacle generation is controlled in `config/config.yaml` under the `obstacles` section. When enabled, generated
+samples include an obstacle channel and metadata contains paths with and without obstacles.

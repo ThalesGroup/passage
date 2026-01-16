@@ -104,6 +104,7 @@ class TestCalibrateCLI:
                 assert args[0] == "/custom/calibrate"
                 assert args[1] == "/custom/tiles"
                 assert kwargs.get("resume") is False
+                assert kwargs.get("overwrite") is True
                 assert kwargs.get("num_cpus") == 8
 
 
