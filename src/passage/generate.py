@@ -1170,13 +1170,9 @@ def tensor_to_image(
     if path_pixels is None and md is not None:
         if "paths" in md:
             if md.get("obstacles", {}).get("enabled", False):
-                path_section = md.get("paths", {}).get("with_obstacles") or md.get("paths", {}).get(
-                    "without_obstacles"
-                )
+                path_section = md.get("paths", {}).get("with_obstacles") or md.get("paths", {}).get("without_obstacles")
             else:
-                path_section = md.get("paths", {}).get("without_obstacles") or md.get("paths", {}).get(
-                    "with_obstacles"
-                )
+                path_section = md.get("paths", {}).get("without_obstacles") or md.get("paths", {}).get("with_obstacles")
         else:
             path_section = md.get("path")
 

@@ -18,6 +18,7 @@ The function here keeps the implementation small and deterministic so it can
 be used in tests and notebooks. Higher-level obstacle-generation routines can
 sample ``n`` from the configuration to create varied collections of shapes.
 """
+
 from __future__ import annotations
 
 from typing import Tuple
@@ -130,7 +131,7 @@ def sample_n_from_config(obstacles_cfg: dict, rng: np.random.Generator) -> float
         # CDF_trunc(s) = (1 - exp(-lam * s)) / (1 - exp(-lam)), s in [0,1]
         u = float(rng.random())
         c = 1.0 - math.exp(-lam)
-        s = - (1.0 / lam) * math.log(1.0 - u * c)
+        s = -(1.0 / lam) * math.log(1.0 - u * c)
         s = min(max(s, 0.0), 1.0)
         return float(n_min + s * (n_max - n_min))
     # beta distribution (default)

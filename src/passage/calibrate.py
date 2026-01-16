@@ -15,7 +15,6 @@ import re
 import cv2
 from matplotlib import cm
 import tempfile
-import os
 
 
 from loguru import logger
