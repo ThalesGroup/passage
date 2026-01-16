@@ -12,29 +12,252 @@ The generation process:
 5. Handle latitude bounds and longitude wrapping at -180/180.
 """
 
+import functools
 import json
 import math
 import multiprocessing
 import os
 import random
 import re
+import shutil
+import time
 from datetime import datetime
 from pathlib import Path
 
 import cv2
+import networkx as nx
 import numpy as np
 import pandas as pd
 import rasterio
-from rasterio.windows import Window
-import shutil
 import yaml
-import functools
-import time
-
 from loguru import logger
-import networkx as nx
+from rasterio.windows import Window
 from tqdm import tqdm
-import scipy.sparse as sp
+
+
+class _GraphTemplate:
+    """Cached graph topology for a given grid shape and connectivity."""
+
+    def __init__(self, rows: int, cols: int, diagonal_movement: str):
+        self.rows = rows
+        self.cols = cols
+        self.diagonal_movement = diagonal_movement
+
+        # Define neighbor offsets with their physical distances
+        if diagonal_movement == "never":
+            offsets = [
+                (-1, 0, PIXEL_SIZE_M),
+                (1, 0, PIXEL_SIZE_M),
+                (0, -1, PIXEL_SIZE_M),
+                (0, 1, PIXEL_SIZE_M),
+            ]
+        else:
+            offsets = [
+                (-1, 0, PIXEL_SIZE_M),
+                (1, 0, PIXEL_SIZE_M),
+                (0, -1, PIXEL_SIZE_M),
+                (0, 1, PIXEL_SIZE_M),
+                (-1, -1, DIAGONAL_DISTANCE_M),
+                (-1, 1, DIAGONAL_DISTANCE_M),
+                (1, -1, DIAGONAL_DISTANCE_M),
+                (1, 1, DIAGONAL_DISTANCE_M),
+            ]
+
+        i_grid, j_grid = np.mgrid[0:rows, 0:cols]
+        src_i_all = []
+        src_j_all = []
+        dst_i_all = []
+        dst_j_all = []
+        dist_all = []
+
+        for di, dj, distance_m in offsets:
+            dst_i = i_grid + di
+            dst_j = j_grid + dj
+            valid = (dst_i >= 0) & (dst_i < rows) & (dst_j >= 0) & (dst_j < cols)
+            if not np.any(valid):
+                continue
+
+            src_i = i_grid[valid]
+            src_j = j_grid[valid]
+            dst_i_v = dst_i[valid]
+            dst_j_v = dst_j[valid]
+
+            src_i_all.append(src_i.ravel())
+            src_j_all.append(src_j.ravel())
+            dst_i_all.append(dst_i_v.ravel())
+            dst_j_all.append(dst_j_v.ravel())
+            dist_all.append(np.full(src_i.size, distance_m, dtype=np.float64))
+
+        if len(src_i_all) == 0:
+            self.src_i = np.array([], dtype=np.int32)
+            self.src_j = np.array([], dtype=np.int32)
+            self.dst_i = np.array([], dtype=np.int32)
+            self.dst_j = np.array([], dtype=np.int32)
+            self.distance_m = np.array([], dtype=np.float64)
+        else:
+            self.src_i = np.concatenate(src_i_all).astype(np.int32)
+            self.src_j = np.concatenate(src_j_all).astype(np.int32)
+            self.dst_i = np.concatenate(dst_i_all).astype(np.int32)
+            self.dst_j = np.concatenate(dst_j_all).astype(np.int32)
+            self.distance_m = np.concatenate(dist_all).astype(np.float64)
+
+        # Build graph once with zero weights (weights updated per crop)
+        self.graph = nx.DiGraph()
+        self.graph.add_nodes_from((i, j) for i in range(rows) for j in range(cols))
+        if len(self.src_i) > 0:
+            self.graph.add_weighted_edges_from(
+                (
+                    (int(self.src_i[k]), int(self.src_j[k])),
+                    (int(self.dst_i[k]), int(self.dst_j[k])),
+                    0.0,
+                )
+                for k in range(len(self.src_i))
+            )
+
+
+_GRAPH_TEMPLATE_CACHE: dict[tuple[int, int, str], _GraphTemplate] = {}
+
+
+def _get_graph_template(rows: int, cols: int, diagonal_movement: str) -> _GraphTemplate:
+    key = (rows, cols, diagonal_movement)
+    template = _GRAPH_TEMPLATE_CACHE.get(key)
+    if template is None:
+        template = _GraphTemplate(rows, cols, diagonal_movement)
+        _GRAPH_TEMPLATE_CACHE[key] = template
+    return template
+
+
+def _compute_edge_weights(
+    template: _GraphTemplate,
+    elevation: np.ndarray,
+    weight: float,
+    cost_model: str,
+) -> np.ndarray:
+    if cost_model not in COST_MODELS:
+        cost_model = "elevation"
+
+    if template.distance_m.size == 0:
+        return template.distance_m
+
+    if cost_model == "distance":
+        return template.distance_m
+
+    normalized, abs_norm, elev_range = _normalize_elevation_arrays(elevation)
+    dst_i = template.dst_i
+    dst_j = template.dst_j
+
+    if cost_model == "absolute_elevation":
+        return template.distance_m * (1.0 + weight * abs_norm[dst_i, dst_j])
+
+    src_i = template.src_i
+    src_j = template.src_j
+    if cost_model == "slope_uphill":
+        if elev_range > 0:
+            delta = elevation[dst_i, dst_j] - elevation[src_i, src_j]
+            slope_norm = np.maximum(0.0, delta) / elev_range
+        else:
+            slope_norm = np.zeros_like(dst_i, dtype=np.float32)
+        return template.distance_m * (1.0 + weight * slope_norm)
+
+    if cost_model == "energy":
+        delta = elevation[dst_i, dst_j] - elevation[src_i, src_j]
+        return template.distance_m + weight * np.maximum(0.0, delta)
+
+    return template.distance_m * (1.0 + weight * normalized[dst_i, dst_j])
+
+
+def _build_pathfinding_cost_matrix(
+    elevation: np.ndarray,
+    weight: float,
+    cost_model: str,
+) -> np.ndarray | None:
+    """Build a per-node cost matrix for the pathfinding package.
+
+    Note: pathfinding uses node weights (not directional edge costs), so only
+    cost models that depend on destination elevation are supported.
+    """
+    if cost_model not in COST_MODELS:
+        cost_model = "elevation"
+
+    if cost_model in {"slope_uphill", "energy"}:
+        return None
+
+    if cost_model == "distance":
+        costs = np.ones_like(elevation, dtype=np.float64)
+    else:
+        normalized, abs_norm, _ = _normalize_elevation_arrays(elevation)
+        if cost_model == "absolute_elevation":
+            costs = 1.0 + weight * abs_norm
+        else:
+            costs = 1.0 + weight * normalized
+
+    return np.maximum(costs, 1e-6)
+
+
+def _pathfinding_path_to_coords(path) -> list[tuple[int, int]]:
+    if not path:
+        return []
+    first = path[0]
+    if hasattr(first, "x") and hasattr(first, "y"):
+        return [(int(node.y), int(node.x)) for node in path]
+    if isinstance(first, (tuple, list)) and len(first) >= 2:
+        return [(int(p[1]), int(p[0])) for p in path]
+    return []
+
+
+def _find_path_pathfinding(
+    crop: np.ndarray,
+    start: tuple[int, int],
+    end: tuple[int, int],
+    solver_name: str,
+    diagonal_movement: str,
+    weight: float,
+    heuristic_name: str,
+    cost_model: str,
+) -> tuple[list[tuple[int, int]], float, float]:
+    """Pathfinding backend using the pathfinding package.
+
+    Returns (path, prep_time, solve_time).
+    """
+    import importlib
+
+    DiagonalMovement = importlib.import_module("pathfinding.core.diagonal_movement").DiagonalMovement
+    Grid = importlib.import_module("pathfinding.core.grid").Grid
+    heuristic_mod = importlib.import_module("pathfinding.core.heuristic")
+    AStarFinder = importlib.import_module("pathfinding.finder.a_star").AStarFinder
+    BestFirst = importlib.import_module("pathfinding.finder.best_first").BestFirst
+    DijkstraFinder = importlib.import_module("pathfinding.finder.dijkstra").DijkstraFinder
+
+    heuristic_map = {
+        "euclidean": heuristic_mod.euclidean,
+        "manhattan": heuristic_mod.manhattan,
+        "chebyshev": heuristic_mod.chebyshev,
+    }
+
+    t_prep = time.time()
+    cost_matrix = _build_pathfinding_cost_matrix(crop, weight, cost_model)
+    if cost_matrix is None:
+        return [], 0.0, 0.0
+
+    diag_mode = DiagonalMovement.always if diagonal_movement == "always" else DiagonalMovement.never
+    grid = Grid(matrix=cost_matrix.tolist())
+    start_node = grid.node(int(start[1]), int(start[0]))
+    end_node = grid.node(int(end[1]), int(end[0]))
+
+    if solver_name == "dijkstra":
+        finder = DijkstraFinder(diagonal_movement=diag_mode)
+    elif solver_name == "best_first":
+        heuristic = heuristic_map.get(heuristic_name, heuristic_mod.euclidean)
+        finder = BestFirst(diagonal_movement=diag_mode, heuristic=heuristic)
+    else:
+        heuristic = heuristic_map.get(heuristic_name, heuristic_mod.euclidean)
+        finder = AStarFinder(diagonal_movement=diag_mode, heuristic=heuristic)
+
+    prep_time = time.time() - t_prep
+    t_solve = time.time()
+    path, _ = finder.find_path(start_node, end_node, grid)
+    solve_time = time.time() - t_solve
+    return _pathfinding_path_to_coords(path), prep_time, solve_time
 
 
 def _log_timing(func):
@@ -65,6 +288,11 @@ MAX_LAT = 90
 MIN_LON = -180
 MAX_LON = 180
 
+# Solver backends
+#   networkx   - NetworkX-based graph solvers [DEFAULT]
+#   pathfinding- pathfinding package solvers (grid-based)
+#   grid       - internal NumPy grid solvers (grid_astar/grid_dijkstra)
+
 # NetworkX solver mapping
 # Available solvers:
 #   astar            - A* search with heuristic (fast, optimal) [DEFAULT]
@@ -73,14 +301,22 @@ MAX_LON = 180
 #   dijkstra_bi      - Bidirectional Dijkstra (faster for long paths)
 #   bellman_ford     - Bellman-Ford algorithm (handles negative weights, slowest)
 #   unweighted       - BFS-based shortest path (ignores weights)
-#
+
+# Pathfinding package solvers:
+#   astar            - A* search with heuristic
+#   dijkstra         - Dijkstra's algorithm
+#   best_first       - Best-first search (greedy)
+
 # Example config:
 #   solver:
+#     backend: networkx
 #     name: astar
 #     diagonal_movement: always
 #     weight: 30.0
 #     heuristic: euclidean  # only for astar/astar_bi: euclidean, manhattan, chebyshev
-SOLVER_NAMES = {"astar", "astar_bi", "dijkstra", "dijkstra_bi", "bellman_ford", "unweighted"}
+NETWORKX_SOLVERS = {"astar", "astar_bi", "dijkstra", "dijkstra_bi", "bellman_ford", "unweighted"}
+PATHFINDING_SOLVERS = {"astar", "dijkstra", "best_first"}
+GRID_SOLVERS = {"grid_astar", "grid_dijkstra"}
 
 # Edge cost models
 #   elevation         - distance * (1 + weight * normalized_elevation) [DEFAULT]
@@ -108,6 +344,55 @@ HEURISTIC_MAP = {
 }
 
 
+def _parse_solver_backend_and_name(solver_config: dict) -> tuple[str, str]:
+    raw_name = solver_config.get("name", "astar")
+    backend = solver_config.get("backend")
+    solver_name = raw_name
+
+    if isinstance(raw_name, str) and ":" in raw_name:
+        prefix, name = raw_name.split(":", 1)
+        backend = prefix
+        solver_name = name
+
+    if not backend:
+        backend = "networkx"
+
+    if backend == "grid":
+        if solver_name == "astar":
+            solver_name = "grid_astar"
+        elif solver_name == "dijkstra":
+            solver_name = "grid_dijkstra"
+
+    return backend, solver_name
+
+
+def _resolve_solver_config(solver_config: dict) -> dict:
+    """Merge common + backend-specific solver config sections.
+
+    Accepts either a flat config or a structured config like:
+    solver:
+      name: networkx:astar
+      common: {...}
+      networkx: {...}
+      pathfinding: {...}
+      grid: {...}
+    """
+    if not isinstance(solver_config, dict):
+        return {}
+
+    has_sections = any(key in solver_config for key in ("common", "networkx", "pathfinding", "grid"))
+    if not has_sections:
+        return solver_config
+
+    backend, _ = _parse_solver_backend_and_name(solver_config)
+    resolved = {}
+    resolved.update(solver_config.get("common", {}))
+    resolved.update(solver_config.get(backend, {}))
+    if "name" in solver_config:
+        resolved["name"] = solver_config["name"]
+    return resolved
+
+
 def _normalize_elevation_arrays(elevation: np.ndarray) -> tuple[np.ndarray, np.ndarray, float]:
     """Return normalized elevation, normalized absolute elevation, and elevation range."""
     elev_min = float(elevation.min())
@@ -132,7 +417,6 @@ def build_graph_from_elevation(
     weight: float = 1.0,
     diagonal_movement: str = "always",
     cost_model: str = "elevation",
-    graph_backend: str = "edges",
 ) -> nx.DiGraph:
     """
     Build a directed graph from a 2D elevation array for pathfinding.
@@ -153,7 +437,6 @@ def build_graph_from_elevation(
         weight: Multiplier for elevation cost (higher = prefer flat paths).
         diagonal_movement: 'always' for 8-connectivity, 'never' for 4-connectivity.
         cost_model: edge cost model name.
-        graph_backend: 'edges' (fast edge list) or 'scipy' (sparse + from_scipy_sparse_array).
 
     Returns:
         NetworkX DiGraph with nodes at (i, j) and weighted edges to neighbors.
@@ -163,126 +446,37 @@ def build_graph_from_elevation(
     logger.debug(
         f"build_graph_from_elevation: start rows={rows}, cols={cols}, "
         f"diagonal={diagonal_movement}, cost_model={cost_model}, weight={weight}, "
-        f"graph_backend={graph_backend}"
+        f"graph_backend=edges"
     )
 
     if cost_model not in COST_MODELS:
         logger.warning(f"Unknown cost_model '{cost_model}', falling back to 'elevation'")
         cost_model = "elevation"
 
-    t_norm = time.time()
-    normalized, abs_norm, elev_range = _normalize_elevation_arrays(elevation)
-    logger.debug(f"build_graph_from_elevation: normalization took {time.time() - t_norm:.4f}s")
+    # Reuse cached graph topology and only update edge weights
+    t_template = time.time()
+    template = _get_graph_template(rows, cols, diagonal_movement)
+    logger.debug(f"build_graph_from_elevation: template fetch took {time.time() - t_template:.4f}s")
 
-    # Define neighbor offsets with their physical distances
-    # Cardinal: 30m, Diagonal: 30*sqrt(2) ≈ 42.43m
-    if diagonal_movement == "never":
-        # Cardinal directions only (N, S, E, W) - 30m each
-        offsets = [
-            (-1, 0, PIXEL_SIZE_M),
-            (1, 0, PIXEL_SIZE_M),
-            (0, -1, PIXEL_SIZE_M),
-            (0, 1, PIXEL_SIZE_M),
-        ]
-    else:
-        # 8-connectivity: cardinal (30m) + diagonal (30*sqrt(2))
-        offsets = [
-            (-1, 0, PIXEL_SIZE_M),  # N
-            (1, 0, PIXEL_SIZE_M),  # S
-            (0, -1, PIXEL_SIZE_M),  # W
-            (0, 1, PIXEL_SIZE_M),  # E
-            (-1, -1, DIAGONAL_DISTANCE_M),  # NW
-            (-1, 1, DIAGONAL_DISTANCE_M),  # NE
-            (1, -1, DIAGONAL_DISTANCE_M),  # SW
-            (1, 1, DIAGONAL_DISTANCE_M),  # SE
-        ]
+    t_weights = time.time()
+    weights = _compute_edge_weights(template, elevation, weight, cost_model)
+    logger.debug(f"build_graph_from_elevation: weights compute took {time.time() - t_weights:.4f}s")
 
-    # Vectorized construction of edge lists
-    i_grid, j_grid = np.mgrid[0:rows, 0:cols]
-    src_ids_all = []
-    dst_ids_all = []
-    weights_all = []
+    if template.distance_m.size == 0:
+        return template.graph
 
-    for di, dj, distance_m in tqdm(offsets, desc="build_graph_offsets", unit="offset"):
-        t_off = time.time()
-        dst_i = i_grid + di
-        dst_j = j_grid + dj
-        valid = (dst_i >= 0) & (dst_i < rows) & (dst_j >= 0) & (dst_j < cols)
-        if not np.any(valid):
-            continue
-
-        src_i = i_grid[valid]
-        src_j = j_grid[valid]
-        dst_i_v = dst_i[valid]
-        dst_j_v = dst_j[valid]
-
-        src_ids = (src_i * cols + src_j).ravel()
-        dst_ids = (dst_i_v * cols + dst_j_v).ravel()
-
-        if cost_model == "distance":
-            weights = np.full(src_ids.shape, distance_m, dtype=np.float64)
-        elif cost_model == "absolute_elevation":
-            weights = distance_m * (1.0 + weight * abs_norm[dst_i_v, dst_j_v])
-        elif cost_model == "slope_uphill":
-            if elev_range > 0:
-                delta = elevation[dst_i_v, dst_j_v] - elevation[src_i, src_j]
-                slope_norm = np.maximum(0.0, delta) / elev_range
-            else:
-                slope_norm = np.zeros_like(dst_i_v, dtype=np.float32)
-            weights = distance_m * (1.0 + weight * slope_norm)
-        elif cost_model == "energy":
-            delta = elevation[dst_i_v, dst_j_v] - elevation[src_i, src_j]
-            weights = distance_m + weight * np.maximum(0.0, delta)
-        else:  # "elevation"
-            weights = distance_m * (1.0 + weight * normalized[dst_i_v, dst_j_v])
-
-        src_ids_all.append(src_ids)
-        dst_ids_all.append(dst_ids)
-        weights_all.append(np.asarray(weights, dtype=np.float64))
-        logger.debug(
-            f"build_graph_from_elevation: offset (di={di}, dj={dj}) edges={len(src_ids)} took {time.time() - t_off:.4f}s"
-        )
-
-    if len(src_ids_all) == 0:
-        G = nx.DiGraph()
-        G.add_nodes_from((i, j) for i in range(rows) for j in range(cols))
-        return G
-
-    t_concat = time.time()
-    src_ids = np.concatenate(src_ids_all)
-    dst_ids = np.concatenate(dst_ids_all)
-    weights = np.concatenate(weights_all)
-    num_nodes = rows * cols
-    logger.debug(f"build_graph_from_elevation: concatenation edges={len(src_ids)} took {time.time() - t_concat:.4f}s")
-
-    if graph_backend == "scipy":
-        t_sparse = time.time()
-        adj = sp.coo_matrix((weights, (src_ids, dst_ids)), shape=(num_nodes, num_nodes))
-        logger.debug(f"build_graph_from_elevation: sparse matrix build took {time.time() - t_sparse:.4f}s")
-
-        t_nx = time.time()
-        G = nx.from_scipy_sparse_array(adj, create_using=nx.DiGraph)
-        mapping = {idx: (idx // cols, idx % cols) for idx in range(num_nodes)}
-        nx.relabel_nodes(G, mapping, copy=False)
-        logger.debug(f"build_graph_from_elevation: networkx graph build + relabel took {time.time() - t_nx:.4f}s")
-        logger.debug(f"build_graph_from_elevation: total time {time.time() - t_start:.4f}s")
-        return G
-
-    # Default: build graph from edge list (fast without sparse conversion)
-    t_edges = time.time()
-    G = nx.DiGraph()
-    G.add_nodes_from((i, j) for i in range(rows) for j in range(cols))
-    G.add_weighted_edges_from(
+    t_update = time.time()
+    template.graph.add_weighted_edges_from(
         (
-            (int(src_ids[k] // cols), int(src_ids[k] % cols)),
-            (int(dst_ids[k] // cols), int(dst_ids[k] % cols)),
+            (int(template.src_i[k]), int(template.src_j[k])),
+            (int(template.dst_i[k]), int(template.dst_j[k])),
             float(weights[k]),
         )
-        for k in range(len(src_ids))
+        for k in range(len(template.src_i))
     )
-    logger.debug(f"build_graph_from_elevation: edge-list graph build took {time.time() - t_edges:.4f}s")
+    logger.debug(f"build_graph_from_elevation: edge weights update took {time.time() - t_update:.4f}s")
     logger.debug(f"build_graph_from_elevation: total time {time.time() - t_start:.4f}s")
-    return G
+    return template.graph
 
 
 @_log_timing
@@ -291,20 +485,24 @@ def find_path(
     start: tuple[int, int],
     end: tuple[int, int],
     solver_config: dict,
+    prebuilt_graph: nx.DiGraph | None = None,
 ) -> list[tuple[int, int]]:
     """
-    Find a path between two points on the crop using configured NetworkX solver.
+    Find a path between two points on the crop using configured solver backend.
 
     Args:
         crop: 2D elevation array (not normalized).
         start: (i, j) start coordinates.
         end: (i, j) end coordinates.
         solver_config: Solver configuration dict with:
-            - name: 'astar' (default), 'dijkstra', 'bellman_ford', or 'unweighted'
+            - backend: 'networkx' (default), 'pathfinding', or 'grid'
+            - name: solver name for selected backend
             - diagonal_movement: 'always' (default) or 'never'
             - weight: float multiplier for elevation cost (default 1.0)
-            - heuristic: 'euclidean' (default), 'manhattan', 'chebyshev' (only for astar)
+            - heuristic: 'euclidean' (default), 'manhattan', 'chebyshev' (for astar/best_first)
             - cost_model: 'elevation' (default), 'distance', 'slope_uphill', 'energy', 'absolute_elevation'
+        prebuilt_graph: Optional prebuilt NetworkX DiGraph. If provided and the selected backend is
+            'networkx', the prebuilt graph will be used and graph construction will be skipped.
 
     Returns:
         List of (i, j) tuples representing the path, or empty list if no path found.
@@ -320,44 +518,81 @@ def find_path(
         return []
 
     # Extract solver configuration
-    solver_name = solver_config.get("name", "astar")
+    solver_config = _resolve_solver_config(solver_config)
+    backend, solver_name = _parse_solver_backend_and_name(solver_config)
+    if backend not in {"networkx", "pathfinding", "grid"}:
+        logger.warning(f"Unknown backend '{backend}', falling back to networkx")
+        backend = "networkx"
     diagonal_name = solver_config.get("diagonal_movement", "always")
     weight = solver_config.get("weight", 1.0)
     heuristic_name = solver_config.get("heuristic", "euclidean")
     cost_model = solver_config.get("cost_model", "elevation")
-    graph_backend = solver_config.get("graph_backend", "edges")
-
     logger.debug(
-        f"find_path: solver={solver_name}, diagonal={diagonal_name}, weight={weight}, "
-        f"heuristic={heuristic_name}, cost_model={cost_model}, graph_backend={graph_backend}, "
+        f"find_path: backend={backend}, solver={solver_name}, diagonal={diagonal_name}, weight={weight}, "
+        f"heuristic={heuristic_name}, cost_model={cost_model}, graph_backend=edges, "
         f"grid_size={grid_size}, start={start}, end={end}"
     )
 
     # For grid-based solvers we avoid constructing a NetworkX graph (faster)
-    if solver_name in {"grid_astar", "grid_dijkstra"}:
+    if backend == "grid" or solver_name in GRID_SOLVERS:
+        grid_solver = solver_name if solver_name in GRID_SOLVERS else "grid_astar"
+        if grid_solver == "grid_dijkstra" or solver_name == "dijkstra":
+            grid_solver = "grid_dijkstra"
         t0 = time.time()
-        if solver_name == "grid_astar":
+        if grid_solver == "grid_astar":
             path = _grid_astar(crop, (si, sj), (ei, ej), weight, diagonal_name, heuristic_name, cost_model)
         else:
             path = _grid_dijkstra(crop, (si, sj), (ei, ej), weight, diagonal_name, cost_model)
-        graph_time = 0.0
         solve_time = time.time() - t0
-        total_time = solve_time
         logger.debug(
-            f"Grid solver finished: path_len={len(path)}, solve_time={solve_time:.4f}s, total={total_time:.4f}s"
+            f"Grid solver finished: path_len={len(path)}, solve_time={solve_time:.4f}s, total={solve_time:.4f}s"
         )
         return list(path)
 
-    # Build graph from elevation for NetworkX solvers
-    t0 = time.time()
-    G = build_graph_from_elevation(
-        crop,
-        weight=weight,
-        diagonal_movement=diagonal_name,
-        cost_model=cost_model,
-        graph_backend=graph_backend,
-    )
-    graph_time = time.time() - t0
+    # Pathfinding backend
+    if backend == "pathfinding":
+        if solver_name not in PATHFINDING_SOLVERS:
+            logger.warning(f"Unknown pathfinding solver '{solver_name}', falling back to astar")
+            solver_name = "astar"
+
+        if cost_model in {"slope_uphill", "energy"}:
+            logger.warning("Pathfinding backend does not support directional cost models; falling back to networkx")
+        else:
+            path, prep_time, solve_time = _find_path_pathfinding(
+                crop,
+                (si, sj),
+                (ei, ej),
+                solver_name,
+                diagonal_name,
+                weight,
+                heuristic_name,
+                cost_model,
+            )
+            total_time = prep_time + solve_time
+            logger.debug(
+                "Pathfinding solver finished: "
+                f"path_len={len(path)}, prep_time={prep_time:.4f}s, solve_time={solve_time:.4f}s, total={total_time:.4f}s"
+            )
+            return list(path)
+
+    # NetworkX backend
+    if solver_name not in NETWORKX_SOLVERS:
+        logger.warning(f"Unknown networkx solver '{solver_name}', falling back to astar")
+        solver_name = "astar"
+
+    if prebuilt_graph is not None:
+        G = prebuilt_graph
+        graph_time = 0.0
+        logger.debug("Using prebuilt NetworkX graph; skipping build_graph_from_elevation()")
+    else:
+        t0 = time.time()
+        G = build_graph_from_elevation(
+            crop,
+            weight=weight,
+            diagonal_movement=diagonal_name,
+            cost_model=cost_model,
+        )
+        graph_time = time.time() - t0
     logger.debug(
         f"Graph construction: nodes={G.number_of_nodes()}, edges={G.number_of_edges()}, time={graph_time:.4f}s"
     )
@@ -387,8 +622,6 @@ def find_path(
         elif solver_name == "unweighted":
             path = nx.shortest_path(G, start_node, end_node)
         else:
-            # Default to astar
-            logger.warning(f"Unknown solver '{solver_name}', falling back to astar")
             heuristic = HEURISTIC_MAP.get(heuristic_name, HEURISTIC_MAP["euclidean"])
             path = nx.astar_path(G, start_node, end_node, heuristic=heuristic, weight="weight")
     except nx.NetworkXNoPath:
@@ -1009,7 +1242,9 @@ def generate_sample(
         solver_config,
     ) = args
 
+    solver_config = _resolve_solver_config(solver_config)
     max_marker_retries = solver_config.get("max_marker_retries", 10)
+    backend, solver_name = _parse_solver_backend_and_name(solver_config)
     max_elevation_retries = 10  # Total attempts for different elevations
 
     start_time = datetime.now()
@@ -1090,6 +1325,20 @@ def generate_sample(
             total_pixels = h * w
             marker1_flat_idx = i1 * w + j1
 
+            # Optionally prebuild NetworkX graph once for this crop when networkx solver is selected
+            prebuilt_graph = None
+            if backend == "networkx" or solver_name in NETWORKX_SOLVERS:
+                try:
+                    prebuilt_graph = build_graph_from_elevation(
+                        crop,
+                        weight=solver_config.get("weight", 1.0),
+                        diagonal_movement=solver_config.get("diagonal_movement", "always"),
+                        cost_model=solver_config.get("cost_model", "elevation"),
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to prebuild NetworkX graph for crop: {e}")
+                    prebuilt_graph = None
+
             path = []
             marker_attempts_used = 0
             for marker_attempt in range(max_marker_retries):
@@ -1101,7 +1350,7 @@ def generate_sample(
                 i2, j2 = divmod(idx2, w)
 
                 # Try to find path between markers
-                path = find_path(crop, (i1, j1), (i2, j2), solver_config)
+                path = find_path(crop, (i1, j1), (i2, j2), solver_config, prebuilt_graph=prebuilt_graph)
                 if len(path) > 0:
                     break  # Found a valid path
 
@@ -1219,7 +1468,8 @@ def generate_sample(
                     "pixels": [{"i": int(pi), "j": int(pj)} for pi, pj in path],
                 },
                 "solver": {
-                    "name": solver_config.get("name", "astar"),
+                    "backend": backend,
+                    "name": solver_name,
                     "diagonal_movement": solver_config.get("diagonal_movement", "always"),
                     "weight": solver_config.get("weight", 1.0),
                     "heuristic": solver_config.get("heuristic", "euclidean"),
@@ -1399,13 +1649,14 @@ def run_generate(
     logger.info(f"Loaded {len(tile_stats_df)} tiles into DataFrame")
 
     # Load solver configuration
-    solver_config = config.get("solver", {})
+    solver_config = _resolve_solver_config(config.get("solver", {}))
+    backend, solver_name = _parse_solver_backend_and_name(solver_config)
     logger.info(
-        f"Solver config: name={solver_config.get('name', 'a_star')}, "
+        f"Solver config: backend={backend}, "
+        f"name={solver_name}, "
         f"diagonal={solver_config.get('diagonal_movement', 'always')}, "
         f"weight={solver_config.get('weight', 1.0)}, "
         f"cost_model={solver_config.get('cost_model', 'elevation')}, "
-        f"graph_backend={solver_config.get('graph_backend', 'edges')}, "
         f"max_marker_retries={solver_config.get('max_marker_retries', 10)}"
     )
 

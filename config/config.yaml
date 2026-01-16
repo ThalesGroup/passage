@@ -8,47 +8,95 @@ resolutions:
   - 4096
 num_samples: 10
 
-# NetworkX pathfinding solver configuration
+# Pathfinding solver configuration
+# Use a name prefix to select backend:
+#   networkx:   NetworkX graph solvers (supports all cost models)
+#   pathfinding: pathfinding package solvers (grid-based, no directional cost models)
+#   grid:       internal NumPy grid solvers (grid_astar/grid_dijkstra)
 # Edge weights = distance_m * (1 + weight * normalized_elevation)
 # Cardinal moves: 30m, Diagonal moves: 30*sqrt(2) ≈ 42.43m
 solver:
-  # Algorithm name - available options:
-  #   astar        - A* search with heuristic (fast, optimal) [DEFAULT]
-  #   astar_bi     - Bidirectional A* variant (same as astar, for compatibility)
-  #   dijkstra     - Dijkstra's algorithm (optimal, no heuristic)
-  #   dijkstra_bi  - Bidirectional Dijkstra (faster for long paths)
-  #   bellman_ford - Bellman-Ford algorithm (handles negative weights, slowest)
-  #   unweighted   - BFS shortest path (ignores weights, fastest)
-  name: dijkstra_bi
+  # Solver name (with prefix):
+  #   networkx: astar, astar_bi, dijkstra, dijkstra_bi, bellman_ford, unweighted
+  #   pathfinding: astar, dijkstra, best_first
+  #   grid: astar, dijkstra (mapped to grid_astar/grid_dijkstra)
+  #
+  # Example (NetworkX A*):
+  #   name: networkx:astar
+  # Example (Pathfinding Dijkstra):
+  #   name: pathfinding:dijkstra
+  # Example (Grid A*):
+  #   name: grid:astar
+  name: grid:astar
 
-  # Diagonal movement - controls graph connectivity:
-  #   always  - 8-connectivity (cardinal 30m + diagonal 42.43m) [DEFAULT]
-  #   never   - 4-connectivity (cardinal only: N/S/E/W, 30m each)
-  diagonal_movement: always
+  # Parameters shared by all backends
+  common:
+    # Diagonal movement - controls graph connectivity:
+    #   always  - 8-connectivity (cardinal 30m + diagonal 42.43m) [DEFAULT]
+    #   never   - 4-connectivity (cardinal only: N/S/E/W, 30m each)
+    diagonal_movement: always
 
-  # Weight multiplier for elevation cost (higher = prefer flat paths)
-  # Set very high to strongly penalize high-elevation cells so the path follows valleys more aggressively.
-  # Note: this multiplies the normalized elevation term, so large values (100+) heavily favor low-elevation routes.
-  weight: 100.0
+    # Maximum retries for marker sampling before trying new elevation
+    max_marker_retries: 10
 
-  # Edge cost model:
-  #   elevation          - distance * (1 + weight * normalized_elevation) [DEFAULT]
-  #   distance           - flat distance only (ignore elevation)
-  #   slope_uphill       - penalize uphill elevation changes (distance-scaled)
-  #   energy             - distance + weight * max(0, elevation_gain)
-  #   absolute_elevation - distance * (1 + weight * normalized_abs_elevation)
-  cost_model: elevation
+  # Parameters for NetworkX backend (all cost models supported)
+  networkx:
+    # Weight multiplier for elevation cost (higher = prefer flat paths)
+    # Set very high to strongly penalize high-elevation cells so the path follows valleys more aggressively.
+    # Note: this multiplies the normalized elevation term, so large values (100+) heavily favor low-elevation routes.
+    weight: 30.0
 
-  # Graph construction backend (NetworkX solvers only):
-  #   edges - build from edge list (fast, no sparse conversion) [DEFAULT]
-  #   scipy - build via sparse adjacency + nx.from_scipy_sparse_array
-  graph_backend: edges
+    # Edge cost model:
+    #   elevation          - distance * (1 + weight * normalized_elevation) [DEFAULT]
+    #   distance           - flat distance only (ignore elevation)
+    #   slope_uphill       - penalize uphill elevation changes (distance-scaled)
+    #   energy             - distance + weight * max(0, elevation_gain)
+    #   absolute_elevation - distance * (1 + weight * normalized_abs_elevation)
+    cost_model: elevation
 
-  # Heuristic function for A* search (only used when name=astar or astar_bi):
-  #   euclidean  - Euclidean distance in meters (best for 8-connectivity) [DEFAULT]
-  #   manhattan  - Manhattan distance in meters (best for 4-connectivity)
-  #   chebyshev  - Chebyshev distance in meters (alternative for 8-connectivity)
-  heuristic: euclidean
+    # Heuristic function for A* search (used by astar/astar_bi):
+    #   euclidean  - Euclidean distance in meters (best for 8-connectivity) [DEFAULT]
+    #   manhattan  - Manhattan distance in meters (best for 4-connectivity)
+    #   chebyshev  - Chebyshev distance in meters (alternative for 8-connectivity)
+    heuristic: euclidean
 
-  # Maximum retries for marker sampling before trying new elevation
-  max_marker_retries: 10
+  # Parameters for pathfinding backend (no directional cost models: slope_uphill, energy)
+  pathfinding:
+    weight: 30.0
+    cost_model: elevation
+    heuristic: euclidean
+
+  # Parameters for grid backend (all cost models supported)
+  grid:
+    weight: 100.0
+    cost_model: elevation
+    heuristic: euclidean
+
+# Obstacle generation configuration (used by obstacles notebook)
+# Overview:
+#  - `ratio_max` controls the maximum fraction of the image that can be occupied by obstacles.
+#  - `size_min_ratio` / `size_max_ratio` describe the minimum and maximum *relative* linear size
+#    (width/height) for generated superellipses, expressed as fraction of the image width/height.
+#    Example: size_max_ratio: 0.5 means a superellipse may be up to half the image width/height.
+#  - `generation` contains procedural tuning parameters that affect how many attempts are made
+#    to reach a target obstacle coverage and how many candidate shapes are considered per attempt.
+#  - `obstacle_penalty` is added to elevation values for cells marked as obstacles when running
+#    pathfinding; set very large to make paths avoid obstacle cells.
+obstacles:
+  # Maximum target ratio of obstacles in the image (0.0 - 1.0)
+  ratio_max: 0.20
+
+  # Superellipse size ratios relative to resolution (simplified defaults)
+  # Set to sensible defaults for experiments: min 20% of the dimension, max 50%.
+  size_min_ratio: 0.05
+  size_max_ratio: 0.20
+
+  # Generator tuning parameters (procedural, not shape-specific)
+  generation:
+    # Number of independent attempts to produce a mask (each attempt draws a new target_ratio)
+    max_attempts: 50
+    # Number of candidate superellipses to try when building a mask
+    candidates_per_mask: 200
+
+  # Penalty added to elevation of obstacle cells during pathfinding (large -> avoided)
+  obstacle_penalty: 1e6

@@ -1,7 +1,7 @@
 """Tests for the generate module."""
 
-import math
 import json
+import math
 from pathlib import Path
 
 import numpy as np
@@ -9,7 +9,6 @@ import pytest
 import yaml
 
 import passage.generate as gen
-
 
 # =============================================================================
 # Unit tests for helper functions
@@ -78,8 +77,8 @@ class TestFindPath:
             "dijkstra_bi",
             "bellman_ford",
             "unweighted",
-            "grid_astar",
-            "grid_dijkstra",
+            "grid:astar",
+            "grid:dijkstra",
         ]
         for solver_name in solvers:
             solver_config = {"name": solver_name, "diagonal_movement": "always", "weight": 1.0}
@@ -121,6 +120,18 @@ class TestFindPath:
             assert len(path) > 0, f"Heuristic {heuristic} failed to find path"
             assert path[0] == (0, 0)
             assert path[-1] == (5, 5)
+
+    @pytest.mark.unit
+    @pytest.mark.generate
+    def test_find_path_with_prebuilt_graph(self):
+        """Test find_path when a prebuilt NetworkX graph is supplied."""
+        crop = np.ones((8, 8), dtype=np.float32) * 50
+        solver_config = {"name": "networkx:astar", "diagonal_movement": "always", "weight": 1.0}
+        G = gen.build_graph_from_elevation(crop, weight=1.0, diagonal_movement="always")
+        path = gen.find_path(crop, (0, 0), (7, 7), solver_config, prebuilt_graph=G)
+        assert len(path) > 0
+        assert path[0] == (0, 0)
+        assert path[-1] == (7, 7)
 
 
 class TestBuildGraphFromElevation:
