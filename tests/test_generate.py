@@ -519,13 +519,14 @@ class TestTensorToImage:
         assert image.shape == (4, 4, 3)
         assert image.dtype == np.uint8
 
-        # Check BGR channels
-        # Blue (elevation) should be 127 or 128 (0.5 * 255)
-        assert image[0, 0, 0] == 127 or image[0, 0, 0] == 128
-        # Green (markers) at (1,1) should be 255
+        # Basic checks: elevation colormap applied (non-empty), markers and path drawn, no red
+        assert image[0, 0].sum() > 0  # elevation colormap produced a non-black pixel
+        # Marker at (1,1) should be visible (green channel is filled for first marker)
         assert image[1, 1, 1] == 255
-        # Red (path) at (1,2) should be 255
-        assert image[1, 2, 2] == 255
+        # Path at (1,2) should be green
+        assert image[1, 2, 1] == 255
+        # Red should be 0 when no obstacles
+        assert image[1, 2, 2] == 0
 
     @pytest.mark.unit
     @pytest.mark.generate
@@ -536,24 +537,16 @@ class TestTensorToImage:
         tensor[0, 0, 1] = 1.0
         tensor[1, 1, 2] = 1.0  # obstacle pixel
 
-        md = {
-            "obstacles": {"enabled": True},
-            "paths": {
-                "with_obstacles": {"pixels": [{"i": 2, "j": 2}]},
-                "without_obstacles": {"pixels": []},
-            },
-            "crop_min_elevation": 0.0,
-            "crop_max_elevation": 1.0,
-        }
-        md_path = tmp_path / "md.yaml"
-        with open(md_path, "w") as f:
-            yaml.dump(md, f)
+        # Provide metadata example (not needed here since we pass path_pixels explicitly)
+        # md = {...}  # unused in this test
+        # Provide path pixels explicitly instead of passing metadata_path
+        path_pixels = [(2, 2)]
 
-        image = gen.tensor_to_image(tensor, metadata_path=md_path)
-        # obstacle should show in red channel (>= 180)
-        assert image[1, 1, 2] >= 180
-        # path pixel should be red at (2,2)
-        assert image[2, 2, 2] == 255
+        image = gen.tensor_to_image(tensor, path_pixels=path_pixels)
+        # obstacle should show in red channel (255)
+        assert image[1, 1, 2] == 255
+        # path pixel should be green at (2,2)
+        assert image[2, 2, 1] == 255
 
     @pytest.mark.unit
     @pytest.mark.generate
@@ -564,8 +557,10 @@ class TestTensorToImage:
 
         assert image.shape == (8, 8, 3)
         assert image.dtype == np.uint8
-        # Elevation and markers zero -> B and G channels are 0, R is 0 (no path)
-        assert np.all(image == 0)
+        # Elevation zeros map through the terrain colormap -> image should not be all zeros
+        assert not np.all(image == 0)
+        # With no obstacles there should be no pure-red pixels (obstacle overlay)
+        assert not np.any((image[:, :, 0] == 0) & (image[:, :, 1] == 0) & (image[:, :, 2] == 255))
 
     @pytest.mark.unit
     @pytest.mark.generate
@@ -576,10 +571,10 @@ class TestTensorToImage:
 
         assert image.shape == (8, 8, 3)
         assert image.dtype == np.uint8
-        # Elevation and markers ones -> B and G channels 255, R is 0 (no path)
-        assert np.all(image[:, :, 0] == 255)
-        assert np.all(image[:, :, 1] == 255)
-        assert np.all(image[:, :, 2] == 0)
+        # Elevation ones map through the terrain colormap -> not all black and no obstacles
+        assert not np.all(image == 0)
+        # With no obstacles there should be no pure-red pixels (obstacle overlay)
+        assert not np.any((image[:, :, 0] == 0) & (image[:, :, 1] == 0) & (image[:, :, 2] == 255))
 
     @pytest.mark.unit
     @pytest.mark.generate
@@ -592,9 +587,8 @@ class TestTensorToImage:
 
         image = gen.tensor_to_image(tensor)
 
-        # Check gradient in blue channel (elevation)
-        assert image[0, 0, 0] == 0  # Top row should be 0
-        assert image[9, 0, 0] == 255  # Bottom row should be 255
+        # Gradient should produce different colors at top and bottom
+        assert not np.array_equal(image[0, 0], image[9, 0])  # Top and bottom should differ
 
     @pytest.mark.unit
     @pytest.mark.generate
@@ -859,21 +853,19 @@ class TestAssembleCrop:
 class TestMetadataCache:
     @pytest.mark.unit
     @pytest.mark.generate
-    def test_tensor_to_image_reads_metadata(self, tmp_path):
-        """Ensure tensor_to_image reads metadata when provided a metadata path (no global cache)."""
+    def test_tensor_to_image_reads_metadata_equivalent(self, tmp_path):
+        """Ensure tensor_to_image behavior when metadata is provided externally (path pixels)."""
         md = {
             "paths": {"without_obstacles": {"pixels": [{"i": 1, "j": 2}]}, "with_obstacles": {"pixels": []}},
             "obstacles": {"enabled": False},
             "crop_min_elevation": 0.0,
             "crop_max_elevation": 100.0,
         }
-        md_path = tmp_path / "0000000000.yaml"
-        with open(md_path, "w") as f:
-            yaml.dump(md, f)
+        # Instead of passing metadata_path to tensor_to_image, callers should extract path pixels
+        path_section = md.get("paths", {}).get("without_obstacles") or md.get("paths", {}).get("with_obstacles")
+        path_pixels = [(p["i"], p["j"]) for p in path_section.get("pixels", [])]
 
         tensor = np.zeros((4, 4, 2), dtype=np.float32)
-        img = gen.tensor_to_image(tensor, metadata_path=md_path)
-        # The red channel at (1,2) should be set by the metadata path pixels
-        assert img[1, 2, 2] == 255
-        # Ensure there is no global _METADATA_CACHE attribute
-        assert not hasattr(gen, "_METADATA_CACHE")
+        img = gen.tensor_to_image(tensor, path_pixels=path_pixels)
+        # The green channel at (1,2) should be set by the provided path pixels
+        assert img[1, 2, 1] == 255

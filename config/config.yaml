@@ -68,8 +68,9 @@ solver:
 
   # Parameters for grid backend (all cost models supported)
   grid:
-    weight: 1000.0
-    cost_model: elevation
+    weight: 30.0
+    # cost_model: elevation
+    cost_model: energy
     heuristic: euclidean
 
 # Obstacle generation configuration (used by obstacles notebook)
