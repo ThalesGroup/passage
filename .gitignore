@@ -13,6 +13,7 @@ wheels/
 .ruff_cache/
 
 outputs
+tmp
 
 # Test outputs
 outputs/tests/
