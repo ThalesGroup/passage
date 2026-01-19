@@ -21,7 +21,7 @@ def tensor_to_image(
 
     Color mapping and overlays:
         - Elevation -> rendered with matplotlib 'terrain' colormap (base image)
-        - Markers -> highlighted (first marker lime, second cyan)
+        - Markers -> highlighted (start_point lime, end_point cyan)
         - Path -> green overlay (drawn as polyline/contours)
         - Obstacles -> red overlay (alpha blended on top of terrain)
 
@@ -113,8 +113,18 @@ def tensor_to_image(
 
     # Compute obstacle mask and log counts (assignment happens after path/markers to preserve overlay priority)
     obst_mask = obstacles_channel > 0.5
+    has_end = bool(np.any(marker_channel > 0.5))
+    has_background = bool(np.any(marker_channel < -0.5))
+    start_mask = (
+        np.isclose(marker_channel, 0.0) if (has_end or has_background) else np.zeros_like(marker_channel, dtype=bool)
+    )
+    end_mask = marker_channel > 0.5
     logger.debug(
-        f"tensor_to_image: obst_count={int(np.sum(obst_mask))}, path_count={int(np.sum(path_channel > 0.5))}, marker_count={int(np.sum(marker_channel > 0.5))}"
+        "tensor_to_image: obst_count=%d, path_count=%d, start_count=%d, end_count=%d",
+        int(np.sum(obst_mask)),
+        int(np.sum(path_channel > 0.5)),
+        int(np.sum(start_mask)),
+        int(np.sum(end_mask)),
     )
 
     # Draw path (green) from path_channel or explicit pixels
@@ -136,12 +146,16 @@ def tensor_to_image(
             for y, x in zip(ys, xs):
                 cv2.circle(img, (int(x), int(y)), radius=1, color=(0, 255, 0), thickness=-1)
 
-    # Draw markers: first marker lime, second marker cyan (if present)
-    marker_positions = np.argwhere(marker_channel > 0.5)
-    for idx, (mi, mj) in enumerate(marker_positions):
+    # Draw markers: start_point (lime) and end_point (cyan)
+    start_positions = np.argwhere(start_mask)
+    end_positions = np.argwhere(end_mask)
+    for mi, mj in start_positions:
         center = (int(mj), int(mi))  # (x, y)
-        color = (0, 255, 0) if idx == 0 else (255, 255, 0)  # BGR: lime, cyan-like
-        cv2.circle(img, center, radius=6, color=color, thickness=-1)
+        cv2.circle(img, center, radius=6, color=(0, 255, 0), thickness=-1)
+        cv2.circle(img, center, radius=7, color=(255, 255, 255), thickness=1)
+    for mi, mj in end_positions:
+        center = (int(mj), int(mi))  # (x, y)
+        cv2.circle(img, center, radius=6, color=(255, 255, 0), thickness=-1)
         cv2.circle(img, center, radius=7, color=(255, 255, 255), thickness=1)
 
     # Re-apply obstacles on top so they are visually dominant

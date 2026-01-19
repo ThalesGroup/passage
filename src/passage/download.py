@@ -199,7 +199,7 @@ def run_download(outputs_dirpath: str, *, resume: bool = True, num_cpus: int | N
     logger.info(f"Starting download: outputs={outputs_path}, cpus={cpus}, resume={resume}")
 
     csv_path = outputs_path / "download.csv"
-    png_path = outputs_path / "download.png"
+    png_path = outputs_path / "world_coverage.png"
 
     # Generate all lat/lon pairs
     all_pairs = []

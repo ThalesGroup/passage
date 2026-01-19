@@ -1,6 +1,7 @@
 """PASSAGE: Path Solving Dataset and Generator."""
 
 import argparse
+import sys
 
 from loguru import logger
 
@@ -38,6 +39,12 @@ def main() -> None:
         type=int,
         default=None,
         help="Number of CPUs for multiprocessing (0 disables multiprocessing, default: all CPUs)",
+    )
+    download_parser.add_argument(
+        "--log-level",
+        choices=["debug", "info", "warning", "error", "critical"],
+        default="info",
+        help="Set log level (default: info)",
     )
 
     # Generate subcommand
@@ -91,6 +98,12 @@ def main() -> None:
         default=False,
         help="Delete existing directories and regenerate all samples (default: resume from existing)",
     )
+    generate_parser.add_argument(
+        "--log-level",
+        choices=["debug", "info", "warning", "error", "critical"],
+        default="info",
+        help="Set log level (default: info)",
+    )
 
     # Calibrate subcommand
     calibrate_parser = subparsers.add_parser(
@@ -118,8 +131,19 @@ def main() -> None:
         default=None,
         help="Number of CPUs for multiprocessing (can be specified before or after subcommand)",
     )
+    calibrate_parser.add_argument(
+        "--log-level",
+        choices=["debug", "info", "warning", "error", "critical"],
+        default="info",
+        help="Set log level (default: info)",
+    )
 
     args = parser.parse_args()
+
+    # Configure global log level (default 'info') when provided on subcommands
+    level = getattr(args, "log_level", "info")
+    logger.remove()
+    logger.add(sys.stderr, level=level.upper())
 
     if args.command == "download":
         run_download(args.outputs_dirpath, resume=not args.no_resume, num_cpus=args.num_cpus)

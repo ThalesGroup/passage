@@ -455,14 +455,18 @@ class TestGenerateSample:
             assert "index" in metadata
             assert "resolution" in metadata
             assert "target_elevation" in metadata
-            assert "tile_min_elevation" in metadata
-            assert "tile_max_elevation" in metadata
-            assert "crop_min_elevation" in metadata
-            assert "crop_max_elevation" in metadata
+            assert "tile" in metadata
+            assert "stats" in metadata["tile"]
+            assert "min_elevation" in metadata["tile"]["stats"]
+            assert "max_elevation" in metadata["tile"]["stats"]
+            assert "crop" in metadata
+            assert "min_elevation" in metadata["crop"]
+            assert "max_elevation" in metadata["crop"]
             assert "markers" in metadata
-            assert len(metadata["markers"]) == 2
-            assert "elevation" in metadata["markers"][0]
-            assert "elevation" in metadata["markers"][1]
+            assert "start_point" in metadata["markers"]
+            assert "end_point" in metadata["markers"]
+            assert "elevation" in metadata["markers"]["start_point"]
+            assert "elevation" in metadata["markers"]["end_point"]
             assert "paths" in metadata
             assert "without_obstacles" in metadata["paths"]
             assert "obstacles" in metadata
@@ -509,8 +513,9 @@ class TestTensorToImage:
         # Create a simple 4x4 tensor with known values (elevation + markers)
         tensor = np.zeros((4, 4, 2), dtype=np.float32)
         tensor[:, :, 0] = 0.5  # Elevation channel (mid-gray)
-        tensor[1, 1, 1] = 1.0  # Marker at (1, 1)
-        tensor[2, 2, 1] = 1.0  # Marker at (2, 2)
+        tensor[:, :, 1] = -1.0
+        tensor[1, 1, 1] = 0.0  # start_point at (1, 1)
+        tensor[2, 2, 1] = 1.0  # end_point at (2, 2)
         path_pixels = [(1, 2)]  # Path pixel
 
         image = gen.tensor_to_image(tensor, path_pixels=path_pixels)
@@ -521,7 +526,7 @@ class TestTensorToImage:
 
         # Basic checks: elevation colormap applied (non-empty), markers and path drawn, no red
         assert image[0, 0].sum() > 0  # elevation colormap produced a non-black pixel
-        # Marker at (1,1) should be visible (green channel is filled for first marker)
+        # Start marker at (1,1) should be visible (green channel is filled)
         assert image[1, 1, 1] == 255
         # Path at (1,2) should be green
         assert image[1, 2, 1] == 255
@@ -534,7 +539,8 @@ class TestTensorToImage:
         """Test tensor_to_image with obstacle channel and metadata paths."""
         tensor = np.zeros((4, 4, 3), dtype=np.float32)
         tensor[:, :, 0] = 0.25
-        tensor[0, 0, 1] = 1.0
+        tensor[:, :, 1] = -1.0
+        tensor[0, 0, 1] = 0.0
         tensor[1, 1, 2] = 1.0  # obstacle pixel
 
         # Provide metadata example (not needed here since we pass path_pixels explicitly)
@@ -553,6 +559,7 @@ class TestTensorToImage:
     def test_tensor_to_image_all_zeros(self):
         """Test tensor_to_image with all zeros (2-channel)."""
         tensor = np.zeros((8, 8, 2), dtype=np.float32)
+        tensor[:, :, 1] = -1.0
         image = gen.tensor_to_image(tensor)
 
         assert image.shape == (8, 8, 3)
@@ -858,8 +865,7 @@ class TestMetadataCache:
         md = {
             "paths": {"without_obstacles": {"pixels": [{"i": 1, "j": 2}]}, "with_obstacles": {"pixels": []}},
             "obstacles": {"enabled": False},
-            "crop_min_elevation": 0.0,
-            "crop_max_elevation": 100.0,
+            "crop": {"min_elevation": 0.0, "max_elevation": 100.0},
         }
         # Instead of passing metadata_path to tensor_to_image, callers should extract path pixels
         path_section = md.get("paths", {}).get("without_obstacles") or md.get("paths", {}).get("with_obstacles")

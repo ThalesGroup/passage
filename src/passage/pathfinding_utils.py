@@ -346,6 +346,36 @@ def build_graph_from_elevation(
     return template.graph
 
 
+def _path_cost_from_graph(graph, path_list) -> float:
+    """Compute total cost of a path using a prebuilt NetworkX graph's edge weights.
+
+    This iterates over consecutive node pairs in `path_list` and sums the
+    'weight' attribute from the graph edges. Falls back to Euclidean pixel
+    distance converted to meters using PIXEL_SIZE_M if an edge weight is
+    missing or an error occurs.
+    """
+    if graph is None or not path_list:
+        return 0.0
+    total = 0.0
+    for a, b in zip(path_list, path_list[1:]):
+        try:
+            u = (int(a[0]), int(a[1]))
+            v = (int(b[0]), int(b[1]))
+            data = graph.get_edge_data(u, v) or {}
+            weight = data.get("weight")
+            if weight is not None:
+                total += float(weight)
+            else:
+                di = b[0] - a[0]
+                dj = b[1] - a[1]
+                total += float(math.hypot(di, dj) * PIXEL_SIZE_M)
+        except Exception:
+            di = b[0] - a[0]
+            dj = b[1] - a[1]
+            total += float(math.hypot(di, dj) * PIXEL_SIZE_M)
+    return total
+
+
 # Optimized grid-based solvers that operate directly on numpy arrays to avoid expensive NetworkX graph construction
 def _grid_solvers_neighbors(diagonal_movement: str):
     if diagonal_movement == "never":
@@ -540,3 +570,23 @@ def _grid_dijkstra(
                 heapq.heappush(open_heap, (tentative_g, ni, nj))
 
     return []
+
+
+def check_path_collision(path: list[tuple[int, int]], obstacles_mask: np.ndarray) -> bool:
+    """
+    Check if a path crosses any obstacles in the provided mask.
+
+    Args:
+        path: List of (row, col) tuples representing the path.
+        obstacles_mask: 2D numpy array where 1 indicates an obstacle and 0 indicates free space.
+
+    Returns:
+        True if any point on the path coincides with an obstacle, False otherwise.
+    """
+    if not path or obstacles_mask is None:
+        return False
+    # Use numpy indexing for speed if possible, but path is usually a list of tuples
+    for i, j in path:
+        if obstacles_mask[i, j] == 1:
+            return True
+    return False
