@@ -44,7 +44,7 @@ solver:
     # Weight multiplier for elevation cost (higher = prefer flat paths)
     # Set very high to strongly penalize high-elevation cells so the path follows valleys more aggressively.
     # Note: this multiplies the normalized elevation term, so large values (100+) heavily favor low-elevation routes.
-    weight: 30.0
+    weight: 100.0
 
     # Edge cost model:
     #   elevation          - distance * (1 + weight * normalized_elevation) [DEFAULT]
@@ -62,13 +62,13 @@ solver:
 
   # Parameters for pathfinding backend (no directional cost models: slope_uphill, energy)
   pathfinding:
-    weight: 30.0
+    weight: 100.0
     cost_model: elevation
     heuristic: euclidean
 
   # Parameters for grid backend (all cost models supported)
   grid:
-    weight: 30.0
+    weight: 100.0
     # cost_model: elevation
     cost_model: energy
     heuristic: euclidean

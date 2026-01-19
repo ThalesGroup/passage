@@ -40,6 +40,10 @@ from passage.pathfinding_utils import (
     _grid_astar,
     _grid_dijkstra,
     build_graph_from_elevation,
+    check_path_collision,
+    _path_cost_from_graph,
+    PIXEL_SIZE_M,
+    DIAGONAL_DISTANCE_M,
 )
 from passage.pathfinding_utils import (
     _get_graph_template as _get_graph_template,
@@ -837,7 +841,9 @@ def generate_sample(
 
             # Optionally prebuild NetworkX graph once for this crop when networkx solver is selected
             prebuilt_graph = None
+            graph_prebuild_time = 0.0
             if backend == "networkx" or solver_name in NETWORKX_SOLVERS:
+                t_graph = time.time()
                 try:
                     prebuilt_graph = build_graph_from_elevation(
                         crop,
@@ -845,12 +851,21 @@ def generate_sample(
                         diagonal_movement=solver_config.get("diagonal_movement", "always"),
                         cost_model=solver_config.get("cost_model", "elevation"),
                     )
+                    graph_prebuild_time = time.time() - t_graph
                 except Exception as e:
+                    graph_prebuild_time = time.time() - t_graph
                     logger.warning(f"Failed to prebuild NetworkX graph for crop: {e}")
                     prebuilt_graph = None
 
             path_without = []
+            path_with = []
+            obstacles_mask = None
+            obstacle_target_ratio = 0.0
+            obstacle_ratio = 0.0
+            path_without_crosses_obstacles = False
+
             marker_attempts_used = 0
+            found_valid_paths = False
             for marker_attempt in range(max_marker_retries):
                 marker_attempts_used += 1
                 # Generate marker 2 randomly, distinct from marker 1
@@ -861,44 +876,65 @@ def generate_sample(
 
                 # Try to find path between markers (without obstacles)
                 path_without = find_path(crop, (i1, j1), (i2, j2), solver_config, prebuilt_graph=prebuilt_graph)
-                if len(path_without) > 0:
-                    break  # Found a valid path
+                if len(path_without) == 0:
+                    continue  # No path without obstacles, try other markers
 
-            if len(path_without) == 0:
-                logger.debug(f"No path found after {marker_attempts_used} marker attempts; retrying elevation")
+                # Generate obstacles mask (if enabled) and compute path with obstacles
+                obstacles_cfg = obstacle_settings.get("config", {})
+                obstacles_enabled = bool(obstacle_settings.get("enabled", False))
+                obstacle_ratio_max = float(obstacle_settings.get("ratio_max", 0.0))
+                size_min_ratio = float(obstacle_settings.get("size_min_ratio", 0.20))
+                size_max_ratio = float(obstacle_settings.get("size_max_ratio", 0.50))
+                generation_cfg = obstacle_settings.get("generation_cfg", {})
+                obstacle_penalty = float(obstacle_settings.get("obstacle_penalty", 1e8))
+
+                marker_positions = [(i1, j1), (i2, j2)]
+                obstacle_gen_time = 0.0
+                if obstacles_enabled:
+                    t_obs = time.time()
+                    obstacles_mask, obstacle_target_ratio = _generate_obstacles_mask(
+                        crop.shape,
+                        obstacle_ratio_max,
+                        size_min_ratio,
+                        size_max_ratio,
+                        obstacles_cfg,
+                        marker_positions=marker_positions,
+                        generation_cfg=generation_cfg,
+                    )
+                    obstacle_gen_time = time.time() - t_obs
+                else:
+                    obstacles_mask = np.zeros_like(crop, dtype=np.uint8)
+                    obstacle_target_ratio = 0.0
+
+                obstacle_ratio = float(np.mean(obstacles_mask))
+
+                # Check if path_without crosses obstacles
+                path_without_crosses_obstacles = check_path_collision(path_without, obstacles_mask)
+
+                masked_elevation = crop.copy()
+                if obstacles_enabled and obstacle_penalty > 0:
+                    masked_elevation[obstacles_mask == 1] = masked_elevation.max() + obstacle_penalty
+
+                path_with = find_path(masked_elevation, (i1, j1), (i2, j2), solver_config)
+
+                # Check if path_with crosses obstacles (should not happen if penalty is high enough and path exists)
+                if obstacles_enabled and check_path_collision(path_with, obstacles_mask):
+                    logger.debug(f"path_with crosses obstacles (attempt {marker_attempt}), retrying markers")
+                    continue
+
+                # Assert path_with is same as path_without if no obstacle cross the first path
+                if not path_without_crosses_obstacles:
+                    assert path_with == path_without, (
+                        f"Sample {index}: path_with != path_without despite no obstacle collision. "
+                        f"lengths: with={len(path_with)}, without={len(path_without)}"
+                    )
+
+                found_valid_paths = True
+                break  # Found valid paths
+
+            if not found_valid_paths:
+                logger.debug(f"No valid paths found after {marker_attempts_used} marker attempts; retrying elevation")
                 continue  # Try another elevation
-
-            # Generate obstacles mask (if enabled) and compute path with obstacles
-            obstacles_cfg = obstacle_settings.get("config", {})
-            obstacles_enabled = bool(obstacle_settings.get("enabled", False))
-            obstacle_ratio_max = float(obstacle_settings.get("ratio_max", 0.0))
-            size_min_ratio = float(obstacle_settings.get("size_min_ratio", 0.20))
-            size_max_ratio = float(obstacle_settings.get("size_max_ratio", 0.50))
-            generation_cfg = obstacle_settings.get("generation_cfg", {})
-            obstacle_penalty = float(obstacle_settings.get("obstacle_penalty", 1e8))
-
-            marker_positions = [(i1, j1), (i2, j2)]
-            if obstacles_enabled:
-                obstacles_mask, obstacle_target_ratio = _generate_obstacles_mask(
-                    crop.shape,
-                    obstacle_ratio_max,
-                    size_min_ratio,
-                    size_max_ratio,
-                    obstacles_cfg,
-                    marker_positions=marker_positions,
-                    generation_cfg=generation_cfg,
-                )
-            else:
-                obstacles_mask = np.zeros_like(crop, dtype=np.uint8)
-                obstacle_target_ratio = 0.0
-
-            obstacle_ratio = float(np.mean(obstacles_mask))
-
-            masked_elevation = crop.copy()
-            if obstacles_enabled and obstacle_penalty > 0:
-                masked_elevation[obstacles_mask == 1] = masked_elevation.max() + obstacle_penalty
-
-            path_with = find_path(masked_elevation, (i1, j1), (i2, j2), solver_config)
 
             # Successfully found a path - proceed with sample generation
             # Normalize to float32 in [0, 1] using global_min/global_max
@@ -909,9 +945,9 @@ def generate_sample(
             crop_norm = np.clip(crop_norm, 0.0, 1.0).astype(np.float32)
             logger.debug(f"crop_norm min/max after clipping: {crop_norm.min()}/{crop_norm.max()}")
 
-            # Create marker channel: zeros with two pixels set to 1
-            marker_channel = np.zeros_like(crop_norm, dtype=np.float32)
-            marker_channel[i1, j1] = 1.0
+            # Create marker channel: -1 everywhere, start_point=0, end_point=1
+            marker_channel = np.full_like(crop_norm, -1.0, dtype=np.float32)
+            marker_channel[i1, j1] = 0.0
             marker_channel[i2, j2] = 1.0
 
             # Extract elevation values before normalization for metadata
@@ -935,61 +971,203 @@ def generate_sample(
             except Exception as e:  # pragma: no cover
                 logger.warning(f"Failed saving tensor {tensor_path}: {e}")
 
+            def _wrap_lon_float(lon_val: float) -> float:
+                return ((lon_val + 180.0) % 360.0) - 180.0
+
+            # Build list of tiles used to generate the elevation crop
+            tiles_used = []
+            tiles_overlapping = []
+            N = 2 * half_tiles + 1
+            for row_idx in range(N):
+                dlat = half_tiles - row_idx
+                tile_lat = center_lat + dlat
+                tile_top = row_idx * TILE_SIZE_PX
+                if tile_lat < MIN_LAT or tile_lat >= MAX_LAT:
+                    continue
+                for col_idx in range(N):
+                    dlon = -half_tiles + col_idx
+                    tile_lon = wrap_lon(center_lon + dlon)
+                    tile_left = col_idx * TILE_SIZE_PX
+                    tile_record = {
+                        "lat": int(tile_lat),
+                        "lon": int(tile_lon),
+                        "name": f"{lat_to_str(tile_lat)}{lon_to_str(tile_lon)}",
+                    }
+                    tiles_used.append(tile_record)
+
+                    # Check overlap with crop bounds
+                    tile_bottom = tile_top + TILE_SIZE_PX
+                    tile_right = tile_left + TILE_SIZE_PX
+                    overlaps = not (tile_right <= x1 or tile_left >= x2 or tile_bottom <= y1 or tile_top >= y2)
+                    if overlaps:
+                        tiles_overlapping.append(tile_record)
+
+            # Calculate geographic coordinates for crop bounds/center
+            px_per_deg = TILE_SIZE_PX
+            crop_center_y = y1 + resolution / 2.0
+            crop_center_x = x1 + resolution / 2.0
+            center_px_in_center_tile_y = crop_center_y - center_offset
+            center_px_in_center_tile_x = crop_center_x - center_offset
+            geo_center_lat = center_lat + 1.0 - (center_px_in_center_tile_y / px_per_deg)
+            geo_center_lon = _wrap_lon_float(center_lon + (center_px_in_center_tile_x / px_per_deg))
+
+            top_left_px_in_center_tile_y = y1 - center_offset
+            top_left_px_in_center_tile_x = x1 - center_offset
+            geo_top_left_lat = center_lat + 1.0 - (top_left_px_in_center_tile_y / px_per_deg)
+            geo_top_left_lon = _wrap_lon_float(center_lon + (top_left_px_in_center_tile_x / px_per_deg))
+
+            bottom_right_px_in_center_tile_y = y2 - center_offset
+            bottom_right_px_in_center_tile_x = x2 - center_offset
+            geo_bottom_right_lat = center_lat + 1.0 - (bottom_right_px_in_center_tile_y / px_per_deg)
+            geo_bottom_right_lon = _wrap_lon_float(center_lon + (bottom_right_px_in_center_tile_x / px_per_deg))
+
+            # Compute path costs (avoid building full NetworkX graphs; use template edge weights and sum along path)
+            cost_compute_time = 0.0
+            try:
+
+                def _sum_costs_from_template(elevation_arr, path_list):
+                    """Efficient per-edge cost summation using local neighbor logic.
+
+                    This computes each edge's weight on-the-fly from the elevations and
+                    cost model without constructing the full edge map or a NetworkX graph.
+                    """
+                    if not path_list:
+                        return 0.0
+
+                    # Precompute normalized arrays once per crop for fast lookup
+                    normalized, abs_norm, elev_range = _normalize_elevation_arrays(elevation_arr)
+                    weight_param = float(solver_config.get("weight", 1.0))
+                    cost_model = solver_config.get("cost_model", "elevation")
+
+                    def _edge_weight(a, b):
+                        ai, aj = int(a[0]), int(a[1])
+                        bi, bj = int(b[0]), int(b[1])
+                        di = bi - ai
+                        dj = bj - aj
+
+                        # Determine physical distance in meters for the step
+                        if abs(di) == 1 and abs(dj) == 1:
+                            dist_m = DIAGONAL_DISTANCE_M
+                        else:
+                            # covers cardinal moves and any unexpected multi-step (fallback)
+                            dist_m = PIXEL_SIZE_M * math.hypot(di, dj)
+
+                        # Choose cost model
+                        if cost_model == "distance":
+                            return float(dist_m)
+
+                        if cost_model == "absolute_elevation":
+                            dst_val = float(abs_norm[bi, bj])
+                            return float(dist_m * (1.0 + weight_param * dst_val))
+
+                        if cost_model == "slope_uphill":
+                            if elev_range > 0:
+                                delta = float(elevation_arr[bi, bj] - elevation_arr[ai, aj])
+                                slope_norm = max(0.0, delta) / elev_range
+                            else:
+                                slope_norm = 0.0
+                            return float(dist_m * (1.0 + weight_param * slope_norm))
+
+                        if cost_model == "energy":
+                            delta = float(elevation_arr[bi, bj] - elevation_arr[ai, aj])
+                            return float(dist_m + weight_param * max(0.0, delta))
+
+                        # default: 'elevation'
+                        dst_val = float(normalized[bi, bj])
+                        return float(dist_m * (1.0 + weight_param * dst_val))
+
+                    total = 0.0
+                    for a, b in zip(path_list, path_list[1:]):
+                        try:
+                            total += _edge_weight(a, b)
+                        except Exception:
+                            # Best-effort fallback: Euclidean pixel distance
+                            total += float(math.hypot(b[0] - a[0], b[1] - a[1]))
+                    return total
+
+                t_cost = time.time()
+                # cost_without: prefer template-sum to avoid building graphs; if prebuilt_graph exists use it (faster)
+                if prebuilt_graph is not None and (backend != "grid" and solver_name not in GRID_SOLVERS):
+                    cost_without = _path_cost_from_graph(prebuilt_graph, path_without)
+                else:
+                    cost_without = _sum_costs_from_template(crop, path_without)
+
+                # cost_with: compute along masked elevation using template-sum (avoids building graph)
+                cost_with = _sum_costs_from_template(masked_elevation, path_with)
+                cost_compute_time = time.time() - t_cost
+            except Exception:
+                cost_without = 0.0
+                cost_with = 0.0
+                cost_compute_time = 0.0
+
+            # Percentage cost difference (with - without) / without * 100
+            if cost_without > 0:
+                cost_diff_percent = float((cost_with - cost_without) / cost_without * 100.0)
+            else:
+                cost_diff_percent = 0.0
+
             # Save metadata into metadata folder *before* images so visualization can read it
             metadata_dir = outputs_dirpath / str(resolution) / "metadata"
             metadata = {
                 "index": index,
                 "resolution": resolution,
                 "target_elevation": float(target_elev),
-                "tile_min_elevation": tile_min_elev,
-                "tile_max_elevation": tile_max_elev,
-                "crop_min_elevation": crop_min_elev,
-                "crop_max_elevation": crop_max_elev,
-                "center": {
-                    "lat": float(locals().get("geo_center_lat"))
-                    if locals().get("geo_center_lat") is not None
-                    else None,
-                    "lon": float(locals().get("geo_center_lon"))
-                    if locals().get("geo_center_lon") is not None
-                    else None,
+                "calibration": {
+                    "min": float(global_min),
+                    "max": float(global_max),
                 },
-                "top_left": {
-                    "lat": float(locals().get("geo_top_left_lat"))
-                    if locals().get("geo_top_left_lat") is not None
-                    else None,
-                    "lon": float(locals().get("geo_top_left_lon"))
-                    if locals().get("geo_top_left_lon") is not None
-                    else None,
+                "tile": {
+                    "source": {
+                        "lat": center_lat,
+                        "lon": center_lon,
+                        "name": f"{lat_to_str(center_lat)}{lon_to_str(center_lon)}",
+                    },
+                    "stats": {
+                        "min_elevation": tile_min_elev,
+                        "max_elevation": tile_max_elev,
+                    },
+                    "used": tiles_used,
+                    "overlapping": tiles_overlapping,
                 },
-                "bottom_right": {
-                    "lat": float(locals().get("geo_bottom_right_lat"))
-                    if locals().get("geo_bottom_right_lat") is not None
-                    else None,
-                    "lon": float(locals().get("geo_bottom_right_lon"))
-                    if locals().get("geo_bottom_right_lon") is not None
-                    else None,
+                "crop": {
+                    "min_elevation": crop_min_elev,
+                    "max_elevation": crop_max_elev,
+                    "target_elevation": float(target_elev),
+                    "center": {"lat": float(geo_center_lat), "lon": float(geo_center_lon)},
+                    "top_left": {"lat": float(geo_top_left_lat), "lon": float(geo_top_left_lon)},
+                    "bottom_right": {"lat": float(geo_bottom_right_lat), "lon": float(geo_bottom_right_lon)},
                 },
-                "source_tile": {
-                    "lat": center_lat,
-                    "lon": center_lon,
-                    "name": f"{lat_to_str(center_lat)}{lon_to_str(center_lon)}",
-                },
-                "markers": [
-                    {"i": int(i1), "j": int(j1), "elevation": marker_1_elev},
-                    {"i": int(i2), "j": int(j2), "elevation": marker_2_elev},
-                ],
-                "path": {
-                    "length": len(path_without),
-                    "pixels": [{"i": int(pi), "j": int(pj)} for pi, pj in path_without],
+                "markers": {
+                    "start_point": {"i": int(i1), "j": int(j1), "elevation": marker_1_elev},
+                    "end_point": {"i": int(i2), "j": int(j2), "elevation": marker_2_elev},
                 },
                 "paths": {
                     "without_obstacles": {
                         "length": len(path_without),
-                        "pixels": [{"i": int(pi), "j": int(pj)} for pi, pj in path_without],
+                        "pixels": [
+                            {
+                                "i": int(pi),
+                                "j": int(pj),
+                                "elevation": float(crop[pi, pj]),
+                            }
+                            for pi, pj in path_without
+                        ],
+                        "crosses_obstacles": bool(path_without_crosses_obstacles),
+                        "cost": float(cost_without),
                     },
                     "with_obstacles": {
                         "length": len(path_with),
-                        "pixels": [{"i": int(pi), "j": int(pj)} for pi, pj in path_with],
+                        "pixels": [
+                            {
+                                "i": int(pi),
+                                "j": int(pj),
+                                "elevation": float(crop[pi, pj]),
+                            }
+                            for pi, pj in path_with
+                        ],
+                        "crosses_obstacles": False,
+                        "cost": float(cost_with),
+                        "cost_diff_percent": float(cost_diff_percent),
                     },
                 },
                 "obstacles": {
@@ -1008,6 +1186,11 @@ def generate_sample(
                     "weight": solver_config.get("weight", 1.0),
                     "heuristic": solver_config.get("heuristic", "euclidean"),
                     "cost_model": solver_config.get("cost_model", "elevation"),
+                },
+                "timing": {
+                    "graph_prebuild_seconds": float(graph_prebuild_time),
+                    "obstacle_generation_seconds": float(obstacle_gen_time),
+                    "cost_compute_seconds": float(cost_compute_time),
                 },
                 "timestamp": datetime.now().isoformat(),
             }
@@ -1039,20 +1222,6 @@ def generate_sample(
                 f"path_length_with_obstacles={len(path_with)}, "
                 f"grid_shape=({grid_h},{grid_w}), duration={duration:.2f}s"
             )
-
-            # Calculate geographic coordinates
-            px_per_deg = TILE_SIZE_PX
-            crop_center_y = y1 + resolution // 2
-            crop_center_x = x1 + resolution // 2
-            center_px_in_center_tile_y = crop_center_y - center_offset
-            center_px_in_center_tile_x = crop_center_x - center_offset
-            geo_center_lat = center_lat + 1 - (center_px_in_center_tile_y / px_per_deg)
-            geo_center_lon = center_lon + (center_px_in_center_tile_x / px_per_deg)
-            half_res_deg = (resolution // 2) / px_per_deg
-            geo_top_left_lat = geo_center_lat + half_res_deg
-            geo_top_left_lon = geo_center_lon - half_res_deg
-            geo_bottom_right_lat = geo_center_lat - half_res_deg
-            geo_bottom_right_lon = geo_center_lon + half_res_deg
 
             end_time = datetime.now()
             duration = (end_time - start_time).total_seconds()
