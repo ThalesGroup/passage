@@ -9,6 +9,7 @@ PASSAGE is a tool for generating elevation-based datasets from [ALOS AW3D30 DSM]
 - **Download**: Automatically download ALOS AW3D30 DSM tiles from JAXA servers
 - **Calibrate**: Scan all tiles to determine global min/max elevation values for normalization
 - **Generate**: Create normalized elevation tensor datasets with configurable resolutions
+- **Export**: Upload datasets to Hugging Face Hub for sharing and distribution
 - **Resume Support**: All commands support resuming from interrupted runs
 - **Multi-resolution**: Generate datasets at multiple resolutions in a single run
 - **Marker Channels**: Each sample includes a marker channel with two random points for path-finding tasks
@@ -120,6 +121,146 @@ By default, `generate` resumes from existing samples:
 - Deletes any partial/incomplete sample files
 
 Use `--force` to delete existing directories and regenerate all samples.
+
+### 4. Export to Hugging Face
+
+Export generated datasets to Hugging Face Hub for sharing and distribution.
+
+#### Prerequisites
+
+1. Install the export dependencies:
+   ```bash
+   uv sync --extra export
+   # or
+   pip install huggingface_hub
+   ```
+
+2. Login to Hugging Face:
+   ```bash
+   uv run hf auth login
+   # or set HF_TOKEN environment variable
+   export HF_TOKEN=hf_your_token_here
+   ```
+
+#### Prepare Export (Local Preview)
+
+Before uploading, you can prepare a local export directory with symlinks to your data.
+This lets you review the structure without copying large files:
+
+```bash
+# Prepare export for all resolutions
+uv run passage export --prepare
+
+# Prepare specific resolutions
+uv run passage export --prepare --resolution 256 512 1024
+```
+
+This creates `outputs/export/` with:
+```
+outputs/export/
+├── README.md
+├── calibration/           # Calibration files (copied)
+│   ├── README.md
+│   ├── calibrate.json
+│   └── *.png
+├── docs/                  # Documentation notebooks
+│   ├── README.md
+│   └── notebooks/
+├── 256/                   # Per-resolution exports
+│   ├── README.md
+│   ├── dataset.ipynb      # Executed with RESOLUTION=256
+│   └── data -> ../../dataset/256  # Symlink (no copy!)
+└── 1024/
+    └── ...
+```
+
+The `dataset.ipynb` notebook is executed via papermill with the resolution parameter,
+so each export folder contains analysis specific to that resolution.
+
+#### Upload to Hugging Face
+
+```bash
+# Upload all resolutions and calibration data
+uv run passage export username/passage
+
+# This creates multiple datasets:
+# - username/passage-calibration  (calibration data)
+# - username/passage-64           (64x64 samples)
+# - username/passage-128          (128x128 samples)
+# - username/passage-256          (256x256 samples)
+# ... and so on for each resolution found
+```
+
+#### Export Options
+
+```bash
+# Export specific resolutions only
+uv run passage export username/passage --resolution 256 512 1024
+
+# Skip calibration data
+uv run passage export username/passage --no-calibration
+
+# Skip PNG images (reduces upload size significantly)
+uv run passage export username/passage --no-images
+
+# Include notebooks as documentation
+uv run passage export username/passage --include-notebooks
+
+# Make repositories private
+uv run passage export username/passage --private
+
+# Custom paths
+uv run passage export username/passage \
+    --dataset-dirpath outputs/dataset \
+    --calibrate-dirpath outputs/calibrate \
+    --notebooks-dirpath notebooks
+```
+
+#### Exported Dataset Structure
+
+Each resolution dataset on Hugging Face contains:
+- `tensors/` - NumPy tensor files organized by tile coordinates
+- `metadata/` - YAML metadata files with sample information
+- `images/` - PNG visualizations (unless `--no-images`)
+- `summary.json` - Dataset generation summary
+- `README.md` - Auto-generated dataset card
+
+#### Using Exported Datasets
+
+```python
+from huggingface_hub import hf_hub_download, snapshot_download
+import numpy as np
+
+# Download a single tensor
+tensor_path = hf_hub_download(
+    repo_id="username/passage-256",
+    filename="tensors/N045/E010/0000000000.npy",
+    repo_type="dataset"
+)
+tensor = np.load(tensor_path)
+
+# Download entire dataset
+local_dir = snapshot_download(
+    repo_id="username/passage-256",
+    repo_type="dataset"
+)
+```
+
+#### Exporting Notebooks as Documentation
+
+Jupyter notebooks can be exported to Hugging Face where they are rendered directly:
+
+```bash
+# Export notebooks to a documentation repository
+uv run passage export username/passage --include-notebooks
+
+# This creates: username/passage-docs with all notebooks
+```
+
+Notebooks on Hugging Face:
+- Are rendered as interactive documentation
+- Can be downloaded and run locally
+- Provide examples of how to use the dataset
 
 ## Configuration
 

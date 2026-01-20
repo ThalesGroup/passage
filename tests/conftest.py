@@ -7,6 +7,8 @@ import pandas as pd
 import pytest
 import yaml
 
+import passage.generate as gen
+
 
 @pytest.fixture
 def mock_tile_stats_df():
@@ -74,9 +76,11 @@ def mock_tiles_dir(tmp_path):
 def valid_sample_files(tmp_path):
     """Create valid sample files (tensor, metadata, image) for testing resume logic."""
     res_dir = tmp_path / "dataset" / "64"
-    tensors_dir = res_dir / "tensors"
-    metadata_dir = res_dir / "metadata"
-    images_dir = res_dir / "images"
+    lat_dir = gen.lat_to_str(0)
+    lon_dir = gen.lon_to_str(0)
+    tensors_dir = res_dir / "tensors" / lat_dir / lon_dir
+    metadata_dir = res_dir / "metadata" / lat_dir / lon_dir
+    images_dir = res_dir / "images" / lat_dir / lon_dir
 
     tensors_dir.mkdir(parents=True, exist_ok=True)
     metadata_dir.mkdir(parents=True, exist_ok=True)
@@ -110,9 +114,11 @@ def valid_sample_files(tmp_path):
 def partial_sample_files(tmp_path):
     """Create partial sample files (incomplete sample) for testing resume cleanup."""
     res_dir = tmp_path / "dataset" / "64"
-    tensors_dir = res_dir / "tensors"
-    metadata_dir = res_dir / "metadata"
-    images_dir = res_dir / "images"
+    lat_dir = gen.lat_to_str(0)
+    lon_dir = gen.lon_to_str(0)
+    tensors_dir = res_dir / "tensors" / lat_dir / lon_dir
+    metadata_dir = res_dir / "metadata" / lat_dir / lon_dir
+    images_dir = res_dir / "images" / lat_dir / lon_dir
 
     tensors_dir.mkdir(parents=True, exist_ok=True)
     metadata_dir.mkdir(parents=True, exist_ok=True)

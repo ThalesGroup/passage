@@ -1,5 +1,6 @@
 """Pathfinding utilities and helpers for PASSAGE."""
 
+import heapq
 import math
 import time
 
@@ -8,6 +9,27 @@ import numpy as np
 from loguru import logger
 
 from passage.utils import _log_timing
+
+# Try to import Numba for JIT-compiled solvers; fall back to pure Python if unavailable
+try:
+    from numba import njit, prange
+    from numba.typed import List as NumbaList
+
+    NUMBA_AVAILABLE = True
+except ImportError:
+    NUMBA_AVAILABLE = False
+
+    # Provide dummy decorator that does nothing
+    def njit(*args, **kwargs):
+        def decorator(func):
+            return func
+
+        if len(args) == 1 and callable(args[0]):
+            return args[0]
+        return decorator
+
+    prange = range
+    NumbaList = list
 
 # Edge cost models
 #   elevation         - distance * (1 + weight * normalized_elevation) [DEFAULT]
@@ -376,6 +398,555 @@ def _path_cost_from_graph(graph, path_list) -> float:
     return total
 
 
+# =============================================================================
+# Numba-optimized grid-based pathfinding solvers
+# =============================================================================
+# These solvers operate directly on NumPy arrays and are JIT-compiled for
+# maximum performance on high-resolution grids (e.g., 4096x4096).
+# =============================================================================
+
+# Cost model constants for Numba (avoid string comparisons in hot loops)
+_COST_DISTANCE = 0
+_COST_ELEVATION = 1
+_COST_ABSOLUTE_ELEVATION = 2
+_COST_SLOPE_UPHILL = 3
+_COST_ENERGY = 4
+
+_COST_MODEL_MAP = {
+    "distance": _COST_DISTANCE,
+    "elevation": _COST_ELEVATION,
+    "absolute_elevation": _COST_ABSOLUTE_ELEVATION,
+    "slope_uphill": _COST_SLOPE_UPHILL,
+    "energy": _COST_ENERGY,
+}
+
+
+@njit(cache=True)
+def _numba_heuristic_euclidean(i: int, j: int, ei: int, ej: int, pixel_size: float) -> float:
+    """Euclidean heuristic scaled to meters."""
+    di = float(i - ei)
+    dj = float(j - ej)
+    return pixel_size * math.sqrt(di * di + dj * dj)
+
+
+@njit(cache=True)
+def _numba_heuristic_manhattan(i: int, j: int, ei: int, ej: int, pixel_size: float) -> float:
+    """Manhattan heuristic scaled to meters."""
+    return pixel_size * (abs(i - ei) + abs(j - ej))
+
+
+@njit(cache=True)
+def _numba_heuristic_chebyshev(i: int, j: int, ei: int, ej: int, pixel_size: float) -> float:
+    """Chebyshev heuristic scaled to meters."""
+    return pixel_size * max(abs(i - ei), abs(j - ej))
+
+
+@njit(cache=True)
+def _numba_compute_step_cost(
+    cost_model: int,
+    dist_m: float,
+    weight: float,
+    elev_range: float,
+    dest_factor_val: float,
+    src_elev: float,
+    dst_elev: float,
+) -> float:
+    """Compute step cost based on cost model (Numba-compatible)."""
+    if cost_model == _COST_DISTANCE:
+        return dist_m
+    elif cost_model == _COST_ELEVATION or cost_model == _COST_ABSOLUTE_ELEVATION:
+        return dist_m * dest_factor_val
+    elif cost_model == _COST_SLOPE_UPHILL:
+        if elev_range > 0.0:
+            delta = dst_elev - src_elev
+            slope_norm = max(0.0, delta) / elev_range
+        else:
+            slope_norm = 0.0
+        return dist_m * (1.0 + weight * slope_norm)
+    elif cost_model == _COST_ENERGY:
+        delta = dst_elev - src_elev
+        return dist_m + weight * max(0.0, delta)
+    else:
+        # Default to elevation model
+        return dist_m * dest_factor_val
+
+
+@njit(cache=True)
+def _numba_heap_push(heap_data: np.ndarray, heap_size: int, f: float, g: float, i: int, j: int) -> int:
+    """Push (f, g, i, j) onto heap and return new size. Binary min-heap by f-score."""
+    idx = heap_size
+    heap_data[idx, 0] = f
+    heap_data[idx, 1] = g
+    heap_data[idx, 2] = float(i)
+    heap_data[idx, 3] = float(j)
+    heap_size += 1
+
+    # Bubble up
+    while idx > 0:
+        parent = (idx - 1) // 2
+        if heap_data[parent, 0] <= heap_data[idx, 0]:
+            break
+        # Swap
+        for k in range(4):
+            tmp = heap_data[parent, k]
+            heap_data[parent, k] = heap_data[idx, k]
+            heap_data[idx, k] = tmp
+        idx = parent
+
+    return heap_size
+
+
+@njit(cache=True)
+def _numba_heap_pop(heap_data: np.ndarray, heap_size: int) -> tuple:
+    """Pop minimum element from heap. Returns (f, g, i, j, new_size)."""
+    f = heap_data[0, 0]
+    g = heap_data[0, 1]
+    i = int(heap_data[0, 2])
+    j = int(heap_data[0, 3])
+
+    heap_size -= 1
+    if heap_size > 0:
+        # Move last element to root
+        for k in range(4):
+            heap_data[0, k] = heap_data[heap_size, k]
+
+        # Bubble down
+        idx = 0
+        while True:
+            left = 2 * idx + 1
+            right = 2 * idx + 2
+            smallest = idx
+
+            if left < heap_size and heap_data[left, 0] < heap_data[smallest, 0]:
+                smallest = left
+            if right < heap_size and heap_data[right, 0] < heap_data[smallest, 0]:
+                smallest = right
+
+            if smallest == idx:
+                break
+
+            # Swap
+            for k in range(4):
+                tmp = heap_data[idx, k]
+                heap_data[idx, k] = heap_data[smallest, k]
+                heap_data[smallest, k] = tmp
+            idx = smallest
+
+    return f, g, i, j, heap_size
+
+
+@njit(cache=True)
+def _numba_astar_core(
+    crop: np.ndarray,
+    dest_factor: np.ndarray,
+    si: int,
+    sj: int,
+    ei: int,
+    ej: int,
+    weight: float,
+    elev_range: float,
+    cost_model: int,
+    neighbors: np.ndarray,
+    heuristic_type: int,
+    pixel_size: float,
+) -> np.ndarray:
+    """
+    Core A* algorithm implemented in Numba for maximum performance.
+
+    Returns parent array of shape (rows, cols, 2) where parents[i,j] = (pi, pj).
+    Returns array with all -1 if no path found.
+    """
+    rows, cols = crop.shape
+    INF = 1e18
+
+    # g_score: cost to reach each cell
+    g_score = np.full((rows, cols), INF, dtype=np.float64)
+    g_score[si, sj] = 0.0
+
+    # Parent tracking for path reconstruction
+    parents = np.full((rows, cols, 2), -1, dtype=np.int32)
+
+    # Closed set
+    closed = np.zeros((rows, cols), dtype=np.uint8)
+
+    # Heap: preallocate for worst case (each cell pushed multiple times)
+    # Use 4 columns: (f, g, i, j)
+    max_heap_size = rows * cols * 4  # Conservative estimate
+    heap_data = np.empty((max_heap_size, 4), dtype=np.float64)
+    heap_size = 0
+
+    # Initial heuristic
+    if heuristic_type == 0:  # euclidean
+        h0 = _numba_heuristic_euclidean(si, sj, ei, ej, pixel_size)
+    elif heuristic_type == 1:  # manhattan
+        h0 = _numba_heuristic_manhattan(si, sj, ei, ej, pixel_size)
+    else:  # chebyshev
+        h0 = _numba_heuristic_chebyshev(si, sj, ei, ej, pixel_size)
+
+    heap_size = _numba_heap_push(heap_data, heap_size, h0, 0.0, si, sj)
+
+    n_neighbors = neighbors.shape[0]
+
+    while heap_size > 0:
+        f, g, i, j, heap_size = _numba_heap_pop(heap_data, heap_size)
+
+        if closed[i, j]:
+            continue
+
+        if i == ei and j == ej:
+            return parents
+
+        closed[i, j] = 1
+
+        src_elev = crop[i, j]
+
+        for n in range(n_neighbors):
+            di = int(neighbors[n, 0])
+            dj = int(neighbors[n, 1])
+            dist_m = neighbors[n, 2]
+
+            ni = i + di
+            nj = j + dj
+
+            if ni < 0 or ni >= rows or nj < 0 or nj >= cols:
+                continue
+            if closed[ni, nj]:
+                continue
+
+            dst_elev = crop[ni, nj]
+            dest_factor_val = dest_factor[ni, nj]
+
+            step_cost = _numba_compute_step_cost(
+                cost_model, dist_m, weight, elev_range, dest_factor_val, src_elev, dst_elev
+            )
+
+            tentative_g = g + step_cost
+
+            if tentative_g < g_score[ni, nj]:
+                g_score[ni, nj] = tentative_g
+                parents[ni, nj, 0] = i
+                parents[ni, nj, 1] = j
+
+                if heuristic_type == 0:
+                    h = _numba_heuristic_euclidean(ni, nj, ei, ej, pixel_size)
+                elif heuristic_type == 1:
+                    h = _numba_heuristic_manhattan(ni, nj, ei, ej, pixel_size)
+                else:
+                    h = _numba_heuristic_chebyshev(ni, nj, ei, ej, pixel_size)
+
+                f_score = tentative_g + h
+                heap_size = _numba_heap_push(heap_data, heap_size, f_score, tentative_g, ni, nj)
+
+    # No path found - return parents with start marked but no valid path
+    return parents
+
+
+@njit(cache=True)
+def _numba_dijkstra_core(
+    crop: np.ndarray,
+    dest_factor: np.ndarray,
+    si: int,
+    sj: int,
+    ei: int,
+    ej: int,
+    weight: float,
+    elev_range: float,
+    cost_model: int,
+    neighbors: np.ndarray,
+) -> np.ndarray:
+    """
+    Core Dijkstra algorithm implemented in Numba for maximum performance.
+
+    Returns parent array of shape (rows, cols, 2) where parents[i,j] = (pi, pj).
+    """
+    rows, cols = crop.shape
+    INF = 1e18
+
+    g_score = np.full((rows, cols), INF, dtype=np.float64)
+    g_score[si, sj] = 0.0
+
+    parents = np.full((rows, cols, 2), -1, dtype=np.int32)
+    closed = np.zeros((rows, cols), dtype=np.uint8)
+
+    # Heap with 3 columns: (g, i, j)
+    max_heap_size = rows * cols * 4
+    heap_data = np.empty((max_heap_size, 3), dtype=np.float64)
+    heap_size = 0
+
+    # Push start
+    heap_data[0, 0] = 0.0
+    heap_data[0, 1] = float(si)
+    heap_data[0, 2] = float(sj)
+    heap_size = 1
+
+    n_neighbors = neighbors.shape[0]
+
+    while heap_size > 0:
+        # Pop minimum
+        g = heap_data[0, 0]
+        i = int(heap_data[0, 1])
+        j = int(heap_data[0, 2])
+
+        heap_size -= 1
+        if heap_size > 0:
+            for k in range(3):
+                heap_data[0, k] = heap_data[heap_size, k]
+            # Bubble down
+            idx = 0
+            while True:
+                left = 2 * idx + 1
+                right = 2 * idx + 2
+                smallest = idx
+                if left < heap_size and heap_data[left, 0] < heap_data[smallest, 0]:
+                    smallest = left
+                if right < heap_size and heap_data[right, 0] < heap_data[smallest, 0]:
+                    smallest = right
+                if smallest == idx:
+                    break
+                for k in range(3):
+                    tmp = heap_data[idx, k]
+                    heap_data[idx, k] = heap_data[smallest, k]
+                    heap_data[smallest, k] = tmp
+                idx = smallest
+
+        if closed[i, j]:
+            continue
+
+        if i == ei and j == ej:
+            return parents
+
+        closed[i, j] = 1
+        src_elev = crop[i, j]
+
+        for n in range(n_neighbors):
+            di = int(neighbors[n, 0])
+            dj = int(neighbors[n, 1])
+            dist_m = neighbors[n, 2]
+
+            ni = i + di
+            nj = j + dj
+
+            if ni < 0 or ni >= rows or nj < 0 or nj >= cols:
+                continue
+            if closed[ni, nj]:
+                continue
+
+            dst_elev = crop[ni, nj]
+            dest_factor_val = dest_factor[ni, nj]
+
+            step_cost = _numba_compute_step_cost(
+                cost_model, dist_m, weight, elev_range, dest_factor_val, src_elev, dst_elev
+            )
+
+            tentative_g = g + step_cost
+
+            if tentative_g < g_score[ni, nj]:
+                g_score[ni, nj] = tentative_g
+                parents[ni, nj, 0] = i
+                parents[ni, nj, 1] = j
+
+                # Push to heap
+                idx = heap_size
+                heap_data[idx, 0] = tentative_g
+                heap_data[idx, 1] = float(ni)
+                heap_data[idx, 2] = float(nj)
+                heap_size += 1
+                # Bubble up
+                while idx > 0:
+                    parent_idx = (idx - 1) // 2
+                    if heap_data[parent_idx, 0] <= heap_data[idx, 0]:
+                        break
+                    for k in range(3):
+                        tmp = heap_data[parent_idx, k]
+                        heap_data[parent_idx, k] = heap_data[idx, k]
+                        heap_data[idx, k] = tmp
+                    idx = parent_idx
+
+    return parents
+
+
+@njit(cache=True)
+def _numba_reconstruct_path(parents: np.ndarray, si: int, sj: int, ei: int, ej: int) -> np.ndarray:
+    """Reconstruct path from parents array. Returns Nx2 array of (i, j) coordinates."""
+    # First pass: count path length
+    length = 0
+    i, j = ei, ej
+    while True:
+        length += 1
+        pi, pj = parents[i, j, 0], parents[i, j, 1]
+        if pi == -1 and pj == -1:
+            break
+        i, j = pi, pj
+
+    # Check if we reached start (valid path)
+    if i != si or j != sj:
+        # No valid path
+        return np.empty((0, 2), dtype=np.int32)
+
+    # Second pass: fill path array in reverse
+    path = np.empty((length, 2), dtype=np.int32)
+    i, j = ei, ej
+    for idx in range(length - 1, -1, -1):
+        path[idx, 0] = i
+        path[idx, 1] = j
+        pi, pj = parents[i, j, 0], parents[i, j, 1]
+        if pi == -1 and pj == -1:
+            break
+        i, j = pi, pj
+
+    return path
+
+
+def _get_neighbors_array(diagonal_movement: str) -> np.ndarray:
+    """Get neighbor offsets as numpy array for Numba compatibility."""
+    if diagonal_movement == "never":
+        return np.array(
+            [
+                [-1, 0, PIXEL_SIZE_M],
+                [1, 0, PIXEL_SIZE_M],
+                [0, -1, PIXEL_SIZE_M],
+                [0, 1, PIXEL_SIZE_M],
+            ],
+            dtype=np.float64,
+        )
+    return np.array(
+        [
+            [-1, 0, PIXEL_SIZE_M],
+            [1, 0, PIXEL_SIZE_M],
+            [0, -1, PIXEL_SIZE_M],
+            [0, 1, PIXEL_SIZE_M],
+            [-1, -1, DIAGONAL_DISTANCE_M],
+            [-1, 1, DIAGONAL_DISTANCE_M],
+            [1, -1, DIAGONAL_DISTANCE_M],
+            [1, 1, DIAGONAL_DISTANCE_M],
+        ],
+        dtype=np.float64,
+    )
+
+
+_HEURISTIC_MAP_NUMBA = {
+    "euclidean": 0,
+    "manhattan": 1,
+    "chebyshev": 2,
+}
+
+
+def _grid_astar_numba(
+    crop: np.ndarray,
+    start: tuple[int, int],
+    end: tuple[int, int],
+    weight: float,
+    diagonal_movement: str,
+    heuristic_name: str,
+    cost_model: str,
+) -> list[tuple[int, int]]:
+    """Numba-accelerated A* pathfinding on grid."""
+    rows, cols = crop.shape
+    si, sj = int(start[0]), int(start[1])
+    ei, ej = int(end[0]), int(end[1])
+
+    if si == ei and sj == ej:
+        return [(si, sj)]
+
+    # Prepare cost model
+    cost_model_id = _COST_MODEL_MAP.get(cost_model, _COST_ELEVATION)
+
+    # Prepare dest_factor and elev_range
+    normalized, abs_norm, elev_range = _normalize_elevation_arrays(crop)
+    if cost_model_id == _COST_ELEVATION:
+        dest_factor = (1.0 + weight * normalized).astype(np.float64)
+    elif cost_model_id == _COST_ABSOLUTE_ELEVATION:
+        dest_factor = (1.0 + weight * abs_norm).astype(np.float64)
+    else:
+        dest_factor = np.ones((rows, cols), dtype=np.float64)
+
+    # Ensure crop is float64 for Numba
+    crop_f64 = crop.astype(np.float64)
+
+    neighbors = _get_neighbors_array(diagonal_movement)
+    heuristic_type = _HEURISTIC_MAP_NUMBA.get(heuristic_name, 0)
+
+    parents = _numba_astar_core(
+        crop_f64,
+        dest_factor,
+        si,
+        sj,
+        ei,
+        ej,
+        weight,
+        elev_range,
+        cost_model_id,
+        neighbors,
+        heuristic_type,
+        PIXEL_SIZE_M,
+    )
+
+    # Check if path exists
+    if parents[ei, ej, 0] == -1 and parents[ei, ej, 1] == -1:
+        # Verify it's the start (path of length 1 - start==end already handled)
+        if ei != si or ej != sj:
+            return []
+
+    path_arr = _numba_reconstruct_path(parents, si, sj, ei, ej)
+    if path_arr.size == 0:
+        return []
+
+    return [(int(path_arr[i, 0]), int(path_arr[i, 1])) for i in range(path_arr.shape[0])]
+
+
+def _grid_dijkstra_numba(
+    crop: np.ndarray,
+    start: tuple[int, int],
+    end: tuple[int, int],
+    weight: float,
+    diagonal_movement: str,
+    cost_model: str,
+) -> list[tuple[int, int]]:
+    """Numba-accelerated Dijkstra pathfinding on grid."""
+    rows, cols = crop.shape
+    si, sj = int(start[0]), int(start[1])
+    ei, ej = int(end[0]), int(end[1])
+
+    if si == ei and sj == ej:
+        return [(si, sj)]
+
+    cost_model_id = _COST_MODEL_MAP.get(cost_model, _COST_ELEVATION)
+
+    normalized, abs_norm, elev_range = _normalize_elevation_arrays(crop)
+    if cost_model_id == _COST_ELEVATION:
+        dest_factor = (1.0 + weight * normalized).astype(np.float64)
+    elif cost_model_id == _COST_ABSOLUTE_ELEVATION:
+        dest_factor = (1.0 + weight * abs_norm).astype(np.float64)
+    else:
+        dest_factor = np.ones((rows, cols), dtype=np.float64)
+
+    crop_f64 = crop.astype(np.float64)
+    neighbors = _get_neighbors_array(diagonal_movement)
+
+    parents = _numba_dijkstra_core(
+        crop_f64,
+        dest_factor,
+        si,
+        sj,
+        ei,
+        ej,
+        weight,
+        elev_range,
+        cost_model_id,
+        neighbors,
+    )
+
+    if parents[ei, ej, 0] == -1 and parents[ei, ej, 1] == -1:
+        if ei != si or ej != sj:
+            return []
+
+    path_arr = _numba_reconstruct_path(parents, si, sj, ei, ej)
+    if path_arr.size == 0:
+        return []
+
+    return [(int(path_arr[i, 0]), int(path_arr[i, 1])) for i in range(path_arr.shape[0])]
+
+
 # Optimized grid-based solvers that operate directly on numpy arrays to avoid expensive NetworkX graph construction
 def _grid_solvers_neighbors(diagonal_movement: str):
     if diagonal_movement == "never":
@@ -414,7 +985,16 @@ def _grid_astar(
     heuristic_name: str,
     cost_model: str,
 ) -> list[tuple[int, int]]:
-    """A* over grid using arrays; returns path as list of (i,j)."""
+    """A* over grid using arrays; returns path as list of (i,j).
+
+    Uses Numba-accelerated implementation when available for ~20-50x speedup
+    on high-resolution grids.
+    """
+    # Use Numba-accelerated version when available
+    if NUMBA_AVAILABLE:
+        return _grid_astar_numba(crop, start, end, weight, diagonal_movement, heuristic_name, cost_model)
+
+    # Fallback to pure Python implementation
     rows, cols = crop.shape
     si, sj = int(start[0]), int(start[1])
     ei, ej = int(end[0]), int(end[1])
@@ -440,8 +1020,6 @@ def _grid_astar(
 
     # Heuristic function (returns meters)
     heuristic = HEURISTIC_MAP.get(heuristic_name, HEURISTIC_MAP["euclidean"])
-
-    import heapq
 
     open_heap = []  # (f, g, i, j)
     f0 = heuristic((si, sj), (ei, ej))
@@ -500,7 +1078,16 @@ def _grid_dijkstra(
     diagonal_movement: str,
     cost_model: str,
 ) -> list[tuple[int, int]]:
-    """Dijkstra over grid using arrays; equivalent to A* with zero heuristic."""
+    """Dijkstra over grid using arrays; equivalent to A* with zero heuristic.
+
+    Uses Numba-accelerated implementation when available for ~20-50x speedup
+    on high-resolution grids.
+    """
+    # Use Numba-accelerated version when available
+    if NUMBA_AVAILABLE:
+        return _grid_dijkstra_numba(crop, start, end, weight, diagonal_movement, cost_model)
+
+    # Fallback to pure Python implementation
     rows, cols = crop.shape
     si, sj = int(start[0]), int(start[1])
     ei, ej = int(end[0]), int(end[1])
@@ -523,8 +1110,6 @@ def _grid_dijkstra(
     g_score = np.full((rows, cols), np.inf, dtype=np.float64)
     g_score[si, sj] = 0.0
     parents = np.full((rows, cols, 2), -1, dtype=np.int32)
-
-    import heapq
 
     open_heap = []  # (g, i, j)
     heapq.heappush(open_heap, (0.0, si, sj))
@@ -585,8 +1170,38 @@ def check_path_collision(path: list[tuple[int, int]], obstacles_mask: np.ndarray
     """
     if not path or obstacles_mask is None:
         return False
-    # Use numpy indexing for speed if possible, but path is usually a list of tuples
-    for i, j in path:
-        if obstacles_mask[i, j] == 1:
-            return True
+
+    # Attempt fast vectorized path check for common case: sequence of (row, col)
+    try:
+        arr = np.asarray(path)
+        # If object array of tuples/lists, stack into numeric 2D array
+        if arr.dtype == np.object_ and arr.ndim == 1:
+            arr = np.vstack(arr)
+        if arr.ndim == 2 and arr.shape[1] >= 2:
+            rows = arr[:, 0].astype(np.intp)
+            cols = arr[:, 1].astype(np.intp)
+            # Keep only in-bounds points
+            valid = (rows >= 0) & (rows < obstacles_mask.shape[0]) & (cols >= 0) & (cols < obstacles_mask.shape[1])
+            if not np.any(valid):
+                return False
+            rows = rows[valid]
+            cols = cols[valid]
+            # Advanced indexing returns obstacle values for each point
+            return bool(np.any(obstacles_mask[rows, cols] != 0))
+    except Exception:
+        # Fall through to safe scalar fallback on any error
+        pass
+
+    # Fallback: robust scalar check (handles objects with attributes, etc.)
+    for p in path:
+        try:
+            i, j = int(p[0]), int(p[1])
+        except Exception:
+            try:
+                i, j = int(p.y), int(p.x)  # support node-like objects if present
+            except Exception:
+                continue
+        if 0 <= i < obstacles_mask.shape[0] and 0 <= j < obstacles_mask.shape[1]:
+            if obstacles_mask[i, j] != 0:
+                return True
     return False

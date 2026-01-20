@@ -293,7 +293,9 @@ class TestCountValidSamples:
         assert count == 2
 
         # Verify partial tensor was deleted
-        partial_tensor = partial_sample_files / "tensors" / "0000000002.npy"
+        lat_dir = gen.lat_to_str(0)
+        lon_dir = gen.lon_to_str(0)
+        partial_tensor = partial_sample_files / "tensors" / lat_dir / lon_dir / "0000000002.npy"
         assert not partial_tensor.exists()
 
     @pytest.mark.unit
@@ -301,8 +303,10 @@ class TestCountValidSamples:
     def test_count_valid_samples_no_images(self, tmp_path):
         """Test count when images are disabled."""
         res_dir = tmp_path / "64"
-        tensors_dir = res_dir / "tensors"
-        metadata_dir = res_dir / "metadata"
+        lat_dir = gen.lat_to_str(0)
+        lon_dir = gen.lon_to_str(0)
+        tensors_dir = res_dir / "tensors" / lat_dir / lon_dir
+        metadata_dir = res_dir / "metadata" / lat_dir / lon_dir
 
         tensors_dir.mkdir(parents=True)
         metadata_dir.mkdir(parents=True)
@@ -447,7 +451,9 @@ class TestGenerateSample:
         if success:
             import yaml
 
-            metadata_path = outputs_dir / "8" / "metadata" / "0000000000.yaml"
+            metadata_matches = list((outputs_dir / "8" / "metadata").rglob("0000000000.yaml"))
+            assert metadata_matches
+            metadata_path = metadata_matches[0]
             with open(metadata_path) as f:
                 metadata = yaml.safe_load(f)
 
@@ -470,6 +476,23 @@ class TestGenerateSample:
             assert "paths" in metadata
             assert "without_obstacles" in metadata["paths"]
             assert "obstacles" in metadata
+
+            # Timing diagnostics should be present
+            assert "timing" in metadata
+            for key in [
+                "tile_loading_seconds",
+                "marker_search_seconds",
+                "marker_find_path_without_seconds",
+                "marker_find_path_with_seconds",
+                "graph_prebuild_seconds",
+                "obstacle_generation_seconds",
+                "cost_compute_seconds",
+                "tensor_save_seconds",
+                "metadata_write_seconds",
+                "image_conversion_seconds",
+                "image_write_seconds",
+            ]:
+                assert key in metadata["timing"]
 
     @pytest.mark.unit
     @pytest.mark.generate
@@ -495,7 +518,7 @@ class TestGenerateSample:
             # Images directory should not exist or be empty
             images_dir = outputs_dir / "8" / "images"
             if images_dir.exists():
-                assert len(list(images_dir.glob("*.png"))) == 0
+                assert len(list(images_dir.rglob("*.png"))) == 0
 
 
 # =============================================================================
@@ -662,9 +685,13 @@ class TestTensorToImage:
 
         if success:
             # Load the tensor and convert to image (pass path from metadata)
-            tensor_path = outputs_dir / "8" / "tensors" / "0000000000.npy"
+            tensor_matches = list((outputs_dir / "8" / "tensors").rglob("0000000000.npy"))
+            assert tensor_matches
+            tensor_path = tensor_matches[0]
             tensor = np.load(tensor_path)
-            metadata_path = outputs_dir / "8" / "metadata" / "0000000000.yaml"
+            metadata_matches = list((outputs_dir / "8" / "metadata").rglob("0000000000.yaml"))
+            assert metadata_matches
+            metadata_path = metadata_matches[0]
             with open(metadata_path) as f:
                 md = yaml.safe_load(f)
             path_section = md.get("paths", {}).get("without_obstacles") or md.get("paths", {}).get("with_obstacles")
@@ -676,7 +703,9 @@ class TestTensorToImage:
             # Load the saved image
             import cv2
 
-            image_path = outputs_dir / "8" / "images" / "0000000000.png"
+            image_matches = list((outputs_dir / "8" / "images").rglob("0000000000.png"))
+            assert image_matches
+            image_path = image_matches[0]
             saved_image = cv2.imread(str(image_path))
 
             # They should be identical
@@ -754,8 +783,12 @@ class TestTilesNeeded:
         assert 160 in summary.get("resolutions", []) or 160 in [int(r) for r in summary.get("resolutions", [])]
 
         # Check that sample metadata and tensor were written
-        metadata_path = outputs_dir / "160" / "metadata" / "0000000000.yaml"
-        tensor_path = outputs_dir / "160" / "tensors" / "0000000000.npy"
+        metadata_matches = list((outputs_dir / "160" / "metadata").rglob("0000000000.yaml"))
+        tensor_matches = list((outputs_dir / "160" / "tensors").rglob("0000000000.npy"))
+        assert metadata_matches
+        assert tensor_matches
+        metadata_path = metadata_matches[0]
+        tensor_path = tensor_matches[0]
         assert metadata_path.exists()
         assert tensor_path.exists()
 

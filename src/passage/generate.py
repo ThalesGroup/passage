@@ -35,26 +35,33 @@ from tqdm import tqdm
 
 from passage.obstacles import sample_angle_from_config, sample_n_from_config, superellipse_mask
 from passage.pathfinding_utils import (
+    DIAGONAL_DISTANCE_M,
     HEURISTIC_MAP,
+    PIXEL_SIZE_M,
     _find_path_pathfinding,
     _grid_astar,
     _grid_dijkstra,
+    _path_cost_from_graph,
     build_graph_from_elevation,
     check_path_collision,
-    _path_cost_from_graph,
-    PIXEL_SIZE_M,
-    DIAGONAL_DISTANCE_M,
+)
+from passage.pathfinding_utils import (
+    _build_pathfinding_cost_matrix as _build_pathfinding_cost_matrix,
+)
+from passage.pathfinding_utils import (
+    _compute_edge_weights as _compute_edge_weights,
 )
 from passage.pathfinding_utils import (
     _get_graph_template as _get_graph_template,
-    _build_pathfinding_cost_matrix as _build_pathfinding_cost_matrix,
-    _pathfinding_path_to_coords as _pathfinding_path_to_coords,
-    _compute_edge_weights as _compute_edge_weights,
+)
+from passage.pathfinding_utils import (
     _normalize_elevation_arrays as _normalize_elevation_arrays,
+)
+from passage.pathfinding_utils import (
+    _pathfinding_path_to_coords as _pathfinding_path_to_coords,
 )
 from passage.utils import _log_timing
 from passage.visualization import tensor_to_image
-
 
 # Standard ALOS AW3D30 tile size in pixels (1° x 1° at 30m resolution)
 TILE_SIZE_PX = 3600
@@ -96,6 +103,15 @@ MAX_LON = 180
 NETWORKX_SOLVERS = {"astar", "astar_bi", "dijkstra", "dijkstra_bi", "bellman_ford", "unweighted"}
 PATHFINDING_SOLVERS = {"astar", "dijkstra", "best_first"}
 GRID_SOLVERS = {"grid_astar", "grid_dijkstra"}
+
+SPLIT_ORDER = ["train", "calibration", "validation", "test"]
+
+
+def _split_sort_key(name: str) -> tuple[int, str]:
+    try:
+        return (SPLIT_ORDER.index(name), name)
+    except ValueError:
+        return (len(SPLIT_ORDER), name)
 
 
 def _parse_solver_backend_and_name(solver_config: dict) -> tuple[str, str]:
@@ -448,17 +464,23 @@ def load_tile_grid(
     center_lat: int,
     center_lon: int,
     half_tiles: int = 1,
-) -> np.ndarray:
+    return_loaded_tiles: bool = False,
+) -> np.ndarray | tuple[np.ndarray, list[tuple[int, int]]]:
     """
     Load a (2*half_tiles+1) x (2*half_tiles+1) grid of tiles centered on the given coordinates.
 
     Handles latitude bounds by substituting flat tiles for out-of-bounds rows.
     Handles longitude wrapping at -180/180.
+
+    Returns:
+        - grid: concatenated numpy array of shape (N*TILE_SIZE_PX, N*TILE_SIZE_PX)
+        - loaded_tiles: list of (lat, lon) tuples in row-major order corresponding to each tile block
     """
     import time
 
     start_time = time.time()
     rows = []
+    loaded_tiles: list[tuple[int, int]] = []
     N = 2 * half_tiles + 1
 
     for dlat in range(half_tiles, -half_tiles - 1, -1):
@@ -467,19 +489,27 @@ def load_tile_grid(
             # Substitute zero tiles for out-of-bounds latitudes (consistent with earlier behavior)
             logger.debug(f"Latitude {lat} out of bounds [{MIN_LAT}, {MAX_LAT}); substituting zero tiles")
             row_tiles = [np.zeros((TILE_SIZE_PX, TILE_SIZE_PX), dtype=np.float32) for _ in range(N)]
+            # still record the lat/lon positions for these substituted tiles
+            for dlon in range(-half_tiles, half_tiles + 1):
+                lon = wrap_lon(center_lon + dlon)
+                loaded_tiles.append((lat, lon))
         else:
             row_tiles = []
             for dlon in range(-half_tiles, half_tiles + 1):
                 lon = wrap_lon(center_lon + dlon)
                 tile = load_tile(tiles_dirpath, lat, lon)
                 row_tiles.append(tile)
+                loaded_tiles.append((lat, lon))
         rows.append(np.concatenate(row_tiles, axis=1))
 
     grid = np.concatenate(rows, axis=0)  # Vertical concat
     duration = time.time() - start_time
     logger.debug(
-        f"load_tile_grid center=({center_lat},{center_lon}) half_tiles={half_tiles} N={N} grid_shape={grid.shape} load_duration={duration:.2f}s"
+        f"load_tile_grid center=({center_lat},{center_lon}) half_tiles={half_tiles} N={N} "
+        f"grid_shape={grid.shape} tiles_loaded={len(loaded_tiles)} load_duration={duration:.2f}s"
     )
+    if return_loaded_tiles:
+        return grid, loaded_tiles
     return grid
 
 
@@ -730,14 +760,15 @@ def tiles_needed_for_resolution(resolution: int) -> tuple[int, int, int]:
 
 @_log_timing
 def generate_sample(
-    args: tuple[int, Path, Path, int, pd.DataFrame, float, float, bool, dict, dict],
+    args: tuple[int, Path, Path, int, pd.DataFrame, float, float, bool, dict, dict, str],
 ) -> tuple[int, bool, str]:
     """
     Generate a single dataset sample.
 
     Args:
           args: Tuple of (index, tiles_dirpath, outputs_dirpath, resolution,
-              tile_stats_df, global_min, global_max, disable_images, solver_config, obstacle_settings).
+              tile_stats_df, global_min, global_max, disable_images, solver_config,
+              obstacle_settings, split_name).
 
     Returns:
         Tuple of (index, success, message).
@@ -753,6 +784,7 @@ def generate_sample(
         disable_images,
         solver_config,
         obstacle_settings,
+        split_name,
     ) = args
 
     solver_config = _resolve_solver_config(solver_config)
@@ -763,6 +795,14 @@ def generate_sample(
 
     start_time = datetime.now()
     elevation_attempts = 0
+    # timing diagnostics
+    tile_loading_time = 0.0
+    marker_search_time = 0.0
+    tensor_save_time = 0.0
+    metadata_write_time = 0.0
+    image_conversion_time = 0.0
+    image_write_time = 0.0
+    obstacle_gen_total = 0.0
 
     half_res = resolution // 2
     half_tiles = max(1, math.ceil(half_res / TILE_SIZE_PX))
@@ -788,8 +828,12 @@ def generate_sample(
 
             # 5. Load the full grid of tiles (may be larger but simplifies processing)
             logger.debug(f"Loading full grid for center=({center_lat},{center_lon}) half_tiles={half_tiles}")
-            grid = load_tile_grid(tiles_dirpath, center_lat, center_lon, half_tiles=half_tiles)
-            logger.debug(f"grid min/max: {grid.min()}/{grid.max()}")
+            t_tile = time.time()
+            grid, loaded_tiles = load_tile_grid(
+                tiles_dirpath, center_lat, center_lon, half_tiles=half_tiles, return_loaded_tiles=True
+            )
+            tile_loading_time = time.time() - t_tile
+            logger.debug(f"grid min/max: {grid.min()}/{grid.max()} (tile_load_seconds={tile_loading_time:.3f})")
 
             # Offset (in pixels) from grid origin to start of center tile
             center_offset = TILE_SIZE_PX * half_tiles
@@ -864,6 +908,9 @@ def generate_sample(
             obstacle_ratio = 0.0
             path_without_crosses_obstacles = False
 
+            t_marker = time.time()
+            t_marker_find_path_without = 0.0
+            t_marker_find_path_with = 0.0
             marker_attempts_used = 0
             found_valid_paths = False
             for marker_attempt in range(max_marker_retries):
@@ -875,7 +922,9 @@ def generate_sample(
                 i2, j2 = divmod(idx2, w)
 
                 # Try to find path between markers (without obstacles)
+                t_marker_find_path_without = time.time()
                 path_without = find_path(crop, (i1, j1), (i2, j2), solver_config, prebuilt_graph=prebuilt_graph)
+                t_marker_find_path_without = time.time() - t_marker_find_path_without
                 if len(path_without) == 0:
                     continue  # No path without obstacles, try other markers
 
@@ -902,6 +951,7 @@ def generate_sample(
                         generation_cfg=generation_cfg,
                     )
                     obstacle_gen_time = time.time() - t_obs
+                    obstacle_gen_total += obstacle_gen_time
                 else:
                     obstacles_mask = np.zeros_like(crop, dtype=np.uint8)
                     obstacle_target_ratio = 0.0
@@ -915,7 +965,9 @@ def generate_sample(
                 if obstacles_enabled and obstacle_penalty > 0:
                     masked_elevation[obstacles_mask == 1] = masked_elevation.max() + obstacle_penalty
 
+                t_marker_find_path_with = time.time()
                 path_with = find_path(masked_elevation, (i1, j1), (i2, j2), solver_config)
+                t_marker_find_path_with = time.time() - t_marker_find_path_with
 
                 # Check if path_with crosses obstacles (should not happen if penalty is high enough and path exists)
                 if obstacles_enabled and check_path_collision(path_with, obstacles_mask):
@@ -932,8 +984,11 @@ def generate_sample(
                 found_valid_paths = True
                 break  # Found valid paths
 
+            marker_search_time = time.time() - t_marker
             if not found_valid_paths:
-                logger.debug(f"No valid paths found after {marker_attempts_used} marker attempts; retrying elevation")
+                logger.debug(
+                    f"No valid paths found after {marker_attempts_used} marker attempts; retrying elevation (marker_search_seconds={marker_search_time:.3f})"
+                )
                 continue  # Try another elevation
 
             # Successfully found a path - proceed with sample generation
@@ -963,44 +1018,52 @@ def generate_sample(
             crop_with_markers = np.stack([crop_norm, marker_channel, obstacles_channel], axis=-1)
 
             # Save as .npy (3-channel float32) into 'tensors'
-            tensors_dir = outputs_dirpath / str(resolution) / "tensors"
+            tensors_dir = (
+                outputs_dirpath
+                / str(resolution)
+                / split_name
+                / "tensors"
+                / f"{lat_to_str(center_lat)}"
+                / f"{lon_to_str(center_lon)}"
+            )
             tensors_dir.mkdir(parents=True, exist_ok=True)
             tensor_path = tensors_dir / f"{index:010d}.npy"
             try:
+                t_np = time.time()
                 np.save(str(tensor_path), crop_with_markers)
+                tensor_save_time = time.time() - t_np
             except Exception as e:  # pragma: no cover
+                tensor_save_time = time.time() - t_np if "t_np" in locals() else 0.0
                 logger.warning(f"Failed saving tensor {tensor_path}: {e}")
 
             def _wrap_lon_float(lon_val: float) -> float:
                 return ((lon_val + 180.0) % 360.0) - 180.0
 
-            # Build list of tiles used to generate the elevation crop
+            # Build list of tiles used to generate the elevation crop from loaded_tiles
             tiles_used = []
             tiles_overlapping = []
             N = 2 * half_tiles + 1
-            for row_idx in range(N):
-                dlat = half_tiles - row_idx
-                tile_lat = center_lat + dlat
+            for k, (tile_lat, tile_lon) in enumerate(loaded_tiles):
+                row_idx = k // N
+                col_idx = k % N
                 tile_top = row_idx * TILE_SIZE_PX
+                tile_left = col_idx * TILE_SIZE_PX
+                # Skip out-of-bounds latitudes (consistent with earlier behavior)
                 if tile_lat < MIN_LAT or tile_lat >= MAX_LAT:
                     continue
-                for col_idx in range(N):
-                    dlon = -half_tiles + col_idx
-                    tile_lon = wrap_lon(center_lon + dlon)
-                    tile_left = col_idx * TILE_SIZE_PX
-                    tile_record = {
-                        "lat": int(tile_lat),
-                        "lon": int(tile_lon),
-                        "name": f"{lat_to_str(tile_lat)}{lon_to_str(tile_lon)}",
-                    }
-                    tiles_used.append(tile_record)
+                tile_record = {
+                    "lat": int(tile_lat),
+                    "lon": int(tile_lon),
+                    "name": f"{lat_to_str(tile_lat)}{lon_to_str(tile_lon)}",
+                }
+                tiles_used.append(tile_record)
 
-                    # Check overlap with crop bounds
-                    tile_bottom = tile_top + TILE_SIZE_PX
-                    tile_right = tile_left + TILE_SIZE_PX
-                    overlaps = not (tile_right <= x1 or tile_left >= x2 or tile_bottom <= y1 or tile_top >= y2)
-                    if overlaps:
-                        tiles_overlapping.append(tile_record)
+                # Check overlap with crop bounds
+                tile_bottom = tile_top + TILE_SIZE_PX
+                tile_right = tile_left + TILE_SIZE_PX
+                overlaps = not (tile_right <= x1 or tile_left >= x2 or tile_bottom <= y1 or tile_top >= y2)
+                if overlaps:
+                    tiles_overlapping.append(tile_record)
 
             # Calculate geographic coordinates for crop bounds/center
             px_per_deg = TILE_SIZE_PX
@@ -1107,10 +1170,18 @@ def generate_sample(
                 cost_diff_percent = 0.0
 
             # Save metadata into metadata folder *before* images so visualization can read it
-            metadata_dir = outputs_dirpath / str(resolution) / "metadata"
+            metadata_dir = (
+                outputs_dirpath
+                / str(resolution)
+                / split_name
+                / "metadata"
+                / f"{lat_to_str(center_lat)}"
+                / f"{lon_to_str(center_lon)}"
+            )
             metadata = {
                 "index": index,
                 "resolution": resolution,
+                "split": split_name,
                 "target_elevation": float(target_elev),
                 "calibration": {
                     "min": float(global_min),
@@ -1188,9 +1259,17 @@ def generate_sample(
                     "cost_model": solver_config.get("cost_model", "elevation"),
                 },
                 "timing": {
+                    "tile_loading_seconds": float(tile_loading_time),
+                    "marker_search_seconds": float(marker_search_time),
+                    "marker_find_path_without_seconds": float(t_marker_find_path_without),
+                    "marker_find_path_with_seconds": float(t_marker_find_path_with),
                     "graph_prebuild_seconds": float(graph_prebuild_time),
-                    "obstacle_generation_seconds": float(obstacle_gen_time),
+                    "obstacle_generation_seconds": float(obstacle_gen_total),
                     "cost_compute_seconds": float(cost_compute_time),
+                    "tensor_save_seconds": float(tensor_save_time),
+                    "metadata_write_seconds": float(metadata_write_time),
+                    "image_conversion_seconds": float(image_conversion_time),
+                    "image_write_seconds": float(image_write_time),
                 },
                 "timestamp": datetime.now().isoformat(),
             }
@@ -1201,17 +1280,51 @@ def generate_sample(
 
             # Save visual image at full resolution in 'images' unless disabled
             if not disable_images:
-                images_dir = outputs_dirpath / str(resolution) / "images"
+                images_dir = (
+                    outputs_dirpath
+                    / str(resolution)
+                    / split_name
+                    / "images"
+                    / f"{lat_to_str(center_lat)}"
+                    / f"{lon_to_str(center_lon)}"
+                )
                 images_dir.mkdir(parents=True, exist_ok=True)
                 # Convert tensor to BGR image using helper function (provide path pixels and optional elev bounds)
                 path_for_image = path_with if obstacles_enabled else path_without
                 # elevation channel is crop_norm in [0, 1], so no need to pass elev_range unless desired
+                t_conv = time.time()
                 thumb_rgb = tensor_to_image(crop_with_markers, path_pixels=path_for_image)
+                image_conversion_time = time.time() - t_conv
                 image_path = images_dir / f"{index:010d}.png"
                 try:
+                    t_img = time.time()
                     cv2.imwrite(str(image_path), thumb_rgb)
+                    image_write_time = time.time() - t_img
                 except Exception as e:  # pragma: no cover
+                    image_write_time = time.time() - t_img if "t_img" in locals() else 0.0
                     logger.warning(f"Failed saving image {image_path}: {e}")
+            # Update metadata with measured timings and rewrite metadata file
+            try:
+                t_meta = time.time()
+                metadata["timing"].update(
+                    {
+                        "tensor_save_seconds": float(tensor_save_time),
+                        "image_conversion_seconds": float(image_conversion_time),
+                        "image_write_seconds": float(image_write_time),
+                        "tile_loading_seconds": float(tile_loading_time),
+                        "marker_search_seconds": float(marker_search_time),
+                        "marker_find_path_without_seconds": float(t_marker_find_path_without),
+                        "marker_find_path_with_seconds": float(t_marker_find_path_with),
+                        "obstacle_generation_seconds": float(obstacle_gen_total),
+                    }
+                )
+                metadata_write_time = time.time() - t_meta
+                metadata["timing"]["metadata_write_seconds"] = float(metadata_write_time)
+                with open(metadata_path, "w") as f:
+                    yaml.dump(metadata, f, default_flow_style=False, sort_keys=False)
+            except Exception as e:  # pragma: no cover
+                logger.warning(f"Failed updating metadata {metadata_path}: {e}")
+
             # Log per-sample diagnostics
             end_time = datetime.now()
             duration = (end_time - start_time).total_seconds()
@@ -1246,56 +1359,133 @@ def _generate_sample_wrapper(args):
 
 
 @_log_timing
-def count_valid_samples(res_dir: Path, disable_images: bool = False) -> int:
+def count_valid_samples(
+    res_dir: Path,
+    disable_images: bool = False,
+    split_assignments: dict[int, str] | None = None,
+) -> int:
     """
     Count consecutive valid samples starting from index 0.
 
-    A sample is valid if it has all required files:
-    - tensors/{index:010d}.npy
-    - metadata/{index:010d}.yaml
-    - images/{index:010d}.png (if disable_images is False)
+    A sample is valid if it has all required files under the expected split/lat/lon subdirectories:
+    - {split}/tensors/{lat}/{lon}/{index:010d}.npy
+    - {split}/metadata/{lat}/{lon}/{index:010d}.yaml
+    - {split}/images/{lat}/{lon}/{index:010d}.png (if disable_images is False)
 
     Stops counting at the first incomplete sample and deletes any partial files.
 
     Args:
-        res_dir: Resolution directory containing tensors/, metadata/, images/ subdirs.
+        res_dir: Resolution directory containing split subdirs.
         disable_images: If True, don't check for images.
+        split_assignments: Mapping from sample index -> split name. If None, assumes legacy layout without splits.
 
     Returns:
         Number of consecutive valid samples from index 0.
     """
-    tensors_dir = res_dir / "tensors"
-    metadata_dir = res_dir / "metadata"
-    images_dir = res_dir / "images"
 
-    if not tensors_dir.exists() or not metadata_dir.exists():
-        return 0
+    def _build_index_map(dir_path: Path, suffix: str) -> dict[int, Path]:
+        index_map: dict[int, Path] = {}
+        if not dir_path.exists():
+            return index_map
+        for path in dir_path.rglob(f"*{suffix}"):
+            if not path.is_file() or path.suffix != suffix:
+                continue
+            stem = path.stem
+            if not stem.isdigit():
+                continue
+            idx = int(stem)
+            if idx in index_map and index_map[idx] != path:
+                logger.warning(
+                    f"Duplicate sample index {idx} under {dir_path}; keeping {index_map[idx]} and ignoring {path}"
+                )
+                continue
+            index_map[idx] = path
+        return index_map
+
+    if not split_assignments:
+        tensors_dir = res_dir / "tensors"
+        metadata_dir = res_dir / "metadata"
+        images_dir = res_dir / "images"
+
+        if not tensors_dir.exists() or not metadata_dir.exists():
+            return 0
+
+        tensors_map = _build_index_map(tensors_dir, ".npy")
+        metadata_map = _build_index_map(metadata_dir, ".yaml")
+        images_map = _build_index_map(images_dir, ".png") if not disable_images else {}
+        index = 0
+        while True:
+            tensor_file = tensors_map.get(index)
+            metadata_file = metadata_map.get(index)
+            image_file = images_map.get(index) if not disable_images else None
+
+            tensor_exists = tensor_file is not None
+            metadata_exists = metadata_file is not None
+            image_exists = image_file is not None if not disable_images else True
+
+            if tensor_exists and metadata_exists and image_exists:
+                index += 1
+            else:
+                partial_files = []
+                if tensor_exists and tensor_file is not None:
+                    partial_files.append(tensor_file)
+                if metadata_exists and metadata_file is not None:
+                    partial_files.append(metadata_file)
+                if not disable_images and image_exists and image_file is not None:
+                    partial_files.append(image_file)
+
+                if partial_files:
+                    logger.warning(
+                        f"Found incomplete sample at index {index}, deleting partial files: "
+                        f"{[str(f.name) for f in partial_files]}"
+                    )
+                    for f in partial_files:
+                        try:
+                            f.unlink()
+                        except Exception as e:  # pragma: no cover
+                            logger.warning(f"Failed to delete partial file {f}: {e}")
+                break
+
+        return index
+
+    # Split-aware layout
+    split_names = sorted(set(split_assignments.values()))
+    tensors_map_by_split: dict[str, dict[int, Path]] = {}
+    metadata_map_by_split: dict[str, dict[int, Path]] = {}
+    images_map_by_split: dict[str, dict[int, Path]] = {}
+
+    for split in split_names:
+        tensors_map_by_split[split] = _build_index_map(res_dir / split / "tensors", ".npy")
+        metadata_map_by_split[split] = _build_index_map(res_dir / split / "metadata", ".yaml")
+        if not disable_images:
+            images_map_by_split[split] = _build_index_map(res_dir / split / "images", ".png")
 
     index = 0
-    while True:
-        tensor_file = tensors_dir / f"{index:010d}.npy"
-        metadata_file = metadata_dir / f"{index:010d}.yaml"
-        image_file = images_dir / f"{index:010d}.png"
+    max_index = max(split_assignments.keys()) + 1 if split_assignments else 0
+    while index < max_index:
+        split = split_assignments.get(index, "train")
+        tensor_file = tensors_map_by_split.get(split, {}).get(index)
+        metadata_file = metadata_map_by_split.get(split, {}).get(index)
+        image_file = images_map_by_split.get(split, {}).get(index) if not disable_images else None
 
-        tensor_exists = tensor_file.exists()
-        metadata_exists = metadata_file.exists()
-        image_exists = image_file.exists() if not disable_images else True
+        tensor_exists = tensor_file is not None
+        metadata_exists = metadata_file is not None
+        image_exists = image_file is not None if not disable_images else True
 
         if tensor_exists and metadata_exists and image_exists:
             index += 1
         else:
-            # Check for partial files and delete them with warning
             partial_files = []
-            if tensor_exists:
+            if tensor_exists and tensor_file is not None:
                 partial_files.append(tensor_file)
-            if metadata_exists:
+            if metadata_exists and metadata_file is not None:
                 partial_files.append(metadata_file)
-            if not disable_images and image_exists:
+            if not disable_images and image_exists and image_file is not None:
                 partial_files.append(image_file)
 
             if partial_files:
                 logger.warning(
-                    f"Found incomplete sample at index {index}, deleting partial files: "
+                    f"Found incomplete sample at index {index} (split={split}), deleting partial files: "
                     f"{[str(f.name) for f in partial_files]}"
                 )
                 for f in partial_files:
@@ -1306,6 +1496,64 @@ def count_valid_samples(res_dir: Path, disable_images: bool = False) -> int:
             break
 
     return index
+
+
+def _assign_splits(
+    num_samples: int,
+    ratios: dict[str, float] | None,
+    seed: int = 42,
+) -> dict[int, str]:
+    """Assign each sample index to a split using deterministic rounding + shuffle.
+
+    Ensures the exact number of samples matches num_samples, distributing leftovers by largest fractional remainder.
+    """
+
+    if num_samples <= 0:
+        return {}
+
+    default_order = ["train", "calibration", "validation", "test"]
+    ratios = ratios or {"train": 1.0}
+
+    # Keep only positive ratios
+    ratios = {k: float(v) for k, v in ratios.items() if float(v) > 0.0}
+    if not ratios:
+        ratios = {"train": 1.0}
+
+    # Preserve deterministic order using default_order first, then any extra keys sorted
+    ordered_splits = [s for s in default_order if s in ratios] + [s for s in sorted(ratios) if s not in default_order]
+    total_ratio = sum(ratios.values())
+    if total_ratio <= 0:
+        ratios = {"train": 1.0}
+        ordered_splits = ["train"]
+        total_ratio = 1.0
+
+    counts: dict[str, int] = {}
+    remainders: list[tuple[float, str]] = []
+    assigned = 0
+    for split in ordered_splits:
+        weight = ratios.get(split, 0.0) / total_ratio
+        target = weight * num_samples
+        base = int(math.floor(target))
+        counts[split] = base
+        remainders.append((target - base, split))
+        assigned += base
+
+    leftover = num_samples - assigned
+    remainders.sort(
+        key=lambda x: (-x[0], ordered_splits.index(x[1]) if x[1] in ordered_splits else len(ordered_splits))
+    )
+    for i in range(leftover):
+        _, split = remainders[i % len(remainders)]
+        counts[split] += 1
+
+    assignments: list[str] = []
+    for split in ordered_splits:
+        assignments.extend([split] * counts.get(split, 0))
+
+    rng = random.Random(seed)
+    rng.shuffle(assignments)
+
+    return {i: assignments[i] for i in range(num_samples)}
 
 
 @_log_timing
@@ -1360,6 +1608,17 @@ def run_generate(
         return
 
     samples_count = num_samples if num_samples is not None else config.get("num_samples", 100)
+
+    splits_cfg = config.get("splits", {}) if isinstance(config, dict) else {}
+    splits_enabled = bool(splits_cfg.get("enabled", True))
+    split_ratios = splits_cfg.get("ratios", {}) if splits_enabled else {"train": 1.0}
+    split_seed = int(splits_cfg.get("seed", 42) if splits_enabled else 42)
+    split_assignments = (
+        _assign_splits(samples_count, split_ratios, seed=split_seed)
+        if splits_enabled
+        else {i: "train" for i in range(samples_count)}
+    )
+    split_names = sorted(set(split_assignments.values()), key=_split_sort_key)
 
     outputs_path = Path(outputs_dirpath)
     tiles_path = Path(tiles_dirpath)
@@ -1434,7 +1693,7 @@ def run_generate(
                     logger.warning(f"Failed to remove existing directory {res_dir}: {e}")
             else:
                 # Count valid samples and resume from there
-                start_index = count_valid_samples(res_dir, disable_images)
+                start_index = count_valid_samples(res_dir, disable_images, split_assignments)
                 if start_index >= samples_count:
                     logger.info(f"Resolution {res} already complete ({start_index}/{samples_count} samples), skipping")
                     continue
@@ -1460,27 +1719,35 @@ def run_generate(
 
         # Prepare output directories
         res_dir.mkdir(parents=True, exist_ok=True)
-        (res_dir / "tensors").mkdir(exist_ok=True)
-        if not disable_images:
-            (res_dir / "images").mkdir(exist_ok=True)
-        (res_dir / "metadata").mkdir(exist_ok=True)
+        for split in split_names:
+            split_root = res_dir / split
+            (split_root / "tensors").mkdir(parents=True, exist_ok=True)
+            (split_root / "metadata").mkdir(parents=True, exist_ok=True)
+            if not disable_images:
+                (split_root / "images").mkdir(parents=True, exist_ok=True)
 
         # Prepare arguments for each sample (starting from start_index)
-        args_list = [
-            (
-                i,
-                tiles_path,
-                outputs_path,
-                res,
-                tile_stats_df,
-                global_min,
-                global_max,
-                disable_images,
-                solver_config,
-                obstacle_settings,
+        args_list = []
+        split_requested = {s: 0 for s in split_names}
+        split_success = {s: 0 for s in split_names}
+        for i in range(start_index, samples_count):
+            split = split_assignments.get(i, "train")
+            split_requested[split] = split_requested.get(split, 0) + 1
+            args_list.append(
+                (
+                    i,
+                    tiles_path,
+                    outputs_path,
+                    res,
+                    tile_stats_df,
+                    global_min,
+                    global_max,
+                    disable_images,
+                    solver_config,
+                    obstacle_settings,
+                    split,
+                )
             )
-            for i in range(start_index, samples_count)
-        ]
 
         # Process samples
         durations = []
@@ -1494,6 +1761,9 @@ def run_generate(
                     logger.warning(msg)
                 else:
                     successful += 1
+                    split_success[split_assignments.get(idx, "train")] = (
+                        split_success.get(split_assignments.get(idx, "train"), 0) + 1
+                    )
         else:
             pool_size = num_cpus if num_cpus is not None else os.cpu_count()
             logger.info(f"Running with {pool_size} CPUs")
@@ -1507,6 +1777,9 @@ def run_generate(
                         logger.warning(msg)
                     else:
                         successful += 1
+                        split_success[split_assignments.get(idx, "train")] = (
+                            split_success.get(split_assignments.get(idx, "train"), 0) + 1
+                        )
 
         logger.info(f"Completed generation for resolution {res}")
 
@@ -1523,6 +1796,14 @@ def run_generate(
             "tiles_dirpath": str(tiles_path),
             "global_min": global_min,
             "global_max": global_max,
+            "splits": {
+                split: {
+                    "requested": split_requested.get(split, 0),
+                    "successful": split_success.get(split, 0),
+                }
+                for split in split_names
+            },
+            "split_seed": split_seed,
             "timestamp": datetime.now().isoformat(),
         }
         res_summary_path = res_dir / "summary.json"
@@ -1550,6 +1831,11 @@ def run_generate(
         "tiles_dirpath": str(tiles_path),
         "global_min": global_min,
         "global_max": global_max,
+        "splits": {
+            "enabled": splits_enabled,
+            "ratios": split_ratios,
+            "seed": split_seed,
+        },
         "mean_time_per_sample_seconds": mean_time_overall,
         "timestamp": datetime.now().isoformat(),
     }
