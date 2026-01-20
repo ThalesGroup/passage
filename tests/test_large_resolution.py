@@ -69,9 +69,9 @@ def test_generate_sample_skip_images(monkeypatch, tmp_path):
     )
     assert isinstance(duration, float)
 
-    tensors = list((outputs_dir / str(resolution) / "tensors").glob("*.npy"))
+    tensors = list((outputs_dir / str(resolution) / "tensors").rglob("*.npy"))
     images = (
-        list((outputs_dir / str(resolution) / "images").glob("*.png"))
+        list((outputs_dir / str(resolution) / "images").rglob("*.png"))
         if (outputs_dir / str(resolution) / "images").exists()
         else []
     )

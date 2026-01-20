@@ -8,6 +8,16 @@ resolutions:
   - 4096
 num_samples: 10
 
+# Dataset split configuration
+splits:
+  enabled: true
+  ratios:
+    train: 0.7
+    calibration: 0.1
+    validation: 0.1
+    test: 0.1
+  seed: 42
+
 # Pathfinding solver configuration
 # Use a name prefix to select backend:
 #   networkx:   NetworkX graph solvers (supports all cost models)

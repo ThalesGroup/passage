@@ -7,6 +7,7 @@ from loguru import logger
 
 from passage.calibrate import run_calibrate
 from passage.download import run_download
+from passage.export import prepare_export, run_export
 from passage.generate import run_generate
 
 
@@ -138,6 +139,108 @@ def main() -> None:
         help="Set log level (default: info)",
     )
 
+    # Prepare subcommand (local structure + manifests, no upload)
+    prepare_parser = subparsers.add_parser(
+        "prepare",
+        help="Prepare outputs/Export from outputs/dataset (no upload)",
+    )
+    prepare_parser.add_argument(
+        "--dataset-dirpath",
+        default="outputs/dataset",
+        help="Directory containing generated datasets (default: outputs/dataset)",
+    )
+    prepare_parser.add_argument(
+        "--export-dirpath",
+        default="outputs/Export",
+        help="Directory to write prepared export structure (default: outputs/Export)",
+    )
+    prepare_parser.add_argument(
+        "--calibrate-dirpath",
+        default="outputs/calibrate",
+        help="Directory containing calibration data (default: outputs/calibrate)",
+    )
+    prepare_parser.add_argument(
+        "--notebooks-dirpath",
+        default="notebooks",
+        help="Directory containing notebooks (default: notebooks)",
+    )
+    prepare_parser.add_argument(
+        "--resolution",
+        type=int,
+        nargs="+",
+        default=None,
+        help="Specific resolutions to prepare. If not specified, prepares all found.",
+    )
+    prepare_parser.add_argument(
+        "--log-level",
+        choices=["debug", "info", "warning", "error", "critical"],
+        default="info",
+        help="Set log level (default: info)",
+    )
+
+    # Export subcommand (upload only)
+    export_parser = subparsers.add_parser(
+        "export",
+        help="Upload datasets to Hugging Face Hub",
+    )
+    export_parser.add_argument(
+        "repo_prefix",
+        help="Hugging Face repository prefix (e.g., 'username/passage').",
+    )
+    export_parser.add_argument(
+        "--dataset-dirpath",
+        default="outputs/dataset",
+        help="Directory containing generated datasets (default: outputs/dataset)",
+    )
+    export_parser.add_argument(
+        "--calibrate-dirpath",
+        default="outputs/calibrate",
+        help="Directory containing calibration data (default: outputs/calibrate)",
+    )
+    export_parser.add_argument(
+        "--notebooks-dirpath",
+        default="notebooks",
+        help="Directory containing notebooks (default: notebooks)",
+    )
+    export_parser.add_argument(
+        "--resolution",
+        type=int,
+        nargs="+",
+        default=None,
+        help="Specific resolutions to export. If not specified, exports all found.",
+    )
+    export_parser.add_argument(
+        "--no-calibration",
+        action="store_true",
+        help="Skip exporting calibration data",
+    )
+    export_parser.add_argument(
+        "--include-notebooks",
+        action="store_true",
+        help="Also export notebooks as documentation",
+    )
+    export_parser.add_argument(
+        "--no-images",
+        action="store_true",
+        help="Skip exporting PNG images (reduces upload size)",
+    )
+    export_parser.add_argument(
+        "--no-manifests",
+        action="store_true",
+        help="Skip regenerating parquet manifests before upload",
+    )
+    export_parser.add_argument(
+        "--private",
+        action="store_true",
+        help="Make repositories private",
+    )
+    export_parser.add_argument(
+        "--log-level",
+        choices=["debug", "info", "warning", "error", "critical"],
+        default="info",
+        help="Set log level (default: info)",
+    )
+
     args = parser.parse_args()
 
     # Configure global log level (default 'info') when provided on subcommands
@@ -166,6 +269,29 @@ def main() -> None:
             resume=not args.no_resume,
             overwrite=args.no_resume,
             num_cpus=args.num_cpus,
+        )
+    elif args.command == "prepare":
+        prepare_export(
+            export_dirpath=args.export_dirpath,
+            dataset_dirpath=args.dataset_dirpath,
+            calibrate_dirpath=args.calibrate_dirpath,
+            notebooks_dirpath=args.notebooks_dirpath,
+            resolutions=args.resolution,
+            repo_prefix="passage",
+        )
+    elif args.command == "export":
+        repo_prefix = args.repo_prefix
+        run_export(
+            repo_prefix=repo_prefix,
+            dataset_dirpath=args.dataset_dirpath,
+            calibrate_dirpath=args.calibrate_dirpath,
+            notebooks_dirpath=args.notebooks_dirpath,
+            resolutions=args.resolution,
+            include_calibration=not args.no_calibration,
+            include_notebooks=args.include_notebooks,
+            include_images=not args.no_images,
+            private=args.private,
+            write_manifests=not args.no_manifests,
         )
     elif args.command is None:
         logger.info("Hello from passage! Use --help for available commands.")
