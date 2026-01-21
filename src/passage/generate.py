@@ -773,19 +773,37 @@ def generate_sample(
     Returns:
         Tuple of (index, success, message).
     """
-    (
-        index,
-        tiles_dirpath,
-        outputs_dirpath,
-        resolution,
-        tile_stats_df,
-        global_min,
-        global_max,
-        disable_images,
-        solver_config,
-        obstacle_settings,
-        split_name,
-    ) = args
+    # Backwards-compatible unpacking: accept either 10- or 11-element tuples.
+    if len(args) == 11:
+        (
+            index,
+            tiles_dirpath,
+            outputs_dirpath,
+            resolution,
+            tile_stats_df,
+            global_min,
+            global_max,
+            disable_images,
+            solver_config,
+            obstacle_settings,
+            split_name,
+        ) = args
+    elif len(args) == 10:
+        (
+            index,
+            tiles_dirpath,
+            outputs_dirpath,
+            resolution,
+            tile_stats_df,
+            global_min,
+            global_max,
+            disable_images,
+            solver_config,
+            obstacle_settings,
+        ) = args
+        split_name = "train"
+    else:
+        raise ValueError("generate_sample expects a 10- or 11-element args tuple")
 
     solver_config = _resolve_solver_config(solver_config)
     obstacle_settings = obstacle_settings or {}
@@ -1278,6 +1296,31 @@ def generate_sample(
             with open(metadata_path, "w") as f:
                 yaml.dump(metadata, f, default_flow_style=False, sort_keys=False)
 
+            # Save pixel-index paths as JSON lists in text files under paths/free and paths/obstacles
+            try:
+                lat_dir = f"{lat_to_str(center_lat)}"
+                lon_dir = f"{lon_to_str(center_lon)}"
+
+                # Free path (without obstacles)
+                free_dir = outputs_dirpath / str(resolution) / split_name / "paths" / "free" / lat_dir / lon_dir
+                free_dir.mkdir(parents=True, exist_ok=True)
+                # Write flattened XY coordinates (x0 y0 x1 y1 ...) with leading class "0"
+                free_txt_file = free_dir / f"{index:010d}.txt"
+                free_coords = [str(int(v)) for pi, pj in path_without for v in (pj, pi)]
+                with open(free_txt_file, "w") as ff:
+                    ff.write("0 " + " ".join(free_coords) + "\n")
+
+                # Obstacles path (with obstacles)
+                obs_dir = outputs_dirpath / str(resolution) / split_name / "paths" / "obstacles" / lat_dir / lon_dir
+                obs_dir.mkdir(parents=True, exist_ok=True)
+                # Write flattened XY coordinates (x0 y0 x1 y1 ...) with leading class "0"
+                obs_txt_file = obs_dir / f"{index:010d}.txt"
+                obs_coords = [str(int(v)) for pi, pj in path_with for v in (pj, pi)]
+                with open(obs_txt_file, "w") as ff:
+                    ff.write("0 " + " ".join(obs_coords) + "\n")
+            except Exception as e:  # pragma: no cover
+                logger.warning(f"Failed saving pixel-index paths for sample {index}: {e}")
+
             # Save visual image at full resolution in 'images' unless disabled
             if not disable_images:
                 images_dir = (
@@ -1289,11 +1332,10 @@ def generate_sample(
                     / f"{lon_to_str(center_lon)}"
                 )
                 images_dir.mkdir(parents=True, exist_ok=True)
-                # Convert tensor to BGR image using helper function (provide path pixels and optional elev bounds)
-                path_for_image = path_with if obstacles_enabled else path_without
-                # elevation channel is crop_norm in [0, 1], so no need to pass elev_range unless desired
+                # Convert tensor to BGR image using helper function, drawing BOTH paths (without and with obstacles)
+                # Primary path (no obstacles) is drawn in green; secondary path (with obstacles) is drawn in blue.
                 t_conv = time.time()
-                thumb_rgb = tensor_to_image(crop_with_markers, path_pixels=path_for_image)
+                thumb_rgb = tensor_to_image(crop_with_markers, path_pixels=path_without, alt_path_pixels=path_with)
                 image_conversion_time = time.time() - t_conv
                 image_path = images_dir / f"{index:010d}.png"
                 try:

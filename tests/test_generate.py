@@ -496,6 +496,48 @@ class TestGenerateSample:
 
     @pytest.mark.unit
     @pytest.mark.generate
+    def test_generate_sample_paths_files(self, monkeypatch, tmp_path, mock_tile_stats_df):
+        """Test that pixel-index path files are written for free and obstacles."""
+        monkeypatch.setattr(gen, "TILE_SIZE_PX", 16)
+
+        tiles_dir = tmp_path / "tiles"
+        tiles_dir.mkdir()
+
+        outputs_dir = tmp_path / "outputs"
+        outputs_dir.mkdir()
+
+        solver_config = {"name": "astar", "diagonal_movement": "always", "weight": 1.0, "max_marker_retries": 10}
+        obstacle_settings = gen._resolve_obstacle_config({"obstacles": {"enabled": True}})
+
+        idx, success, msg, duration = gen.generate_sample(
+            (0, tiles_dir, outputs_dir, 8, mock_tile_stats_df, 0.0, 2000.0, False, solver_config, obstacle_settings)
+        )
+        assert isinstance(duration, float)
+
+        if success:
+            all_txt = list((outputs_dir / "8").rglob("0000000000.txt"))
+            free_matches = [p for p in all_txt if "paths" in p.parts and "free" in p.parts]
+            obs_matches = [p for p in all_txt if "paths" in p.parts and "obstacles" in p.parts]
+
+            assert free_matches
+            assert obs_matches
+
+            import json
+
+            with open(free_matches[0]) as f:
+                free_list = json.load(f)
+            assert isinstance(free_list, list)
+            assert all(isinstance(pair, list) and len(pair) == 2 for pair in free_list)
+            assert all(0 <= pair[0] < 8 and 0 <= pair[1] < 8 for pair in free_list)
+
+            with open(obs_matches[0]) as f:
+                obs_list = json.load(f)
+            assert isinstance(obs_list, list)
+            assert all(isinstance(pair, list) and len(pair) == 2 for pair in obs_list)
+            assert all(0 <= pair[0] < 8 and 0 <= pair[1] < 8 for pair in obs_list)
+
+    @pytest.mark.unit
+    @pytest.mark.generate
     def test_generate_sample_no_images(self, monkeypatch, tmp_path, mock_tile_stats_df):
         """Test sample generation with images disabled."""
         monkeypatch.setattr(gen, "TILE_SIZE_PX", 16)
@@ -555,6 +597,65 @@ class TestTensorToImage:
         assert image[1, 2, 1] == 255
         # Red should be 0 when no obstacles
         assert image[1, 2, 2] == 0
+
+    @pytest.mark.unit
+    @pytest.mark.generate
+    def test_tensor_to_image_two_paths(self):
+        """Test that tensor_to_image draws both primary and secondary paths and that sizes scale."""
+        # Small resolution (64) -> path thickness ~1
+        tensor64 = np.zeros((64, 64, 3), dtype=np.float32)
+        tensor64[:, :, 0] = 0.5
+        tensor64[:, :, 1] = -1.0
+        tensor64[32, 32, 1] = 0.0
+        path64 = [(32, 30), (32, 31), (32, 32), (32, 33), (32, 34)]
+        img64 = gen.tensor_to_image(tensor64, path_pixels=path64, alt_path_pixels=None)
+        # Primary path is now yellow (B low, G high, R high)
+        primary64 = np.sum((img64[:, :, 1] >= 200) & (img64[:, :, 2] >= 200) & (img64[:, :, 0] < 100))
+
+        # Larger resolution (256) -> path thickness should increase
+        tensor256 = np.zeros((256, 256, 3), dtype=np.float32)
+        tensor256[:, :, 0] = 0.5
+        tensor256[:, :, 1] = -1.0
+        tensor256[128, 128, 1] = 0.0
+        # Scale coordinates roughly by 4
+        path256 = [(128, 120), (128, 121), (128, 122), (128, 123), (128, 124)]
+        img256 = gen.tensor_to_image(tensor256, path_pixels=path256, alt_path_pixels=None)
+        primary256 = np.sum((img256[:, :, 1] >= 200) & (img256[:, :, 2] >= 200) & (img256[:, :, 0] < 100))
+
+        assert primary64 > 0, "No primary (yellow) pixels found for small resolution path"
+        assert primary256 > primary64, "Primary path did not scale up for higher resolution"
+
+    @pytest.mark.unit
+    @pytest.mark.generate
+    def test_marker_plus_shape_and_no_white(self):
+        """Ensure marker is drawn as a plus-sign (3x3 at base) and no white outline exists."""
+        tensor = np.zeros((64, 64, 3), dtype=np.float32)
+        tensor[:, :, 0] = 0.5
+        tensor[:, :, 1] = -1.0
+        # Place start marker at center and end marker elsewhere
+        tensor[32, 32, 1] = 0.0
+        tensor[40, 40, 1] = 1.0
+        img = gen.tensor_to_image(tensor, path_pixels=None)
+
+        # Start marker (cyan): check center and cardinal neighbors have high B and G
+        sx, sy = 32, 32
+        neighbors = [(sx, sy), (sx - 1, sy), (sx + 1, sy), (sx, sy - 1), (sx, sy + 1)]
+        for y, x in neighbors:
+            assert (img[y, x, 0] >= 200) and (img[y, x, 1] >= 200) and (img[y, x, 2] < 100)
+
+        # End marker (blue): check central pixel has dominant B channel
+        ex, ey = 40, 40
+        assert (img[ex, ey, 0] >= 200) and (img[ex, ey, 0] > img[ex, ey, 1]) and (img[ex, ey, 0] > img[ex, ey, 2])
+
+        # Check diagonal neighbors near start are not cyan/green-dominant (plus shape only)
+        diagonals = [(sx - 1, sy - 1), (sx - 1, sy + 1), (sx + 1, sy - 1), (sx + 1, sy + 1)]
+        for y, x in diagonals:
+            assert not ((img[y, x, 0] >= 200) and (img[y, x, 1] >= 200))
+
+        # Ensure no white (255,255,255) in a small neighborhood around start marker
+        for y in range(sx - 2, sx + 3):
+            for x in range(sy - 2, sy + 3):
+                assert not (img[y, x, 0] == 255 and img[y, x, 1] == 255 and img[y, x, 2] == 255)
 
     @pytest.mark.unit
     @pytest.mark.generate

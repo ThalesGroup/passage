@@ -47,6 +47,20 @@
                 "--num-samples",
                 "1"
             ]
+        },
+        {
+            "name": "generate all",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "src/passage/__init__.py",
+            "console": "integratedTerminal",
+            // "args": "${command:pickArgs}"
+            "args": [
+                "generate",
+                "--num-samples",
+                "10",
+                "--force"
+            ]
         }
     ]
 }

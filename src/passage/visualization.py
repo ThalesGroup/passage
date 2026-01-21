@@ -8,6 +8,7 @@ from loguru import logger
 def tensor_to_image(
     tensor: np.ndarray,
     path_pixels: list[tuple[int, int]] | None = None,
+    alt_path_pixels: list[tuple[int, int]] | None = None,
     elev_range: tuple[float, float] | None = None,
 ) -> np.ndarray:
     """
@@ -19,15 +20,21 @@ def tensor_to_image(
         - 3-channel tensors (elevation, markers, obstacles) where the third channel is
             treated as obstacles; path pixels should still be provided via `path_pixels`.
 
+    This function now supports drawing two paths at once for comparison:
+        - `path_pixels`: primary path (drawn in green by default)
+        - `alt_path_pixels`: secondary path (drawn in blue by default)
+
     Color mapping and overlays:
         - Elevation -> rendered with matplotlib 'terrain' colormap (base image)
         - Markers -> highlighted (start_point lime, end_point cyan)
-        - Path -> green overlay (drawn as polyline/contours)
-        - Obstacles -> red overlay (alpha blended on top of terrain)
+        - Primary path -> green overlay (drawn as polyline/contours)
+        - Secondary path -> blue overlay (drawn as polyline/contours)
+        - Obstacles -> red overlay (applied last)
 
     Args:
         tensor: float32 array of shape (H, W, 2) or (H, W, 3).
-        path_pixels: Optional list of (i, j) tuples indicating path pixels.
+        path_pixels: Optional list of (i, j) tuples indicating primary path pixels.
+        alt_path_pixels: Optional list of (i, j) tuples indicating secondary path pixels.
         elev_range: Optional (min, max) tuple to use for elevation normalization. If None, tensor min/max are used.
 
     Returns:
@@ -50,12 +57,17 @@ def tensor_to_image(
     else:
         obstacles_channel = np.zeros_like(elevation_channel, dtype=np.float32)
 
-    # Build path channel from provided `path_pixels` (callers must provide it when relevant)
+    # Build path channels from provided path lists (callers must provide them when relevant)
     path_channel = np.zeros_like(elevation_channel, dtype=np.float32)
+    alt_path_channel = np.zeros_like(elevation_channel, dtype=np.float32)
     if path_pixels:
         for pi, pj in path_pixels:
             if 0 <= int(pi) < path_channel.shape[0] and 0 <= int(pj) < path_channel.shape[1]:
                 path_channel[int(pi), int(pj)] = 1.0
+    if alt_path_pixels:
+        for pi, pj in alt_path_pixels:
+            if 0 <= int(pi) < alt_path_channel.shape[0] and 0 <= int(pj) < alt_path_channel.shape[1]:
+                alt_path_channel[int(pi), int(pj)] = 1.0
 
     # Normalize elevation using provided elev_range tuple (min, max) in same units as elevation_channel
     if (
@@ -127,7 +139,43 @@ def tensor_to_image(
         int(np.sum(end_mask)),
     )
 
-    # Draw path (green) from path_channel or explicit pixels
+    # Determine resolution and scale factors (base reference = 64)
+    H, W = elevation_channel.shape
+    res = max(H, W)
+    base = 64
+    scale = float(res) / float(base) if base > 0 else 1.0
+
+    # Path thickness scales with resolution but made thinner: 1px at 64 -> round(scale * 0.5)
+    path_thickness = max(1, int(round(scale * 0.5)))
+
+    # Marker plus arm length unchanged; marker thickness reduced for thinner markers
+    marker_arm = max(1, int(round(scale)))
+    marker_thickness = max(1, int(round(max(1, scale * 0.25))))
+
+    # Colors (BGR)
+    obst_color = (0, 0, 255)  # red
+    start_color = (255, 255, 0)  # cyan
+    end_color = (255, 0, 0)  # blue
+    path_wo_color = (0, 255, 255)  # yellow (without obstacles)
+    path_w_color = (0, 255, 0)  # green (with obstacles)
+
+    # 1) Draw obstacles on top of elevation
+    if np.any(obst_mask):
+        img[obst_mask] = obst_color
+
+    # 2) Draw start and end markers (plus-signs) without white surrounding
+    start_positions = np.argwhere(start_mask)
+    end_positions = np.argwhere(end_mask)
+    for mi, mj in start_positions:
+        cx, cy = int(mj), int(mi)  # (x, y)
+        cv2.line(img, (cx - marker_arm, cy), (cx + marker_arm, cy), color=start_color, thickness=marker_thickness)
+        cv2.line(img, (cx, cy - marker_arm), (cx, cy + marker_arm), color=start_color, thickness=marker_thickness)
+    for mi, mj in end_positions:
+        cx, cy = int(mj), int(mi)  # (x, y)
+        cv2.line(img, (cx - marker_arm, cy), (cx + marker_arm, cy), color=end_color, thickness=marker_thickness)
+        cv2.line(img, (cx, cy - marker_arm), (cx, cy + marker_arm), color=end_color, thickness=marker_thickness)
+
+    # 3) Draw path without obstacles (yellow)
     path_mask = (path_channel > 0.5).astype(np.uint8) * 255
     if np.any(path_mask):
         try:
@@ -136,30 +184,31 @@ def tensor_to_image(
                 if cnt is None or len(cnt) == 0:
                     continue
                 if len(cnt) >= 2:
-                    cv2.polylines(img, [cnt], isClosed=False, color=(0, 255, 0), thickness=2)
+                    cv2.polylines(img, [cnt], isClosed=False, color=path_wo_color, thickness=path_thickness)
                 else:
                     x, y = int(cnt[0][0][0]), int(cnt[0][0][1])
-                    cv2.circle(img, (x, y), radius=1, color=(0, 255, 0), thickness=-1)
+                    cv2.circle(img, (x, y), radius=max(1, path_thickness // 2), color=path_wo_color, thickness=-1)
         except Exception:
-            # Last-resort: draw individual path pixels
             ys, xs = np.nonzero(path_channel > 0.5)
             for y, x in zip(ys, xs):
-                cv2.circle(img, (int(x), int(y)), radius=1, color=(0, 255, 0), thickness=-1)
+                cv2.circle(img, (int(x), int(y)), radius=max(1, path_thickness // 2), color=path_wo_color, thickness=-1)
 
-    # Draw markers: start_point (lime) and end_point (cyan)
-    start_positions = np.argwhere(start_mask)
-    end_positions = np.argwhere(end_mask)
-    for mi, mj in start_positions:
-        center = (int(mj), int(mi))  # (x, y)
-        cv2.circle(img, center, radius=6, color=(0, 255, 0), thickness=-1)
-        cv2.circle(img, center, radius=7, color=(255, 255, 255), thickness=1)
-    for mi, mj in end_positions:
-        center = (int(mj), int(mi))  # (x, y)
-        cv2.circle(img, center, radius=6, color=(255, 255, 0), thickness=-1)
-        cv2.circle(img, center, radius=7, color=(255, 255, 255), thickness=1)
-
-    # Re-apply obstacles on top so they are visually dominant
-    if np.any(obst_mask):
-        img[obst_mask] = (0, 0, 255)
+    # 4) Draw path with obstacles (green) on top
+    alt_mask = (alt_path_channel > 0.5).astype(np.uint8) * 255
+    if np.any(alt_mask):
+        try:
+            contours, _ = cv2.findContours(alt_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+            for cnt in contours:
+                if cnt is None or len(cnt) == 0:
+                    continue
+                if len(cnt) >= 2:
+                    cv2.polylines(img, [cnt], isClosed=False, color=path_w_color, thickness=path_thickness)
+                else:
+                    x, y = int(cnt[0][0][0]), int(cnt[0][0][1])
+                    cv2.circle(img, (x, y), radius=max(1, path_thickness // 2), color=path_w_color, thickness=-1)
+        except Exception:
+            ys, xs = np.nonzero(alt_path_channel > 0.5)
+            for y, x in zip(ys, xs):
+                cv2.circle(img, (int(x), int(y)), radius=max(1, path_thickness // 2), color=path_w_color, thickness=-1)
 
     return img
