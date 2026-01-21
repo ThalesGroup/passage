@@ -39,12 +39,8 @@ dependencies = [
   "matplotlib>=3.7.0",
   "papermill>=2.5.0",
   "imageio>=2.34.0",
-  "pyarrow>=23.0.0"
-]
-
-[project.optional-dependencies]
-export = [
-  "huggingface_hub>=0.20.0"
+  "pyarrow>=23.0.0",
+  "datasets>=2.10.2"
 ]
 
 [project.scripts]
