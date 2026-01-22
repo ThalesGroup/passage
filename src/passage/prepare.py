@@ -17,6 +17,8 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 import yaml
 from loguru import logger
+import time
+import subprocess
 
 try:
     import papermill as pm
@@ -135,33 +137,105 @@ def _execute_notebook_with_papermill(
     parameters: dict,
     cwd: Path | None = None,
 ) -> bool:
-    """Execute a notebook with papermill and save the output."""
+    """Execute a notebook with papermill and save the output.
 
-    if not PAPERMILL_AVAILABLE:
-        logger.warning("papermill not installed; copying notebook without execution")
-        return False
+    Prefer executing via the `uv run papermill` wrapper so that the same virtual
+    environment used by `uv` is used for notebook execution. If that fails, fall
+    back to using the imported `papermill` module when available.
+    """
 
+    # Build papermill CLI args: `uv run papermill input.ipynb output.ipynb -k python3 -p KEY VALUE ...`
+    cmd_base = [
+        "uv",
+        "run",
+        "papermill",
+        str(input_notebook.resolve()),
+        str(output_notebook.resolve()),
+        "-k",
+        "python3",
+    ]
+    for k, v in (parameters or {}).items():
+        # papermill expects scalar values as strings
+        cmd_base.extend(["-p", str(k), str(v)])
+
+    # Try running via `uv run papermill` first
     try:
-        old_cwd = os.getcwd()
-        if cwd:
-            os.chdir(cwd)
-        try:
-            pm.execute_notebook(
-                str(input_notebook.resolve()),
-                str(output_notebook.resolve()),
-                parameters=parameters,
-                kernel_name="python3",
-            )
-        finally:
-            os.chdir(old_cwd)
-        logger.info(f"✓ Notebook executed: {output_notebook.name}")
+        logger.info(f"Running notebook with: {' '.join(cmd_base)}")
+        subprocess.run(cmd_base, cwd=str(cwd) if cwd else None, check=True)
+        logger.info(f"✓ Notebook executed (via uv run): {output_notebook.name}")
         return True
+    except FileNotFoundError:
+        logger.warning("`uv` not found in PATH; attempting local papermill execution if available")
+    except subprocess.CalledProcessError as exc:
+        logger.warning(
+            f"`uv run papermill` failed (exit {exc.returncode}); falling back to local papermill if available"
+        )
     except KeyboardInterrupt:
         logger.warning(f"Notebook execution interrupted: {input_notebook.name}")
         return False
-    except Exception as exc:  # pragma: no cover
-        logger.warning(f"Failed to execute notebook {input_notebook.name}: {exc}")
-        return False
+
+    # Fallback: try the imported papermill if present
+    if PAPERMILL_AVAILABLE:
+        try:
+            old_cwd = os.getcwd()
+            if cwd:
+                os.chdir(cwd)
+            try:
+                pm.execute_notebook(
+                    str(input_notebook.resolve()),
+                    str(output_notebook.resolve()),
+                    parameters=parameters,
+                    kernel_name="python3",
+                )
+            finally:
+                os.chdir(old_cwd)
+            logger.info(f"✓ Notebook executed (via papermill): {output_notebook.name}")
+            return True
+        except KeyboardInterrupt:
+            logger.warning(f"Notebook execution interrupted: {input_notebook.name}")
+            return False
+        except Exception as exc:  # pragma: no cover
+            logger.warning(f"Failed to execute notebook {input_notebook.name}: {exc}")
+            return False
+
+    logger.warning("Papermill execution not available; copying notebook without execution")
+    return False
+
+
+def _execute_notebook_with_retries(
+    input_notebook: Path,
+    output_notebook: Path,
+    parameters: dict,
+    cwd: Path | None = None,
+    max_retries: int | None = 3,
+    retry_delay: int = 5,
+) -> bool:
+    """Execute a notebook using papermill, retrying until success or retries exhausted.
+
+    - If `max_retries` is None, retries indefinitely until success (useful for CI where
+      transient errors may occur). Returns True on successful execution and False when
+      retries are exhausted.
+    """
+
+    attempt = 0
+    while True:
+        attempt += 1
+        logger.info(f"Executing dataset notebook (attempt {attempt}) for resolution {parameters.get('RESOLUTION')}")
+        success = _execute_notebook_with_papermill(input_notebook, output_notebook, parameters, cwd)
+        if success:
+            return True
+
+        # Execution failed; decide whether to retry
+        if max_retries is None:
+            logger.warning("Notebook execution failed; retrying indefinitely (0 means infinite retries).")
+            time.sleep(max(0, int(retry_delay)))
+            continue
+
+        if attempt >= max_retries:
+            logger.warning(f"Notebook execution failed after {attempt} attempt(s).")
+            return False
+
+        time.sleep(max(0, int(retry_delay)))
 
 
 def _generate_dataset_readme(
@@ -273,8 +347,17 @@ def prepare_export(
     execute_notebooks: bool = True,
     max_samples_notebook: int | None = None,
     chunk_size: int | None = None,
+    max_notebook_retries: int | None = 3,
+    notebook_retry_delay: int = 5,
 ) -> bool:
-    """Prepare export artifacts in outputs/export (no upload)."""
+    """Prepare export artifacts in outputs/export (no upload).
+
+    Notebook execution behavior:
+    - If `execute_notebooks` is True, `dataset.ipynb` will be executed with papermill.
+    - `max_notebook_retries` controls how many attempts to make before giving up and
+      copying the notebook without execution. Set to 0 for unlimited retries.
+    - `notebook_retry_delay` sets the delay (seconds) between retries.
+    """
 
     export_path = Path(export_dirpath).resolve()
     dataset_path = Path(dataset_dirpath).resolve()
@@ -334,9 +417,28 @@ def prepare_export(
                     "RESOLUTION": res,
                     "MAX_SAMPLES": 0 if max_samples_notebook is None else max_samples_notebook,
                     "SAVE_WORLD_COVER": False,
+                    "DATASET_DIR": str(dataset_path),  # allow notebook to be run independently
                 }
-                if not _execute_notebook_with_papermill(dataset_notebook, output_notebook, parameters, notebooks_path):
+
+                # Interpret 0 as infinite retries for CLI convenience
+                retries = None if max_notebook_retries == 0 else max_notebook_retries
+
+                success = _execute_notebook_with_retries(
+                    dataset_notebook,
+                    output_notebook,
+                    parameters=parameters,
+                    cwd=notebooks_path,
+                    max_retries=retries,
+                    retry_delay=notebook_retry_delay,
+                )
+
+                if not success:
+                    # Notebook could not be executed after retries; copy original without execution
                     shutil.copy2(dataset_notebook, output_notebook)
+
+                    logger.warning(
+                        "Notebook execution failed after configured retries; copied original without execution"
+                    )
             else:
                 shutil.copy2(dataset_notebook, output_notebook)
 
@@ -440,13 +542,12 @@ def prepare_export(
     logger.info(f"\n✓ Export prepared at {export_path}")
     logger.info("\nNext steps (Hugging Face Hub):")
     logger.info(
-        "  1. Create the dataset repo if needed:\n"
-        f"     uv run huggingface-cli repo create {repo_id} --type dataset --exists-ok"
+        f"  1. Create the dataset repo if needed:\n     uv run hf repo create {repo_id} --type dataset --exists-ok"
     )
     logger.info(
         "  2. Upload prepared export:\n"
-        f"     cd {export_path} && uv run huggingface-cli upload . {repo_id} --repo-type dataset --include '*'\n"
-        f"     (or from elsewhere: uv run huggingface-cli upload {export_path} {repo_id} --repo-type dataset --include '*')"
+        f"     cd {export_path} && uv run hf upload . {repo_id} --repo-type dataset --include '*'\n"
+        f"     (or from elsewhere: uv run hf upload {export_path} {repo_id} --repo-type dataset --include '*')"
     )
 
     return True

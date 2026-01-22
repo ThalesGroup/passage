@@ -194,6 +194,18 @@ def main() -> None:
         help="Max samples for dataset.ipynb execution (default: 0)",
     )
     prepare_parser.add_argument(
+        "--max-notebook-retries",
+        type=int,
+        default=3,
+        help="Number of attempts to execute dataset.ipynb before giving up; set to 0 for unlimited retries (default: 3)",
+    )
+    prepare_parser.add_argument(
+        "--notebook-retry-delay",
+        type=int,
+        default=5,
+        help="Seconds to wait between notebook execution retries (default: 5)",
+    )
+    prepare_parser.add_argument(
         "--log-level",
         choices=["debug", "info", "warning", "error", "critical"],
         default="info",
@@ -240,6 +252,8 @@ def main() -> None:
             execute_notebooks=not args.no_exec_notebooks,
             max_samples_notebook=args.max_samples_notebook,
             chunk_size=args.chunk_size,
+            max_notebook_retries=(None if args.max_notebook_retries == 0 else args.max_notebook_retries),
+            notebook_retry_delay=args.notebook_retry_delay,
         )
     elif args.command is None:
         logger.info("Hello from passage! Use --help for available commands.")
