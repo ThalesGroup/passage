@@ -75,11 +75,13 @@ def _extract_paths(metadata: dict) -> tuple[list[list[int]], list[list[int]]]:
 
 
 def _write_parquet_shard(rows: list[dict], shard_path: Path, resolution: int) -> None:
-    """Write one Parquet shard with Arrow-typed columns (tensor, paths, image).
+    """Write one Parquet shard with Arrow-typed columns (tensor, paths, image path).
 
     Tensors are stored as fixed-size nested lists with shape [resolution, resolution, 3]
     using Arrow's FixedSizeList type so high-dimensional arrays are preserved efficiently.
     Paths are stored as list<list<int32>> (variable-length sequences of pixel pairs).
+    The `image` column contains a relative path to a PNG file included in the export (under `images/`), so
+    Hugging Face Data Studio and `datasets.Image` can load and render the image by path.
     """
 
     if not rows:
@@ -91,6 +93,7 @@ def _write_parquet_shard(rows: list[dict], shard_path: Path, resolution: int) ->
     path_type = pa.list_(pa.list_(pa.int32()))
 
     ids = pa.array([r["id"] for r in rows], type=pa.string())
+    images = pa.array([r.get("image") for r in rows], type=pa.binary())
     prefixes = pa.array([r["prefix"] for r in rows], type=pa.string())
 
     # Normalize tensors to numpy.float32 and validate/reshape where reasonable
@@ -120,12 +123,11 @@ def _write_parquet_shard(rows: list[dict], shard_path: Path, resolution: int) ->
 
     path_free = pa.array([r["path_free"] for r in rows], type=path_type)
     path_obstacles = pa.array([r["path_obstacles"] for r in rows], type=path_type)
-    images = pa.array([r.get("image") for r in rows], type=pa.binary())
     metadata = pa.array([r["metadata"] for r in rows])
 
     table = pa.Table.from_arrays(
-        [ids, prefixes, tensors, path_free, path_obstacles, images, metadata],
-        names=["id", "prefix", "tensor", "path_free", "path_obstacles", "image", "metadata"],
+        [ids, images, prefixes, tensors, path_free, path_obstacles, metadata],
+        names=["id", "image", "prefix", "tensor", "path_free", "path_obstacles", "metadata"],
     )
 
     pq.write_table(table, shard_path, compression="zstd")
@@ -305,11 +307,11 @@ patch represented as a 3-channel float32 tensor plus metadata and optional PNG v
 
 ## Parquet schema
 - `id`: sample index (zero-padded)
+- `image`: relative path to PNG file included in the export under `images/` (usable as `datasets.Image`)
 - `prefix`: `<LAT>/<LON>` directory prefix
 - `tensor`: float32 `[H, W, 3]` array (Arrow fixed-size lists)
 - `path_free`: `[[i, j], ...]` path without obstacles
 - `path_obstacles`: `[[i, j], ...]` path with obstacles
-- `image`: PNG bytes with both paths drawn (usable as `datasets.Image`)
 - `metadata`: metadata without pixel-level path lists
 
 ## Calibration summary
@@ -346,7 +348,6 @@ def prepare_export(
     repo_id: str = "username/passage",
     execute_notebooks: bool = True,
     max_samples_notebook: int | None = None,
-    chunk_size: int | None = None,
     max_notebook_retries: int | None = 3,
     notebook_retry_delay: int = 5,
 ) -> bool:
@@ -368,6 +369,25 @@ def prepare_export(
 
     calibrate_path = Path(calibrate_dirpath).resolve()
     notebooks_path = Path(notebooks_dirpath).resolve()
+
+    # Load export chunk sizes from config.yaml (hard-coded row counts per resolution)
+    config_file = notebooks_path.parent / "config" / "config.yaml"
+    chunk_map: dict[int, int] = {}
+    try:
+        if config_file.exists():
+            cfg = yaml.safe_load(config_file.read_text()) or {}
+            exp_cfg = cfg.get("export", {}) if isinstance(cfg, dict) else {}
+            cs = exp_cfg.get("chunk_size", {}) if isinstance(exp_cfg, dict) else {}
+            # Normalize keys to ints where possible
+            for k, v in (cs or {}).items():
+                try:
+                    chunk_map[int(k)] = int(v)
+                except Exception:
+                    continue
+        else:
+            logger.warning(f"Config file not found at {config_file}; falling back to computed chunk sizes")
+    except Exception as exc:  # pragma: no cover
+        logger.warning(f"Failed to parse config file {config_file}: {exc}")
 
     if resolutions is None:
         resolutions = [int(d.name) for d in dataset_path.iterdir() if d.is_dir() and d.name.isdigit()]
@@ -463,7 +483,8 @@ def prepare_export(
                 logger.warning(f"No metadata for split {split} at {metadata_root}, skipping")
                 continue
 
-            shard_size = _recommended_chunk_size(res, chunk_size)
+            # Determine shard size from configuration mapping when available, otherwise fall back to the heuristic
+            shard_size = chunk_map.get(res) if chunk_map.get(res) is not None else _recommended_chunk_size(res)
             shard_rows: list[dict] = []
             shard_index = 0
             total_rows = 0
@@ -490,12 +511,17 @@ def prepare_export(
                 tensor = np.load(tensor_path).astype(np.float32)
 
                 image_path = split_src / "images" / lat_dir / lon_dir / f"{idx:010d}.png"
-                image_bytes: bytes | None
+                image_rel_path: str | None = None
                 try:
-                    image_bytes = image_path.read_bytes() if image_path.exists() else None
+                    if image_path.exists():
+                        dest_image_dir = split_export / "images" / lat_dir / lon_dir
+                        dest_image_dir.mkdir(parents=True, exist_ok=True)
+                        dest_file = dest_image_dir / image_path.name
+                        shutil.copy2(image_path, dest_file)
+                        image_rel_path = str(Path("images") / lat_dir / lon_dir / image_path.name)
                 except Exception as exc:  # pragma: no cover
-                    logger.warning(f"Failed to read image {image_path}: {exc}")
-                    image_bytes = None
+                    logger.warning(f"Failed to copy image {image_path}: {exc}")
+                    image_rel_path = None
 
                 path_free, path_obstacles = _extract_paths(metadata)
                 metadata_clean = _strip_paths_from_metadata(metadata)
@@ -507,7 +533,7 @@ def prepare_export(
                         "tensor": tensor,
                         "path_free": path_free,
                         "path_obstacles": path_obstacles,
-                        "image": image_bytes,
+                        "image": image_rel_path,
                         "metadata": metadata_clean,
                     }
                 )
@@ -524,7 +550,9 @@ def prepare_export(
                 _write_parquet_shard(shard_rows, shard_path, res)
                 shard_index += 1
 
-            logger.info(f"Split {split} ({res}): {total_rows} rows -> {shard_index} shard(s) (chunk_size={shard_size})")
+            logger.info(
+                f"Split {split} ({res}): {total_rows} rows -> {shard_index} shard(s) (rows_per_shard={shard_size})"
+            )
 
     # Copy calibration artifacts into the export so HF consumers have calibration stats and maps
     export_calibrate = export_path / "calibrate"

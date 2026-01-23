@@ -42,7 +42,6 @@ def test_prepare_retries_notebook(tmp_path, monkeypatch):
         resolutions=[256],
         execute_notebooks=True,
         max_samples_notebook=0,
-        chunk_size=None,
         max_notebook_retries=5,
         notebook_retry_delay=0,
     )
