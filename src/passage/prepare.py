@@ -19,39 +19,23 @@ from loguru import logger
 import time
 import subprocess
 import concurrent.futures
+from tqdm import tqdm
+import papermill as pm
 
-try:
-    from tqdm import tqdm
-except Exception:  # pragma: no cover - if tqdm isn't available, provide a simple fallback
-
-    def tqdm(iterable, **kwargs):
-        return iterable
+PAPERMILL_AVAILABLE = True
 
 
 def _parse_path_txt(txt_path: Path) -> list[list[int]]:
     """Parse a path .txt file written as: "0 x0 y0 x1 y1 ..." and return [[i,j], ...]."""
-    try:
-        txt = txt_path.read_text().strip()
-        if not txt:
-            return []
-        parts = txt.split()
-        if len(parts) < 3:
-            return []
-        # ignore leading class token
-        coords = [int(p) for p in parts[1:]]
-        pairs: list[list[int]] = []
-        # file stores as (x0 y0 x1 y1 ...) where x=col (j), y=row (i)
-        # original generator wrote coords as (pj, pi) => (col, row)
-        for k in range(0, len(coords), 2):
-            try:
-                col = coords[k]
-                row = coords[k + 1]
-                pairs.append([row, col])
-            except Exception:
-                continue
-        return pairs
-    except Exception:
+    txt = txt_path.read_text().strip()
+    if not txt:
         return []
+    parts = txt.split()
+    if len(parts) < 3:
+        return []
+    coords = list(map(int, parts[1:]))
+    # stored as (x0 y0 x1 y1 ...) where x=col, y=row -> return [[row,col], ...]
+    return [[coords[i + 1], coords[i]] for i in range(0, len(coords) - 1, 2)]
 
 
 def _process_meta_for_prepare(meta_file: str, tensors_root: str, split_src: str) -> dict | None:
@@ -59,67 +43,36 @@ def _process_meta_for_prepare(meta_file: str, tensors_root: str, split_src: str)
 
     Returns a dict with keys: id, prefix, tensor (bytes|None), path_free (list), path_obstacles (list), image (bytes|None), metadata (dict)
     """
-    try:
-        meta_p = Path(meta_file)
-        stem = meta_p.stem
-        try:
-            int(stem)
-        except ValueError:
-            return None
-        lat_dir = meta_p.parent.parent.name
-        lon_dir = meta_p.parent.name
-        prefix = f"{lat_dir}/{lon_dir}"
-
-        # Load metadata once
-        try:
-            metadata = yaml.safe_load(meta_p.read_text()) or {}
-        except Exception:
-            metadata = {}
-
-        # Tensor bytes
-        t_path = Path(tensors_root) / lat_dir / lon_dir / f"{stem}.npy"
-        tensor_bytes: bytes | None = None
-        try:
-            if t_path.exists():
-                tensor_bytes = t_path.read_bytes()
-        except Exception:
-            tensor_bytes = None
-
-        # Image bytes
-        img_path = Path(split_src) / "images" / lat_dir / lon_dir / f"{stem}.png"
-        image_bytes: bytes | None = None
-        try:
-            if img_path.exists():
-                image_bytes = img_path.read_bytes()
-        except Exception:
-            image_bytes = None
-
-        # Paths from text files
-        free_txt = Path(split_src) / "paths" / "free" / lat_dir / lon_dir / f"{stem}.txt"
-        obs_txt = Path(split_src) / "paths" / "obstacles" / lat_dir / lon_dir / f"{stem}.txt"
-        path_free = _parse_path_txt(free_txt) if free_txt.exists() else []
-        path_obstacles = _parse_path_txt(obs_txt) if obs_txt.exists() else []
-
-        return {
-            "id": f"{stem}",
-            "prefix": prefix,
-            "tensor": tensor_bytes,
-            "path_free": path_free,
-            "path_obstacles": path_obstacles,
-            "image": image_bytes,
-            "metadata": metadata,
-        }
-    except Exception:
+    meta_p = Path(meta_file)
+    if not meta_p.exists() or not meta_p.stem.isdigit():
         return None
+    stem = meta_p.stem
+    lat_dir = meta_p.parent.parent.name
+    lon_dir = meta_p.parent.name
+    prefix = f"{lat_dir}/{lon_dir}"
 
+    metadata = yaml.safe_load(meta_p.read_text()) or {}
 
-try:
-    import papermill as pm
+    t_path = Path(tensors_root) / lat_dir / lon_dir / f"{stem}.npy"
+    tensor_bytes = t_path.read_bytes() if t_path.exists() else None
 
-    PAPERMILL_AVAILABLE = True
-except ImportError:  # pragma: no cover
-    PAPERMILL_AVAILABLE = False
-    pm = None
+    img_path = Path(split_src) / "images" / lat_dir / lon_dir / f"{stem}.png"
+    image_bytes = img_path.read_bytes() if img_path.exists() else None
+
+    free_txt = Path(split_src) / "paths" / "free" / lat_dir / lon_dir / f"{stem}.txt"
+    obs_txt = Path(split_src) / "paths" / "obstacles" / lat_dir / lon_dir / f"{stem}.txt"
+    path_free = _parse_path_txt(free_txt) if free_txt.exists() else []
+    path_obstacles = _parse_path_txt(obs_txt) if obs_txt.exists() else []
+
+    return {
+        "id": f"{stem}",
+        "prefix": prefix,
+        "tensor": tensor_bytes,
+        "path_free": path_free,
+        "path_obstacles": path_obstacles,
+        "image": image_bytes,
+        "metadata": metadata,
+    }
 
 
 def _recommended_chunk_size(resolution: int, user_chunk_size: int | None = None) -> int:
@@ -144,27 +97,6 @@ def _strip_paths_from_metadata(metadata: dict) -> dict:
             if key in paths and isinstance(paths[key], dict):
                 paths[key].pop("pixels", None)
     return meta
-
-
-def _extract_paths(metadata: dict) -> tuple[list[list[int]], list[list[int]]]:
-    """Extract pixel indices for free/obstacle paths as list[list[int, int]]."""
-
-    def _to_pairs(path_dict: dict | None) -> list[list[int]]:
-        if not path_dict or "pixels" not in path_dict:
-            return []
-        pixels = path_dict.get("pixels", [])
-        pairs: list[list[int]] = []
-        for item in pixels:
-            try:
-                pairs.append([int(item.get("i")), int(item.get("j"))])
-            except Exception:
-                continue
-        return pairs
-
-    paths = metadata.get("paths", {}) if isinstance(metadata, dict) else {}
-    free_pairs = _to_pairs(paths.get("without_obstacles"))
-    obstacles_pairs = _to_pairs(paths.get("with_obstacles"))
-    return free_pairs, obstacles_pairs
 
 
 def _write_parquet_shard(rows: list[dict], shard_path: Path, resolution: int) -> None:
@@ -195,14 +127,7 @@ def _write_parquet_shard(rows: list[dict], shard_path: Path, resolution: int) ->
         [ids, images, prefixes, tensors, path_free, path_obstacles, metadata],
         names=["id", "image", "prefix", "tensor", "path_free", "path_obstacles", "metadata"],
     )
-
-    pq.write_table(table, shard_path, compression="zstd")
-    table = pa.Table.from_arrays(
-        [ids, images, prefixes, tensors, path_free, path_obstacles, metadata],
-        names=["id", "image", "prefix", "tensor", "path_free", "path_obstacles", "metadata"],
-    )
-
-    pq.write_table(table, shard_path, compression="zstd")
+    pq.write_table(table, shard_path, compression="zstd", write_statistics=True)
 
 
 def _execute_notebook_with_papermill(
@@ -249,28 +174,27 @@ def _execute_notebook_with_papermill(
         return False
 
     # Fallback: try the imported papermill if present
-    if PAPERMILL_AVAILABLE:
+    try:
+        old_cwd = os.getcwd()
+        if cwd:
+            os.chdir(cwd)
         try:
-            old_cwd = os.getcwd()
-            if cwd:
-                os.chdir(cwd)
-            try:
-                pm.execute_notebook(
-                    str(input_notebook.resolve()),
-                    str(output_notebook.resolve()),
-                    parameters=parameters,
-                    kernel_name="python3",
-                )
-            finally:
-                os.chdir(old_cwd)
-            logger.info(f"✓ Notebook executed (via papermill): {output_notebook.name}")
-            return True
-        except KeyboardInterrupt:
-            logger.warning(f"Notebook execution interrupted: {input_notebook.name}")
-            return False
-        except Exception as exc:  # pragma: no cover
-            logger.warning(f"Failed to execute notebook {input_notebook.name}: {exc}")
-            return False
+            pm.execute_notebook(
+                str(input_notebook.resolve()),
+                str(output_notebook.resolve()),
+                parameters=parameters,
+                kernel_name="python3",
+            )
+        finally:
+            os.chdir(old_cwd)
+        logger.info(f"✓ Notebook executed (via papermill): {output_notebook.name}")
+        return True
+    except KeyboardInterrupt:
+        logger.warning(f"Notebook execution interrupted: {input_notebook.name}")
+        return False
+    except Exception as exc:  # pragma: no cover
+        logger.warning(f"Failed to execute notebook {input_notebook.name}: {exc}")
+        return False
 
     logger.warning("Papermill execution not available; copying notebook without execution")
     return False
@@ -442,24 +366,16 @@ def prepare_export(
     calibrate_path = Path(calibrate_dirpath).resolve()
     notebooks_path = Path(notebooks_dirpath).resolve()
 
-    # Load export chunk sizes from config.yaml (hard-coded row counts per resolution)
+    # Load export chunk sizes from config.yaml (rows per shard). Keep it simple.
     config_file = notebooks_path.parent / "config" / "config.yaml"
     chunk_map: dict[int, int] = {}
-    try:
-        if config_file.exists():
-            cfg = yaml.safe_load(config_file.read_text()) or {}
-            exp_cfg = cfg.get("export", {}) if isinstance(cfg, dict) else {}
-            cs = exp_cfg.get("chunk_size", {}) if isinstance(exp_cfg, dict) else {}
-            # Normalize keys to ints where possible
-            for k, v in (cs or {}).items():
-                try:
-                    chunk_map[int(k)] = int(v)
-                except Exception:
-                    continue
-        else:
-            logger.warning(f"Config file not found at {config_file}; falling back to computed chunk sizes")
-    except Exception as exc:  # pragma: no cover
-        logger.warning(f"Failed to parse config file {config_file}: {exc}")
+    if config_file.exists():
+        cfg = yaml.safe_load(config_file.read_text()) or {}
+        cs = cfg.get("export", {}).get("chunk_size", {})
+        try:
+            chunk_map = {int(k): int(v) for k, v in cs.items()}
+        except Exception:
+            chunk_map = {}
 
     if resolutions is None:
         resolutions = [int(d.name) for d in dataset_path.iterdir() if d.is_dir() and d.name.isdigit()]
@@ -602,11 +518,6 @@ def prepare_export(
                         shard_index += 1
 
             # Flush remaining rows
-            if shard_rows:
-                shard_path = split_export / f"data-{shard_index:05d}.parquet"
-                _write_parquet_shard(shard_rows, shard_path, res)
-                shard_index += 1
-
             if shard_rows:
                 shard_path = split_export / f"data-{shard_index:05d}.parquet"
                 _write_parquet_shard(shard_rows, shard_path, res)
