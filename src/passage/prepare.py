@@ -413,11 +413,16 @@ def prepare_export(
         if dataset_notebook.exists():
             output_notebook = res_export / "dataset.ipynb"
             if execute_notebooks:
+                config_path = notebooks_path.parent / "config" / "config.yaml"
+                calibrate_json_path = calibrate_path / "calibrate.json"
+                max_workers_param = os.cpu_count() or 8
+
                 parameters = {
                     "RESOLUTION": res,
-                    "MAX_SAMPLES": 0 if max_samples_notebook is None else max_samples_notebook,
-                    "SAVE_WORLD_COVER": False,
-                    "DATASET_DIR": str(dataset_path),  # allow notebook to be run independently
+                    "DATASET_DIRPATH": str(dataset_path),
+                    "CONFIG_FILEPATH": str(config_path),
+                    "CALIBRATE_FILEPATH": str(calibrate_json_path),
+                    "MAX_WORKERS": max_workers_param,
                 }
 
                 # Interpret 0 as infinite retries for CLI convenience
