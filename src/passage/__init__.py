@@ -177,12 +177,6 @@ def main() -> None:
         help="Hugging Face dataset repo id for README and upload commands (default: username/passage)",
     )
     prepare_parser.add_argument(
-        "--chunk-size",
-        type=int,
-        default=None,
-        help="Override Parquet rows per shard (default: auto target ~500MB)",
-    )
-    prepare_parser.add_argument(
         "--no-exec-notebooks",
         action="store_true",
         help="Disable executing dataset.ipynb with papermill",
@@ -251,7 +245,6 @@ def main() -> None:
             repo_id=args.repo_id,
             execute_notebooks=not args.no_exec_notebooks,
             max_samples_notebook=args.max_samples_notebook,
-            chunk_size=args.chunk_size,
             max_notebook_retries=(None if args.max_notebook_retries == 0 else args.max_notebook_retries),
             notebook_retry_delay=args.notebook_retry_delay,
         )
