@@ -236,13 +236,12 @@ def _execute_notebook_with_retries(
         time.sleep(max(0, int(retry_delay)))
 
 
-def _generate_dataset_readme(
+def _generate_huggingface_yaml_header(
     repo_id: str,
     resolutions: list[int],
     split_names: list[str],
-    calibrate_data: dict | None,
 ) -> str:
-    """Generate a dataset README.md with config/split definitions."""
+    """Generate the Hugging Face YAML header for the dataset README."""
 
     configs_yaml = []
     for res in sorted(resolutions):
@@ -250,14 +249,6 @@ def _generate_dataset_readme(
         for split in sorted(split_names):
             split_entries.append(f'      - split: {split}\n        path: "{res}/{split}/data-*.parquet"')
         configs_yaml.append('  - config_name: "%s"\n    data_files:\n%s' % (res, "\n".join(split_entries)))
-
-    calibration_info = ""
-    if calibrate_data:
-        calibration_info = (
-            f"- Global min elevation: {calibrate_data.get('global_min', 'N/A')}\n"
-            f"- Global max elevation: {calibrate_data.get('global_max', 'N/A')}\n"
-            f"- Tiles analyzed: {len(calibrate_data.get('tile_stats', []))}\n"
-        )
 
     return f"""---
 license: mit
@@ -275,64 +266,47 @@ configs:
 {os.linesep.join(configs_yaml)}
 ---
 
-# PASSAGE Elevation Dataset (multi-resolution)
+"""
 
-This repository contains a single dataset with multiple configs (one per resolution) and
-four splits: train, calibration, validation, and test. Each sample is a small terrain
-patch represented as a 3-channel float32 tensor plus metadata and optional PNG visualization.
 
-## What this dataset is for
-- **Task**: path finding on elevation maps. Each sample contains two representative
-  pixel-level paths:
-  - **`path_free`**: a path computed on the raw terrain without obstacles (baseline);
-  - **`path_obstacles`**: a path computed on the same terrain with synthetic obstacles applied.
-  Models can be trained to predict feasible paths, estimate cost differences, or reason about
-  obstacle avoidance on elevation-based inputs.
+def _load_and_customize_readme(
+    assets_readme_path: Path,
+    repo_id: str,
+    resolutions: list[int],
+    split_names: list[str],
+    calibrate_data: dict | None,
+) -> str:
+    """Load README from assets and prepend Hugging Face YAML header with customizations."""
 
-## Where the data come from
-- Source elevation tiles are taken from the ALOS AW3D30 DSM product (publicly available global
-  digital surface model). Tiles are cropped around randomized centers and normalized using
-  globally computed calibration statistics.
+    # Generate the HF YAML header
+    yaml_header = _generate_huggingface_yaml_header(repo_id, resolutions, split_names)
 
-## How obstacles are generated
-- Obstacles are synthesized procedurally during dataset generation. For each crop the generator:
-  - decides a target obstacle ratio and sizes (configurable);
-  - places obstacle regions (blobs) randomly while respecting size constraints and coverage targets;
-  - marks obstacles in a dedicated channel and recomputes the path to obtain `path_obstacles`.
-  The generated metadata contains obstacle statistics (`ratio_actual`, `ratio_target`, `size_min_ratio`, `size_max_ratio`, `penalty`) useful for analysis.
+    # Load the base README from assets
+    if assets_readme_path.exists():
+        base_readme = assets_readme_path.read_text()
+    else:
+        logger.warning(f"Assets README not found at {assets_readme_path}, using minimal fallback")
+        base_readme = "# PASSAGE Dataset\n\nElevation pathfinding dataset.\n"
 
-## Parquet schema
-- `id`: sample index (zero-padded)
-- `image`: relative path to PNG file included in the export under `images/` (usable as `datasets.Image`)
-- `prefix`: `<LAT>/<LON>` directory prefix
-- `tensor`: float32 `[H, W, 3]` array (Arrow fixed-size lists)
-- `path_free`: `[[i, j], ...]` path without obstacles
-- `path_obstacles`: `[[i, j], ...]` path with obstacles
-- `metadata`: metadata without pixel-level path lists
+    # Add calibration info section if available
+    calibration_section = ""
+    if calibrate_data:
+        calibration_section = f"""
+## 📈 Calibration Statistics
 
-## Calibration summary
-{calibration_info if calibration_info else "(calibration data not included)"}
+This export was generated with the following calibration data:
 
-## Calibration maps
-The following diagnostic maps are included under `calibrate/` in this export and are useful
-for understanding the elevation distribution over tiles:
-
-- `calibrate/max_elevation_map.png` — per-tile maximum elevation visualization
-- `calibrate/ptp_elevation_map.png` — per-tile peak-to-peak (range) elevation visualization
-
-## Usage
-
-```python
-from datasets import load_dataset
-
-# Load one resolution config
-# e.g., 256 for 256x256 samples
-
-dataset = load_dataset("{repo_id}", "256")
-print(dataset)
-```
+- **Global minimum elevation**: {calibrate_data.get("global_min", "N/A")} m
+- **Global maximum elevation**: {calibrate_data.get("global_max", "N/A")} m
+- **Tiles analyzed**: {len(calibrate_data.get("tile_stats", []))}
 
 """
+
+    # Customize the repo_id in usage examples
+    customized_readme = base_readme.replace("your-username/passage-dataset", repo_id)
+
+    # Combine: YAML header + calibration stats + customized README
+    return yaml_header + customized_readme + calibration_section
 
 
 def prepare_export(
@@ -391,6 +365,27 @@ def prepare_export(
     calibrate_json = calibrate_path / "calibrate.json"
     if calibrate_json.exists():
         calibrate_data = json.loads(calibrate_json.read_text())
+
+    # Copy assets folder (images and README template)
+    assets_path = notebooks_path.parent / "assets"
+    assets_export = export_path / "assets"
+    if assets_path.exists():
+        if assets_export.exists():
+            shutil.rmtree(assets_export)
+        shutil.copytree(assets_path, assets_export)
+        logger.info(f"✓ Copied assets folder to {assets_export}")
+        # Ensure sample.png is present in the exported assets directory (fallback behavior)
+        sample_src = assets_path / "sample.png"
+        sample_dst = assets_export / "sample.png"
+        if not sample_dst.exists():
+            if sample_src.exists():
+                shutil.copy2(sample_src, sample_dst)
+                logger.info(f"✓ Copied sample.png to {sample_dst}")
+            else:
+                alt_sample = notebooks_path.parent / "sample.png"
+                if alt_sample.exists():
+                    shutil.copy2(alt_sample, sample_dst)
+                    logger.info(f"✓ Copied sample.png from project root to {sample_dst}")
 
     # Copy notebooks (excluding dataset.ipynb)
     notebooks_export = export_path / "notebooks"
@@ -542,7 +537,9 @@ def prepare_export(
     except Exception as exc:  # pragma: no cover
         logger.warning(f"Failed to copy calibration artifacts: {exc}")
 
-    readme = _generate_dataset_readme(repo_id, resolutions, split_names, calibrate_data)
+    # Generate README from assets template with HF YAML header and customizations
+    assets_readme_path = notebooks_path.parent / "assets" / "README.md"
+    readme = _load_and_customize_readme(assets_readme_path, repo_id, resolutions, split_names, calibrate_data)
     (export_path / "README.md").write_text(readme)
 
     logger.info(f"\n✓ Export prepared at {export_path}")
@@ -552,8 +549,7 @@ def prepare_export(
     )
     logger.info(
         "  2. Upload prepared export:\n"
-        f"     cd {export_path} && uv run hf upload . {repo_id} --repo-type dataset --include '*'\n"
-        f"     (or from elsewhere: uv run hf upload {export_path} {repo_id} --repo-type dataset --include '*')"
+        f"     pushd {export_path} && uv run hf upload {repo_id} . --repo-type dataset --include '*' && popd\n"
     )
 
     return True

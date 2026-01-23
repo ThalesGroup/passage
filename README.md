@@ -1,6 +1,6 @@
 # PASSAGE: Path Solving Dataset and Generator
 
-**PASSAGE** stands for **PA**th **S**olving Data**S**et **A**nd **GE**nerator.
+> **PASSAGE** stands for **PA**th **S**olving Data**S**et **A**nd **GE**nerator
 
 PASSAGE is a tool for generating elevation-based datasets from [ALOS AW3D30 DSM](https://www.eorc.jaxa.jp/ALOS/en/aw3d30/) (Digital Surface Model) tiles. It is designed to create training datasets for machine learning models that solve path-finding problems on terrain data.
 
