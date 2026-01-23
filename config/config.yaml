@@ -12,15 +12,15 @@ resolutions:
 # runtime estimation. Keys are resolutions (pixels) and values are rows per parquet shard.
 export:
   chunk_size:
-    64: 546133
-    128: 136533
-    256: 34133
-    512: 8533
-    1024: 2133
-    2048: 533
-    4096: 133
+    64: 1000000
+    128: 250000
+    256: 64000
+    512: 16000
+    1024: 4000
+    2048: 1000
+    4096: 150
 
-num_samples: 10
+num_samples: 200
 
 # Dataset split configuration
 splits:

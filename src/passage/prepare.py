@@ -12,13 +12,106 @@ import os
 import shutil
 from pathlib import Path
 
-import numpy as np
 import pyarrow as pa
 import pyarrow.parquet as pq
 import yaml
 from loguru import logger
 import time
 import subprocess
+import concurrent.futures
+
+try:
+    from tqdm import tqdm
+except Exception:  # pragma: no cover - if tqdm isn't available, provide a simple fallback
+
+    def tqdm(iterable, **kwargs):
+        return iterable
+
+
+def _parse_path_txt(txt_path: Path) -> list[list[int]]:
+    """Parse a path .txt file written as: "0 x0 y0 x1 y1 ..." and return [[i,j], ...]."""
+    try:
+        txt = txt_path.read_text().strip()
+        if not txt:
+            return []
+        parts = txt.split()
+        if len(parts) < 3:
+            return []
+        # ignore leading class token
+        coords = [int(p) for p in parts[1:]]
+        pairs: list[list[int]] = []
+        # file stores as (x0 y0 x1 y1 ...) where x=col (j), y=row (i)
+        # original generator wrote coords as (pj, pi) => (col, row)
+        for k in range(0, len(coords), 2):
+            try:
+                col = coords[k]
+                row = coords[k + 1]
+                pairs.append([row, col])
+            except Exception:
+                continue
+        return pairs
+    except Exception:
+        return []
+
+
+def _process_meta_for_prepare(meta_file: str, tensors_root: str, split_src: str) -> dict | None:
+    """Process a single metadata file into a serializable dict for parquet writing.
+
+    Returns a dict with keys: id, prefix, tensor (bytes|None), path_free (list), path_obstacles (list), image (bytes|None), metadata (dict)
+    """
+    try:
+        meta_p = Path(meta_file)
+        stem = meta_p.stem
+        try:
+            int(stem)
+        except ValueError:
+            return None
+        lat_dir = meta_p.parent.parent.name
+        lon_dir = meta_p.parent.name
+        prefix = f"{lat_dir}/{lon_dir}"
+
+        # Load metadata once
+        try:
+            metadata = yaml.safe_load(meta_p.read_text()) or {}
+        except Exception:
+            metadata = {}
+
+        # Tensor bytes
+        t_path = Path(tensors_root) / lat_dir / lon_dir / f"{stem}.npy"
+        tensor_bytes: bytes | None = None
+        try:
+            if t_path.exists():
+                tensor_bytes = t_path.read_bytes()
+        except Exception:
+            tensor_bytes = None
+
+        # Image bytes
+        img_path = Path(split_src) / "images" / lat_dir / lon_dir / f"{stem}.png"
+        image_bytes: bytes | None = None
+        try:
+            if img_path.exists():
+                image_bytes = img_path.read_bytes()
+        except Exception:
+            image_bytes = None
+
+        # Paths from text files
+        free_txt = Path(split_src) / "paths" / "free" / lat_dir / lon_dir / f"{stem}.txt"
+        obs_txt = Path(split_src) / "paths" / "obstacles" / lat_dir / lon_dir / f"{stem}.txt"
+        path_free = _parse_path_txt(free_txt) if free_txt.exists() else []
+        path_obstacles = _parse_path_txt(obs_txt) if obs_txt.exists() else []
+
+        return {
+            "id": f"{stem}",
+            "prefix": prefix,
+            "tensor": tensor_bytes,
+            "path_free": path_free,
+            "path_obstacles": path_obstacles,
+            "image": image_bytes,
+            "metadata": metadata,
+        }
+    except Exception:
+        return None
+
 
 try:
     import papermill as pm
@@ -75,56 +168,35 @@ def _extract_paths(metadata: dict) -> tuple[list[list[int]], list[list[int]]]:
 
 
 def _write_parquet_shard(rows: list[dict], shard_path: Path, resolution: int) -> None:
-    """Write one Parquet shard with Arrow-typed columns (tensor, paths, image path).
+    """Write one Parquet shard with Arrow-typed columns (tensor bytes, image bytes, paths).
 
-    Tensors are stored as fixed-size nested lists with shape [resolution, resolution, 3]
-    using Arrow's FixedSizeList type so high-dimensional arrays are preserved efficiently.
-    Paths are stored as list<list<int32>> (variable-length sequences of pixel pairs).
-    The `image` column contains a relative path to a PNG file included in the export (under `images/`), so
-    Hugging Face Data Studio and `datasets.Image` can load and render the image by path.
+    Both `tensor` and `image` are stored as binary (`pa.binary()`) so that consumers like Hugging
+    Face Data Studio or `datasets` can load image bytes directly from the parquet shard.
+    Paths are stored as `list<list<int32>>` and metadata is stored as a struct-like object.
     """
 
     if not rows:
         return
 
-    # Fixed-size nested lists: [resolution][resolution][3] (float32)
-    # Use nested list_ with explicit list_size for compatibility with older pyarrow
-    tensor_type = pa.list_(pa.list_(pa.list_(pa.float32(), list_size=3), list_size=resolution), list_size=resolution)
     path_type = pa.list_(pa.list_(pa.int32()))
 
     ids = pa.array([r["id"] for r in rows], type=pa.string())
     images = pa.array([r.get("image") for r in rows], type=pa.binary())
     prefixes = pa.array([r["prefix"] for r in rows], type=pa.string())
 
-    # Normalize tensors to numpy.float32 and validate/reshape where reasonable
-    tensors_np = []
-    for r in rows:
-        t = np.asarray(r["tensor"], dtype=np.float32)
-        # If 2D -> expand to 3 channels
-        if t.ndim == 2:
-            t = np.stack([t, np.zeros_like(t, dtype=np.float32), np.zeros_like(t, dtype=np.float32)], axis=-1)
-        # If 3D but wrong channel count, pad or truncate
-        if t.ndim == 3:
-            if t.shape[2] < 3:
-                pad = np.zeros((t.shape[0], t.shape[1], 3 - t.shape[2]), dtype=np.float32)
-                t = np.concatenate([t, pad], axis=2)
-            elif t.shape[2] > 3:
-                t = t[:, :, :3]
-        # Ensure expected spatial dims match resolution when possible
-        if t.shape[0] != resolution or t.shape[1] != resolution:
-            # Try to reshape from flat array if possible
-            if t.size == resolution * resolution * 3:
-                t = t.reshape((resolution, resolution, 3))
-            else:
-                raise ValueError(f"Tensor shape mismatch: expected ({resolution},{resolution},3) got {t.shape}")
-        tensors_np.append(t.tolist())
-
-    tensors = pa.array(tensors_np, type=tensor_type)
+    # Tensor bytes (npy files) stored as binary
+    tensors = pa.array([r.get("tensor") for r in rows], type=pa.binary())
 
     path_free = pa.array([r["path_free"] for r in rows], type=path_type)
     path_obstacles = pa.array([r["path_obstacles"] for r in rows], type=path_type)
     metadata = pa.array([r["metadata"] for r in rows])
 
+    table = pa.Table.from_arrays(
+        [ids, images, prefixes, tensors, path_free, path_obstacles, metadata],
+        names=["id", "image", "prefix", "tensor", "path_free", "path_obstacles", "metadata"],
+    )
+
+    pq.write_table(table, shard_path, compression="zstd")
     table = pa.Table.from_arrays(
         [ids, images, prefixes, tensors, path_free, path_obstacles, metadata],
         names=["id", "image", "prefix", "tensor", "path_free", "path_obstacles", "metadata"],
@@ -483,67 +555,57 @@ def prepare_export(
                 logger.warning(f"No metadata for split {split} at {metadata_root}, skipping")
                 continue
 
-            # Determine shard size from configuration mapping when available, otherwise fall back to the heuristic
             shard_size = chunk_map.get(res) if chunk_map.get(res) is not None else _recommended_chunk_size(res)
             shard_rows: list[dict] = []
             shard_index = 0
             total_rows = 0
 
-            for meta_file in sorted(metadata_root.rglob("*.yaml")):
-                try:
-                    idx = int(meta_file.stem)
-                except ValueError:
-                    continue
+            meta_files = sorted([p for p in metadata_root.rglob("*.yaml") if p.stem.isdigit()])
+            if not meta_files:
+                logger.info(f"No metadata files for split {split} at {metadata_root}, skipping")
+                continue
 
-                lat_dir = meta_file.parent.parent.name
-                lon_dir = meta_file.parent.name
-                tensor_path = tensors_root / lat_dir / lon_dir / f"{idx:010d}.npy"
-                if not tensor_path.exists():
-                    continue
+            max_workers = max(1, (os.cpu_count() or 4) - 1)
 
-                try:
-                    metadata = yaml.safe_load(meta_file.read_text())
-                except Exception as exc:  # pragma: no cover
-                    logger.warning(f"Failed to parse metadata {meta_file}: {exc}")
-                    continue
-                if not isinstance(metadata, dict):
-                    continue
-                tensor = np.load(tensor_path).astype(np.float32)
+            # Use a simple map signature for pickling compatibility: (meta_file, tensors_root, split_src)
+            with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as exe:
+                for result in tqdm(
+                    exe.map(
+                        _process_meta_for_prepare,
+                        [str(p) for p in meta_files],
+                        [str(tensors_root)] * len(meta_files),
+                        [str(split_src)] * len(meta_files),
+                    ),
+                    total=len(meta_files),
+                ):
+                    if not result:
+                        continue
 
-                image_path = split_src / "images" / lat_dir / lon_dir / f"{idx:010d}.png"
-                image_rel_path: str | None = None
-                try:
-                    if image_path.exists():
-                        dest_image_dir = split_export / "images" / lat_dir / lon_dir
-                        dest_image_dir.mkdir(parents=True, exist_ok=True)
-                        dest_file = dest_image_dir / image_path.name
-                        shutil.copy2(image_path, dest_file)
-                        image_rel_path = str(Path("images") / lat_dir / lon_dir / image_path.name)
-                except Exception as exc:  # pragma: no cover
-                    logger.warning(f"Failed to copy image {image_path}: {exc}")
-                    image_rel_path = None
+                    # Append and create shard as soon as we reach shard_size
+                    shard_rows.append(
+                        {
+                            "id": result["id"],
+                            "prefix": result["prefix"],
+                            "tensor": result["tensor"],
+                            "path_free": result.get("path_free", []),
+                            "path_obstacles": result.get("path_obstacles", []),
+                            "image": result["image"],
+                            "metadata": _strip_paths_from_metadata(result.get("metadata", {})),
+                        }
+                    )
+                    total_rows += 1
 
-                path_free, path_obstacles = _extract_paths(metadata)
-                metadata_clean = _strip_paths_from_metadata(metadata)
+                    if len(shard_rows) >= shard_size:
+                        shard_path = split_export / f"data-{shard_index:05d}.parquet"
+                        _write_parquet_shard(shard_rows, shard_path, res)
+                        shard_rows.clear()
+                        shard_index += 1
 
-                shard_rows.append(
-                    {
-                        "id": f"{idx:010d}",
-                        "prefix": f"{lat_dir}/{lon_dir}",
-                        "tensor": tensor,
-                        "path_free": path_free,
-                        "path_obstacles": path_obstacles,
-                        "image": image_rel_path,
-                        "metadata": metadata_clean,
-                    }
-                )
-                total_rows += 1
-
-                if len(shard_rows) >= shard_size:
-                    shard_path = split_export / f"data-{shard_index:05d}.parquet"
-                    _write_parquet_shard(shard_rows, shard_path, res)
-                    shard_rows.clear()
-                    shard_index += 1
+            # Flush remaining rows
+            if shard_rows:
+                shard_path = split_export / f"data-{shard_index:05d}.parquet"
+                _write_parquet_shard(shard_rows, shard_path, res)
+                shard_index += 1
 
             if shard_rows:
                 shard_path = split_export / f"data-{shard_index:05d}.parquet"
