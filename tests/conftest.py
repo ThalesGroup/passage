@@ -8,6 +8,7 @@ import pytest
 import yaml
 
 import passage.generate as gen
+from passage.utils import save_tensor, TENSOR_SUFFIX
 
 
 @pytest.fixture
@@ -90,7 +91,7 @@ def valid_sample_files(tmp_path):
     for i in range(3):
         # Create tensor
         tensor = np.zeros((64, 64, 3), dtype=np.float32)
-        np.save(tensors_dir / f"{i:010d}.npy", tensor)
+        save_tensor(tensor, tensors_dir / f"{i:010d}{TENSOR_SUFFIX}")
 
         # Create metadata
         metadata = {
@@ -127,7 +128,7 @@ def partial_sample_files(tmp_path):
     # Create 2 valid samples (indices 0, 1)
     for i in range(2):
         tensor = np.zeros((64, 64, 3), dtype=np.float32)
-        np.save(tensors_dir / f"{i:010d}.npy", tensor)
+        save_tensor(tensor, tensors_dir / f"{i:010d}{TENSOR_SUFFIX}")
         metadata = {"index": i, "resolution": 64}
         with open(metadata_dir / f"{i:010d}.yaml", "w") as f:
             yaml.dump(metadata, f)
@@ -138,6 +139,6 @@ def partial_sample_files(tmp_path):
 
     # Create partial sample at index 2 (tensor only, no metadata or image)
     tensor = np.zeros((64, 64, 3), dtype=np.float32)
-    np.save(tensors_dir / f"{2:010d}.npy", tensor)
+    save_tensor(tensor, tensors_dir / f"{2:010d}{TENSOR_SUFFIX}")
 
     return res_dir

@@ -9,6 +9,7 @@ import pytest
 import yaml
 
 import passage.generate as gen
+from passage.utils import save_tensor, TENSOR_SUFFIX
 
 # =============================================================================
 # Unit tests for helper functions
@@ -295,7 +296,7 @@ class TestCountValidSamples:
         # Verify partial tensor was deleted
         lat_dir = gen.lat_to_str(0)
         lon_dir = gen.lon_to_str(0)
-        partial_tensor = partial_sample_files / "tensors" / lat_dir / lon_dir / "0000000002.npy"
+        partial_tensor = partial_sample_files / "tensors" / lat_dir / lon_dir / f"0000000002{TENSOR_SUFFIX}"
         assert not partial_tensor.exists()
 
     @pytest.mark.unit
@@ -315,7 +316,7 @@ class TestCountValidSamples:
         import yaml
 
         for i in range(2):
-            np.save(tensors_dir / f"{i:010d}.npy", np.zeros((64, 64, 3)))
+            save_tensor(np.zeros((64, 64, 3), dtype=np.float32), tensors_dir / f"{i:010d}{TENSOR_SUFFIX}")
             with open(metadata_dir / f"{i:010d}.yaml", "w") as f:
                 yaml.dump({"index": i}, f)
 
@@ -786,10 +787,12 @@ class TestTensorToImage:
 
         if success:
             # Load the tensor and convert to image (pass path from metadata)
-            tensor_matches = list((outputs_dir / "8" / "tensors").rglob("0000000000.npy"))
+            tensor_matches = list((outputs_dir / "8" / "tensors").rglob(f"0000000000{TENSOR_SUFFIX}"))
             assert tensor_matches
             tensor_path = tensor_matches[0]
-            tensor = np.load(tensor_path)
+            from passage.utils import load_tensor
+
+            tensor = load_tensor(tensor_path, (8, 8, 3), "float32")
             metadata_matches = list((outputs_dir / "8" / "metadata").rglob("0000000000.yaml"))
             assert metadata_matches
             metadata_path = metadata_matches[0]
@@ -885,7 +888,7 @@ class TestTilesNeeded:
 
         # Check that sample metadata and tensor were written
         metadata_matches = list((outputs_dir / "160" / "metadata").rglob("0000000000.yaml"))
-        tensor_matches = list((outputs_dir / "160" / "tensors").rglob("0000000000.npy"))
+        tensor_matches = list((outputs_dir / "160" / "tensors").rglob(f"0000000000{TENSOR_SUFFIX}"))
         assert metadata_matches
         assert tensor_matches
         metadata_path = metadata_matches[0]
@@ -897,7 +900,9 @@ class TestTilesNeeded:
             md = yaml.safe_load(f)
         assert "paths" in md and "without_obstacles" in md["paths"]
 
-        arr = np.load(tensor_path)
+        from passage.utils import load_tensor
+
+        arr = load_tensor(tensor_path, (160, 160, 3), "float32")
         assert arr.shape[0] == 160 and arr.shape[1] == 160 and arr.shape[2] == 3
 
 

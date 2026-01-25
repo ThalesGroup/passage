@@ -40,7 +40,10 @@ dependencies = [
   "papermill>=2.5.0",
   "imageio>=2.34.0",
   "pyarrow>=23.0.0",
-  "datasets>=2.10.2"
+  "datasets>=2.10.2",
+  "zstandard>=0.25.0",
+  "python-dotenv>=1.0.0",
+  "huggingface-hub>=0.20.0"
 ]
 
 [project.scripts]

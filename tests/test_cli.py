@@ -5,7 +5,6 @@ from unittest.mock import patch
 
 import pytest
 
-
 # =============================================================================
 # Unit tests for CLI argument parsing
 # =============================================================================
@@ -285,3 +284,50 @@ class TestMainCLI:
                 main()
 
             assert exc_info.value.code == 0
+
+    @pytest.mark.unit
+    def test_export_logs_env_credentials_message(self):
+        """When --repo-id is omitted, the CLI should inform the user that it will read
+        HF credentials from .env and .env.secret (or custom paths)."""
+        from passage import main
+
+        with patch.object(sys, "argv", ["passage", "export", "--no-exec-notebooks", "--no-upload"]):
+            with patch("passage.logger") as mock_logger:
+                with patch("passage.export_and_upload") as mock_export:
+                    main()
+
+                    # Ensure export was called
+                    mock_export.assert_called_once()
+
+                    # Confirm an info log was emitted mentioning HF credentials
+                    info_calls = [c for c in mock_logger.info.call_args_list]
+                    assert any("Using Hugging Face credentials" in str(c.args[0]) for c in info_calls)
+
+    @pytest.mark.unit
+    def test_export_uses_env_repo_id(self):
+        """When --repo-id is not provided, the export subcommand should leave repo_id as None so
+        downstream code can read username/repo from .env."""
+        from passage import main
+
+        with patch.object(sys, "argv", ["passage", "export", "--no-exec-notebooks", "--no-upload"]):
+            with patch("passage.export_and_upload") as mock_export:
+                main()
+
+                mock_export.assert_called_once()
+                _, kwargs = mock_export.call_args
+                assert kwargs.get("repo_id") is None
+
+    @pytest.mark.unit
+    def test_export_passes_explicit_repo_id(self):
+        """If --repo-id is provided it should be passed through unchanged."""
+        from passage import main
+
+        with patch.object(
+            sys, "argv", ["passage", "export", "--repo-id", "alice/repo", "--no-exec-notebooks", "--no-upload"]
+        ):
+            with patch("passage.export_and_upload") as mock_export:
+                main()
+
+                mock_export.assert_called_once()
+                _, kwargs = mock_export.call_args
+                assert kwargs.get("repo_id") == "alice/repo"

@@ -60,7 +60,7 @@ from passage.pathfinding_utils import (
 from passage.pathfinding_utils import (
     _pathfinding_path_to_coords as _pathfinding_path_to_coords,
 )
-from passage.utils import _log_timing
+from passage.utils import TENSOR_SUFFIX, _log_timing, save_tensor
 from passage.visualization import tensor_to_image
 
 # Standard ALOS AW3D30 tile size in pixels (1° x 1° at 30m resolution)
@@ -1036,19 +1036,18 @@ def generate_sample(
             crop_with_markers = np.stack([crop_norm, marker_channel, obstacles_channel], axis=-1)
 
             # Save as .npy (3-channel float32) into 'tensors'
-            tensors_dir = (
-                outputs_dirpath
-                / str(resolution)
-                / split_name
-                / "tensors"
-                / f"{lat_to_str(center_lat)}"
-                / f"{lon_to_str(center_lon)}"
-            )
+            base_res_dir = outputs_dirpath / str(resolution)
+            if split_name == "train":
+                tensors_dir = base_res_dir / "tensors" / f"{lat_to_str(center_lat)}" / f"{lon_to_str(center_lon)}"
+            else:
+                tensors_dir = (
+                    base_res_dir / split_name / "tensors" / f"{lat_to_str(center_lat)}" / f"{lon_to_str(center_lon)}"
+                )
             tensors_dir.mkdir(parents=True, exist_ok=True)
-            tensor_path = tensors_dir / f"{index:010d}.npy"
+            tensor_path = tensors_dir / f"{index:010d}{TENSOR_SUFFIX}"
             try:
                 t_np = time.time()
-                np.save(str(tensor_path), crop_with_markers)
+                save_tensor(crop_with_markers, tensor_path)
                 tensor_save_time = time.time() - t_np
             except Exception as e:  # pragma: no cover
                 tensor_save_time = time.time() - t_np if "t_np" in locals() else 0.0
@@ -1188,14 +1187,13 @@ def generate_sample(
                 cost_diff_percent = 0.0
 
             # Save metadata into metadata folder *before* images so visualization can read it
-            metadata_dir = (
-                outputs_dirpath
-                / str(resolution)
-                / split_name
-                / "metadata"
-                / f"{lat_to_str(center_lat)}"
-                / f"{lon_to_str(center_lon)}"
-            )
+            base_res_dir = outputs_dirpath / str(resolution)
+            if split_name == "train":
+                metadata_dir = base_res_dir / "metadata" / f"{lat_to_str(center_lat)}" / f"{lon_to_str(center_lon)}"
+            else:
+                metadata_dir = (
+                    base_res_dir / split_name / "metadata" / f"{lat_to_str(center_lat)}" / f"{lon_to_str(center_lon)}"
+                )
             metadata = {
                 "index": index,
                 "resolution": resolution,
@@ -1301,46 +1299,57 @@ def generate_sample(
                 lat_dir = f"{lat_to_str(center_lat)}"
                 lon_dir = f"{lon_to_str(center_lon)}"
 
+                base_res_dir = outputs_dirpath / str(resolution)
                 # Free path (without obstacles)
-                free_dir = outputs_dirpath / str(resolution) / split_name / "paths" / "free" / lat_dir / lon_dir
+                if split_name == "train":
+                    free_dir = base_res_dir / "paths" / "free" / lat_dir / lon_dir
+                else:
+                    free_dir = base_res_dir / split_name / "paths" / "free" / lat_dir / lon_dir
                 free_dir.mkdir(parents=True, exist_ok=True)
                 # Write flattened XY coordinates (x0 y0 x1 y1 ...) with leading class "0"
                 free_txt_file = free_dir / f"{index:010d}.txt"
-                free_coords = [str(int(v)) for pi, pj in path_without for v in (pj, pi)]
+                free_pairs = [[int(pi), int(pj)] for pi, pj in path_without]
                 with open(free_txt_file, "w") as ff:
-                    ff.write("0 " + " ".join(free_coords) + "\n")
+                    json.dump(free_pairs, ff)
 
                 # Obstacles path (with obstacles)
-                obs_dir = outputs_dirpath / str(resolution) / split_name / "paths" / "obstacles" / lat_dir / lon_dir
+                if split_name == "train":
+                    obs_dir = base_res_dir / "paths" / "obstacles" / lat_dir / lon_dir
+                else:
+                    obs_dir = base_res_dir / split_name / "paths" / "obstacles" / lat_dir / lon_dir
                 obs_dir.mkdir(parents=True, exist_ok=True)
                 # Write flattened XY coordinates (x0 y0 x1 y1 ...) with leading class "0"
                 obs_txt_file = obs_dir / f"{index:010d}.txt"
-                obs_coords = [str(int(v)) for pi, pj in path_with for v in (pj, pi)]
+                obs_pairs = [[int(pi), int(pj)] for pi, pj in path_with]
                 with open(obs_txt_file, "w") as ff:
-                    ff.write("0 " + " ".join(obs_coords) + "\n")
+                    json.dump(obs_pairs, ff)
             except Exception as e:  # pragma: no cover
                 logger.warning(f"Failed saving pixel-index paths for sample {index}: {e}")
 
             # Save visual image at full resolution in 'images' unless disabled
             if not disable_images:
-                images_dir = (
-                    outputs_dirpath
-                    / str(resolution)
-                    / split_name
-                    / "images"
-                    / f"{lat_to_str(center_lat)}"
-                    / f"{lon_to_str(center_lon)}"
-                )
+                base_res_dir = outputs_dirpath / str(resolution)
+                if split_name == "train":
+                    images_dir = base_res_dir / "images" / f"{lat_to_str(center_lat)}" / f"{lon_to_str(center_lon)}"
+                else:
+                    images_dir = (
+                        base_res_dir / split_name / "images" / f"{lat_to_str(center_lat)}" / f"{lon_to_str(center_lon)}"
+                    )
                 images_dir.mkdir(parents=True, exist_ok=True)
                 # Convert tensor to BGR image using helper function, drawing BOTH paths (without and with obstacles)
                 # Primary path (no obstacles) is drawn in green; secondary path (with obstacles) is drawn in blue.
                 t_conv = time.time()
-                thumb_rgb = tensor_to_image(crop_with_markers, path_pixels=path_without, alt_path_pixels=path_with)
+                # Avoid drawing the alt path on top of the primary when they are identical or obstacles are disabled
+                if (path_with == path_without) or (not obstacles_enabled):
+                    thumb_rgb = tensor_to_image(crop_with_markers, path_pixels=path_without)
+                else:
+                    thumb_rgb = tensor_to_image(crop_with_markers, path_pixels=path_without, alt_path_pixels=path_with)
                 image_conversion_time = time.time() - t_conv
                 image_path = images_dir / f"{index:010d}.png"
                 try:
                     t_img = time.time()
-                    cv2.imwrite(str(image_path), thumb_rgb)
+                    # Ensure deterministic PNG write (no compression variance)
+                    cv2.imwrite(str(image_path), thumb_rgb, [cv2.IMWRITE_PNG_COMPRESSION, 0])
                     image_write_time = time.time() - t_img
                 except Exception as e:  # pragma: no cover
                     image_write_time = time.time() - t_img if "t_img" in locals() else 0.0
@@ -1371,7 +1380,7 @@ def generate_sample(
             end_time = datetime.now()
             duration = (end_time - start_time).total_seconds()
             logger.info(
-                f"Sample {index}: success=True, elevation_attempts={elevation_attempts}, "
+                f"Resolution: {resolution} / Sample {index}: success=True, elevation_attempts={elevation_attempts}, "
                 f"marker_retries={marker_attempt + 1 if 'marker_attempt' in locals() else 0}, "
                 f"path_length_no_obstacles={len(path_without)}, "
                 f"path_length_with_obstacles={len(path_with)}, "
@@ -1388,7 +1397,7 @@ def generate_sample(
 
     duration = (datetime.now() - start_time).total_seconds()
     logger.info(
-        f"Sample {index}: success=False, elevation_attempts={elevation_attempts}, "
+        f"Resolution: {resolution} / Sample {index}: success=False, elevation_attempts={elevation_attempts}, "
         f"marker_retries={marker_attempts_used if 'marker_attempts_used' in locals() else 0}, duration={duration:.2f}s"
     )
     return index, False, f"Failed to generate sample {index} after {max_elevation_retries} elevation attempts", duration
@@ -1410,7 +1419,7 @@ def count_valid_samples(
     Count consecutive valid samples starting from index 0.
 
     A sample is valid if it has all required files under the expected split/lat/lon subdirectories:
-    - {split}/tensors/{lat}/{lon}/{index:010d}.npy
+    - {split}/tensors/{lat}/{lon}/{index:010d}.npy.zst
     - {split}/metadata/{lat}/{lon}/{index:010d}.yaml
     - {split}/images/{lat}/{lon}/{index:010d}.png (if disable_images is False)
 
@@ -1430,9 +1439,12 @@ def count_valid_samples(
         if not dir_path.exists():
             return index_map
         for path in dir_path.rglob(f"*{suffix}"):
-            if not path.is_file() or path.suffix != suffix:
+            if not path.is_file() or not str(path).endswith(suffix):
                 continue
-            stem = path.stem
+            # Handle multi-part extensions like .npy.zst
+            stem = path.name
+            if stem.endswith(suffix):
+                stem = stem[: -len(suffix)]
             if not stem.isdigit():
                 continue
             idx = int(stem)
@@ -1452,7 +1464,7 @@ def count_valid_samples(
         if not tensors_dir.exists() or not metadata_dir.exists():
             return 0
 
-        tensors_map = _build_index_map(tensors_dir, ".npy")
+        tensors_map = _build_index_map(tensors_dir, TENSOR_SUFFIX)
         metadata_map = _build_index_map(metadata_dir, ".yaml")
         images_map = _build_index_map(images_dir, ".png") if not disable_images else {}
         index = 0
@@ -1497,7 +1509,7 @@ def count_valid_samples(
     images_map_by_split: dict[str, dict[int, Path]] = {}
 
     for split in split_names:
-        tensors_map_by_split[split] = _build_index_map(res_dir / split / "tensors", ".npy")
+        tensors_map_by_split[split] = _build_index_map(res_dir / split / "tensors", TENSOR_SUFFIX)
         metadata_map_by_split[split] = _build_index_map(res_dir / split / "metadata", ".yaml")
         if not disable_images:
             images_map_by_split[split] = _build_index_map(res_dir / split / "images", ".png")
