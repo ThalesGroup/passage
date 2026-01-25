@@ -156,8 +156,11 @@ def tensor_to_image(
     obst_color = (0, 0, 255)  # red
     start_color = (255, 255, 0)  # cyan
     end_color = (255, 0, 0)  # blue
-    path_wo_color = (0, 255, 255)  # yellow (without obstacles)
-    path_w_color = (0, 255, 0)  # green (with obstacles)
+    # Primary path colors: polyline (yellow) for multi-pixel paths, single-pixel points drawn green
+    path_poly_color = (0, 255, 255)  # yellow (B low, G high, R high)
+    path_point_color = (0, 255, 0)  # green
+    # Alternate/with-obstacles path uses blue
+    alt_poly_color = (255, 0, 0)
 
     # 1) Draw obstacles on top of elevation
     if np.any(obst_mask):
@@ -175,7 +178,7 @@ def tensor_to_image(
         cv2.line(img, (cx - marker_arm, cy), (cx + marker_arm, cy), color=end_color, thickness=marker_thickness)
         cv2.line(img, (cx, cy - marker_arm), (cx, cy + marker_arm), color=end_color, thickness=marker_thickness)
 
-    # 3) Draw path without obstacles (yellow)
+    # 3) Draw path without obstacles (polyline yellow; single point green)
     path_mask = (path_channel > 0.5).astype(np.uint8) * 255
     if np.any(path_mask):
         try:
@@ -184,16 +187,18 @@ def tensor_to_image(
                 if cnt is None or len(cnt) == 0:
                     continue
                 if len(cnt) >= 2:
-                    cv2.polylines(img, [cnt], isClosed=False, color=path_wo_color, thickness=path_thickness)
+                    cv2.polylines(img, [cnt], isClosed=False, color=path_poly_color, thickness=path_thickness)
                 else:
                     x, y = int(cnt[0][0][0]), int(cnt[0][0][1])
-                    cv2.circle(img, (x, y), radius=max(1, path_thickness // 2), color=path_wo_color, thickness=-1)
+                    cv2.circle(img, (x, y), radius=max(1, path_thickness // 2), color=path_point_color, thickness=-1)
         except Exception:
             ys, xs = np.nonzero(path_channel > 0.5)
             for y, x in zip(ys, xs):
-                cv2.circle(img, (int(x), int(y)), radius=max(1, path_thickness // 2), color=path_wo_color, thickness=-1)
+                cv2.circle(
+                    img, (int(x), int(y)), radius=max(1, path_thickness // 2), color=path_point_color, thickness=-1
+                )
 
-    # 4) Draw path with obstacles (green) on top
+    # 4) Draw path with obstacles (alt path) on top
     alt_mask = (alt_path_channel > 0.5).astype(np.uint8) * 255
     if np.any(alt_mask):
         try:
@@ -202,13 +207,15 @@ def tensor_to_image(
                 if cnt is None or len(cnt) == 0:
                     continue
                 if len(cnt) >= 2:
-                    cv2.polylines(img, [cnt], isClosed=False, color=path_w_color, thickness=path_thickness)
+                    cv2.polylines(img, [cnt], isClosed=False, color=alt_poly_color, thickness=path_thickness)
                 else:
                     x, y = int(cnt[0][0][0]), int(cnt[0][0][1])
-                    cv2.circle(img, (x, y), radius=max(1, path_thickness // 2), color=path_w_color, thickness=-1)
+                    cv2.circle(img, (x, y), radius=max(1, path_thickness // 2), color=alt_poly_color, thickness=-1)
         except Exception:
             ys, xs = np.nonzero(alt_path_channel > 0.5)
             for y, x in zip(ys, xs):
-                cv2.circle(img, (int(x), int(y)), radius=max(1, path_thickness // 2), color=path_w_color, thickness=-1)
+                cv2.circle(
+                    img, (int(x), int(y)), radius=max(1, path_thickness // 2), color=alt_poly_color, thickness=-1
+                )
 
     return img

@@ -8,7 +8,7 @@ from loguru import logger
 from passage.calibrate import run_calibrate
 from passage.download import run_download
 from passage.generate import run_generate
-from passage.prepare import prepare_export
+from passage.prepare import export_and_upload, upload_to_huggingface
 
 
 def main() -> None:
@@ -139,67 +139,134 @@ def main() -> None:
         help="Set log level (default: info)",
     )
 
-    # Prepare subcommand (local export structure, no upload)
-    prepare_parser = subparsers.add_parser(
-        "prepare",
-        help="Prepare outputs/export for Hugging Face upload (no upload)",
+    # Export subcommand (prepare + upload + force dataset metadata)
+    export_parser = subparsers.add_parser(
+        "export",
+        help="Prepare outputs/export and upload to Hugging Face (pushes dataset metadata to force image rendering)",
     )
-    prepare_parser.add_argument(
+    export_parser.add_argument(
         "--dataset-dirpath",
         default="outputs/dataset",
         help="Directory containing generated datasets (default: outputs/dataset)",
     )
-    prepare_parser.add_argument(
+    export_parser.add_argument(
         "--export-dirpath",
         default="outputs/export",
         help="Directory to write prepared export structure (default: outputs/export)",
     )
-    prepare_parser.add_argument(
+    export_parser.add_argument(
         "--calibrate-dirpath",
         default="outputs/calibrate",
         help="Directory containing calibration data (default: outputs/calibrate)",
     )
-    prepare_parser.add_argument(
+    export_parser.add_argument(
         "--notebooks-dirpath",
         default="notebooks",
         help="Directory containing notebooks (default: notebooks)",
     )
-    prepare_parser.add_argument(
+    export_parser.add_argument(
         "--resolution",
         type=int,
         nargs="+",
         default=None,
         help="Specific resolutions to prepare. If not specified, prepares all found.",
     )
-    prepare_parser.add_argument(
-        "--repo-id",
-        default="username/passage",
-        help="Hugging Face dataset repo id for README and upload commands (default: username/passage)",
+    export_parser.add_argument(
+        "--num-cpus",
+        type=int,
+        default=None,
+        help="Number of CPUs for multiprocessing (can be specified before or after subcommand)",
     )
-    prepare_parser.add_argument(
+    export_parser.add_argument(
+        "--repo-id",
+        default=None,
+        help="Hugging Face dataset repo id for README and upload commands (default: read from .env)",
+    )
+    export_parser.add_argument(
         "--no-exec-notebooks",
         action="store_true",
         help="Disable executing dataset.ipynb with papermill",
     )
-    prepare_parser.add_argument(
-        "--max-samples-notebook",
-        type=int,
-        default=None,
-        help="Max samples for dataset.ipynb execution (default: 0)",
-    )
-    prepare_parser.add_argument(
+    export_parser.add_argument(
         "--max-notebook-retries",
         type=int,
         default=3,
         help="Number of attempts to execute dataset.ipynb before giving up; set to 0 for unlimited retries (default: 3)",
     )
-    prepare_parser.add_argument(
+    export_parser.add_argument(
         "--notebook-retry-delay",
         type=int,
         default=5,
         help="Seconds to wait between notebook execution retries (default: 5)",
     )
-    prepare_parser.add_argument(
+    export_parser.add_argument(
+        "--env-path",
+        default=None,
+        help="Path to .env file containing HF_USER_NAME and HF_REPO_NAME (default: project root .env)",
+    )
+    export_parser.add_argument(
+        "--secret-path",
+        default=None,
+        help="Path to .env.secret file containing HF_TOKEN (default: project root .env.secret)",
+    )
+    export_parser.add_argument(
+        "--no-upload",
+        action="store_true",
+        help="Prepare export but do not upload to Hugging Face (useful for local testing)",
+    )
+    export_parser.add_argument(
+        "--private",
+        action="store_true",
+        help="Make the uploaded repository private (default: public)",
+    )
+    export_parser.add_argument(
+        "--no-create-repo",
+        action="store_true",
+        help="Don't create the repository if it doesn't exist",
+    )
+    export_parser.add_argument(
+        "--log-level",
+        choices=["debug", "info", "warning", "error", "critical"],
+        default="info",
+        help="Set log level (default: info)",
+    )
+
+    # Upload subcommand (upload to Hugging Face Hub)
+    upload_parser = subparsers.add_parser(
+        "upload",
+        help="Upload prepared export to Hugging Face Hub",
+    )
+    upload_parser.add_argument(
+        "--export-dirpath",
+        default="outputs/export",
+        help="Directory containing prepared export (default: outputs/export)",
+    )
+    upload_parser.add_argument(
+        "--env-path",
+        default=None,
+        help="Path to .env file containing HF_USER_NAME and HF_REPO_NAME (default: project root .env)",
+    )
+    upload_parser.add_argument(
+        "--secret-path",
+        default=None,
+        help="Path to .env.secret file containing HF_TOKEN (default: project root .env.secret)",
+    )
+    upload_parser.add_argument(
+        "--repo-id",
+        default=None,
+        help="Explicit Hugging Face repo id (overrides .env settings, format: username/repo)",
+    )
+    upload_parser.add_argument(
+        "--private",
+        action="store_true",
+        help="Make the repository private (default: public)",
+    )
+    upload_parser.add_argument(
+        "--no-create-repo",
+        action="store_true",
+        help="Don't create the repository if it doesn't exist",
+    )
+    upload_parser.add_argument(
         "--log-level",
         choices=["debug", "info", "warning", "error", "critical"],
         default="info",
@@ -235,8 +302,17 @@ def main() -> None:
             overwrite=args.no_resume,
             num_cpus=args.num_cpus,
         )
-    elif args.command == "prepare":
-        prepare_export(
+    elif args.command == "export":
+        # Inform the user when the CLI will read credentials from .env/.env.secret
+        if args.repo_id is None:
+            env_display = args.env_path if args.env_path else ".env"
+            secret_display = args.secret_path if args.secret_path else ".env.secret"
+            logger.info(
+                f"Using Hugging Face credentials from {env_display} and {secret_display} "
+                "(HF_USER_NAME/HF_REPO_NAME and HF_TOKEN). To override, pass --repo-id or --env-path/--secret-path."
+            )
+
+        export_and_upload(
             export_dirpath=args.export_dirpath,
             dataset_dirpath=args.dataset_dirpath,
             calibrate_dirpath=args.calibrate_dirpath,
@@ -244,9 +320,23 @@ def main() -> None:
             resolutions=args.resolution,
             repo_id=args.repo_id,
             execute_notebooks=not args.no_exec_notebooks,
-            max_samples_notebook=args.max_samples_notebook,
             max_notebook_retries=(None if args.max_notebook_retries == 0 else args.max_notebook_retries),
             notebook_retry_delay=args.notebook_retry_delay,
+            num_cpus=args.num_cpus,
+            env_path=args.env_path,
+            secret_path=args.secret_path,
+            private=args.private,
+            create_repo=not args.no_create_repo,
+            skip_upload=args.no_upload,
+        )
+    elif args.command == "upload":
+        upload_to_huggingface(
+            export_dirpath=args.export_dirpath,
+            env_path=args.env_path,
+            secret_path=args.secret_path,
+            repo_id=args.repo_id,
+            private=args.private,
+            create_repo=not args.no_create_repo,
         )
     elif args.command is None:
         logger.info("Hello from passage! Use --help for available commands.")

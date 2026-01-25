@@ -20,3 +20,5 @@ outputs/tests/
 .coverage
 htmlcov/
 .pytest_cache/
+
+.env.secret

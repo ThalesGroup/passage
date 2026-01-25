@@ -203,7 +203,7 @@ outputs/
 └── dataset/
     ├── summary.json       # Generation summary
     ├── 64/
-    │   ├── tensors/       # .npy files (H×W×2 float32)
+    │   ├── tensors/       # .npy.zst files (H×W×3 float32, zstd-compressed)
     │   ├── images/        # .png visualization
     │   └── metadata/      # .yaml sample info
     ├── 128/
@@ -213,7 +213,7 @@ outputs/
 
 ### Tensor Format
 
-Each `.npy` tensor is a `(H, W, 3)` float32 array:
+Each `.npy.zst` tensor is a zstd-compressed `(H, W, 3)` float32 array:
 - **Channel 0**: Normalized elevation (0-1 range using global min/max)
 - **Channel 1**: Marker channel (two pixels set to 1.0, rest 0.0)
 - **Channel 2**: Obstacles mask (1.0 for blocked, 0.0 for free)
