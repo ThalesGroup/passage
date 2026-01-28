@@ -1,0 +1,70 @@
+\begin{thebibliography}{9}
+\providecommand{\natexlab}[1]{#1}
+\providecommand{\url}[1]{\texttt{#1}}
+\expandafter\ifx\csname urlstyle\endcsname\relax
+  \providecommand{\doi}[1]{doi: #1}\else
+  \providecommand{\doi}{doi: \begingroup \urlstyle{rm}\Url}\fi
+
+\bibitem[Cappart et~al.(2023)Cappart, Ch{\'e}telat, Khalil, Lodi, Morris, and
+  Veli{\v{c}}kovi{\'c}]{cappart2021combinatorial}
+Quentin Cappart, Didier Ch{\'e}telat, Elias~B Khalil, Andrea Lodi, Christopher
+  Morris, and Petar Veli{\v{c}}kovi{\'c}.
+\newblock Combinatorial optimization and reasoning with graph neural networks.
+\newblock \emph{Journal of Machine Learning Research}, 24\penalty0
+  (130):\penalty0 1--61, 2023.
+
+\bibitem[{EUROCAE WG-114}(2024)]{ed324}
+{EUROCAE WG-114}.
+\newblock {ED-324}: First usable guidance for level 1 \& 2 machine learning
+  applications.
+\newblock Technical report, EUROCAE, 2024.
+
+\bibitem[Mirowski et~al.(2017)Mirowski, Pascanu, Leber,
+  et~al.]{mirowski2017learning}
+Piotr Mirowski, Razvan Pascanu, Fabio Leber, et~al.
+\newblock Learning to navigate in complex environments.
+\newblock In \emph{International Conference on Learning Representations}, 2017.
+
+\bibitem[Ronneberger et~al.(2015)Ronneberger, Fischer, and
+  Brox]{ronneberger2015unet}
+Olaf Ronneberger, Philipp Fischer, and Thomas Brox.
+\newblock U-net: Convolutional networks for biomedical image segmentation.
+\newblock In \emph{International Conference on Medical Image Computing and
+  Computer-Assisted Intervention}, pages 234--241. Springer, 2015.
+
+\bibitem[{SAE International}(2024)]{arp6983}
+{SAE International}.
+\newblock {ARP6983}: Process standard for development and
+  certification/approval of aeronautical safety-related products implementing
+  {AI}.
+\newblock Technical report, SAE International, 2024.
+
+\bibitem[Sturtevant(2012)]{sturtevant2012benchmarks}
+Nathan~R Sturtevant.
+\newblock Benchmarks for grid-based pathfinding.
+\newblock In \emph{Transactions on Computational Intelligence and AI in Games},
+  volume~4, pages 144--148. IEEE, 2012.
+
+\bibitem[Tadono et~al.(2014)Tadono, Ishida, Oda, Naito, Minakawa, and
+  Iwamoto]{tadono2014alos}
+Takeo Tadono, Hiroshi Ishida, Futoshi Oda, Shinsuke Naito, Koji Minakawa, and
+  Hitomi Iwamoto.
+\newblock Precise global {DEM} generation by {ALOS PRISM}.
+\newblock \emph{ISPRS Annals of the Photogrammetry, Remote Sensing and Spatial
+  Information Sciences}, 2\penalty0 (4):\penalty0 71--76, 2014.
+
+\bibitem[Tamar et~al.(2016)Tamar, Wu, Thomas, Levine, and Abbeel]{tamar2016vin}
+Aviv Tamar, Yi~Wu, Garrett Thomas, Sergey Levine, and Pieter Abbeel.
+\newblock Value iteration networks.
+\newblock In \emph{Advances in Neural Information Processing Systems},
+  volume~29, 2016.
+
+\bibitem[Yonetani et~al.(2021)Yonetani, Taniai, Barekatain, Nishimura, and
+  Kanezaki]{yonetani2021neural}
+Ryo Yonetani, Tatsunori Taniai, Mohammadamin Barekatain, Mai Nishimura, and
+  Asako Kanezaki.
+\newblock Path planning using neural {A*} search.
+\newblock In \emph{International Conference on Machine Learning}, pages
+  12029--12039. PMLR, 2021.
+
+\end{thebibliography}

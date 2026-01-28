@@ -8,9 +8,8 @@ import numpy as np
 import zstandard as zstd
 from loguru import logger
 
-
 # Default compression level for tensor blobs
-TENSOR_COMPRESSION_LEVEL = 3
+TENSOR_COMPRESSION_LEVEL = 12
 
 # File suffix for compressed tensor files
 TENSOR_SUFFIX = ".npy.zst"

@@ -5,10 +5,12 @@ import sys
 
 from loguru import logger
 
-from passage.calibrate import run_calibrate
-from passage.download import run_download
-from passage.generate import run_generate
-from passage.prepare import export_and_upload, upload_to_huggingface
+# Lazily import heavy CLI functions to avoid importing dependencies (like rasterio) at package import time.
+# Tests patch these names (e.g., patch('passage.run_generate')) so keep attributes available as placeholders.
+run_calibrate = None
+run_download = None
+run_generate = None
+export_and_upload = None
 
 
 def main() -> None:
@@ -139,20 +141,15 @@ def main() -> None:
         help="Set log level (default: info)",
     )
 
-    # Export subcommand (prepare + upload + force dataset metadata)
+    # Export subcommand (direct push to Hugging Face datasets)
     export_parser = subparsers.add_parser(
         "export",
-        help="Prepare outputs/export and upload to Hugging Face (pushes dataset metadata to force image rendering)",
+        help="Push prepared datasets directly to Hugging Face (zstd shards, no parquet)",
     )
     export_parser.add_argument(
         "--dataset-dirpath",
         default="outputs/dataset",
         help="Directory containing generated datasets (default: outputs/dataset)",
-    )
-    export_parser.add_argument(
-        "--export-dirpath",
-        default="outputs/export",
-        help="Directory to write prepared export structure (default: outputs/export)",
     )
     export_parser.add_argument(
         "--calibrate-dirpath",
@@ -170,12 +167,6 @@ def main() -> None:
         nargs="+",
         default=None,
         help="Specific resolutions to prepare. If not specified, prepares all found.",
-    )
-    export_parser.add_argument(
-        "--num-cpus",
-        type=int,
-        default=None,
-        help="Number of CPUs for multiprocessing (can be specified before or after subcommand)",
     )
     export_parser.add_argument(
         "--repo-id",
@@ -212,7 +203,7 @@ def main() -> None:
     export_parser.add_argument(
         "--no-upload",
         action="store_true",
-        help="Prepare export but do not upload to Hugging Face (useful for local testing)",
+        help="Run notebook prep but skip pushing to Hugging Face (useful for local testing)",
     )
     export_parser.add_argument(
         "--private",
@@ -231,48 +222,6 @@ def main() -> None:
         help="Set log level (default: info)",
     )
 
-    # Upload subcommand (upload to Hugging Face Hub)
-    upload_parser = subparsers.add_parser(
-        "upload",
-        help="Upload prepared export to Hugging Face Hub",
-    )
-    upload_parser.add_argument(
-        "--export-dirpath",
-        default="outputs/export",
-        help="Directory containing prepared export (default: outputs/export)",
-    )
-    upload_parser.add_argument(
-        "--env-path",
-        default=None,
-        help="Path to .env file containing HF_USER_NAME and HF_REPO_NAME (default: project root .env)",
-    )
-    upload_parser.add_argument(
-        "--secret-path",
-        default=None,
-        help="Path to .env.secret file containing HF_TOKEN (default: project root .env.secret)",
-    )
-    upload_parser.add_argument(
-        "--repo-id",
-        default=None,
-        help="Explicit Hugging Face repo id (overrides .env settings, format: username/repo)",
-    )
-    upload_parser.add_argument(
-        "--private",
-        action="store_true",
-        help="Make the repository private (default: public)",
-    )
-    upload_parser.add_argument(
-        "--no-create-repo",
-        action="store_true",
-        help="Don't create the repository if it doesn't exist",
-    )
-    upload_parser.add_argument(
-        "--log-level",
-        choices=["debug", "info", "warning", "error", "critical"],
-        default="info",
-        help="Set log level (default: info)",
-    )
-
     args = parser.parse_args()
 
     # Configure global log level (default 'info') when provided on subcommands
@@ -281,8 +230,17 @@ def main() -> None:
     logger.add(sys.stderr, level=level.upper())
 
     if args.command == "download":
+        # Prefer module-level patched function if present, otherwise import lazily
+        if run_download is None:
+            from passage.download import run_download as _rd
+
+            globals()["run_download"] = _rd
         run_download(args.outputs_dirpath, resume=not args.no_resume, num_cpus=args.num_cpus)
     elif args.command == "generate":
+        if run_generate is None:
+            from passage.generate import run_generate as _rg
+
+            globals()["run_generate"] = _rg
         run_generate(
             args.outputs_dirpath,
             args.config,
@@ -295,6 +253,10 @@ def main() -> None:
         )
     elif args.command == "calibrate":
         # When --no-resume is set, user expects a full recompute: set overwrite=True
+        if run_calibrate is None:
+            from passage.calibrate import run_calibrate as _rc
+
+            globals()["run_calibrate"] = _rc
         run_calibrate(
             args.outputs_dirpath,
             args.tiles_dirpath,
@@ -312,8 +274,11 @@ def main() -> None:
                 "(HF_USER_NAME/HF_REPO_NAME and HF_TOKEN). To override, pass --repo-id or --env-path/--secret-path."
             )
 
+        if export_and_upload is None:
+            from passage.export import export_and_upload as _ea
+
+            globals()["export_and_upload"] = _ea
         export_and_upload(
-            export_dirpath=args.export_dirpath,
             dataset_dirpath=args.dataset_dirpath,
             calibrate_dirpath=args.calibrate_dirpath,
             notebooks_dirpath=args.notebooks_dirpath,
@@ -322,21 +287,11 @@ def main() -> None:
             execute_notebooks=not args.no_exec_notebooks,
             max_notebook_retries=(None if args.max_notebook_retries == 0 else args.max_notebook_retries),
             notebook_retry_delay=args.notebook_retry_delay,
-            num_cpus=args.num_cpus,
             env_path=args.env_path,
             secret_path=args.secret_path,
             private=args.private,
             create_repo=not args.no_create_repo,
             skip_upload=args.no_upload,
-        )
-    elif args.command == "upload":
-        upload_to_huggingface(
-            export_dirpath=args.export_dirpath,
-            env_path=args.env_path,
-            secret_path=args.secret_path,
-            repo_id=args.repo_id,
-            private=args.private,
-            create_repo=not args.no_create_repo,
         )
     elif args.command is None:
         logger.info("Hello from passage! Use --help for available commands.")
