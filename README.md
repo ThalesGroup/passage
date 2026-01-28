@@ -1,329 +1,235 @@
-# PASSAGE: Path Solving Dataset and Generator
+# 🌍 PASSAGE — Path Solving Dataset & Generator 🔧
 
-> **PASSAGE** stands for **PA**th **S**olving Data**S**et **A**nd **GE**nerator
+**PASSAGE** (PAth S olving Data S et And G enerator) is a toolkit to build reproducible elevation-based datasets from the JAXA ALOS AW3D30 DSM tiles.
+It is targeted at researchers and engineers working on terrain-based pathfinding (A*, RL, GNNs, surrogate models) and provides the full pipeline: download → calibrate → generate → export (push to the Hugging Face Hub).
 
-PASSAGE is a tool for generating elevation-based datasets from [ALOS AW3D30 DSM](https://www.eorc.jaxa.jp/ALOS/en/aw3d30/) (Digital Surface Model) tiles. It is designed to create training datasets for machine learning models that solve path-finding problems on terrain data.
+---
 
-## Features
+## 🎯 Highlights
 
-- **Download**: Automatically download ALOS AW3D30 DSM tiles from JAXA servers
-- **Calibrate**: Scan all tiles to determine global min/max elevation values for normalization
-- **Generate**: Create normalized elevation tensor datasets with configurable resolutions
-- **Prepare**: Build an HF-ready export with parquet shards per resolution/split
-- **Resume Support**: All commands support resuming from interrupted runs
-- **Multi-resolution**: Generate datasets at multiple resolutions in a single run
-- **Marker Channels**: Each sample includes a marker channel with two random points for path-finding tasks
+- Multi-resolution dataset generation (64 → 4096 px and more)
+- Resume support for long-running processes (download / calibrate / generate)
+- Configurable obstacle generation using superellipses (rich shapes)
+- HF-ready direct push using `datasets` with zstd-compressed shards (no parquet staging)
+- Fully tested and geared for reproducible experiments
 
-## Installation
+---
 
-### Python Installation with uv
+## Quick visual summary
 
-[uv](https://github.com/astral-sh/uv) is the recommended package manager:
+<p align="center">
+  <img src="assets/sample.png" alt="Representative Sample" width="640"/>
+</p>
+
+This sample shows normalized elevation, start/end **markers**, and procedurally generated **obstacles** with two computed paths (free vs with obstacles).
+
+---
+
+## Install
+
+We recommend using the `uv` package manager for a reproducible environment:
 
 ```bash
-# Install uv (if not already installed)
+# Install uv (if needed)
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# Clone the repository
+# Clone the repo and install dependencies
 git clone <repository-url>
 cd passage
-
-# Install dependencies and create virtual environment
-uv sync
-
-# Install with development dependencies (for testing)
-uv sync --group dev
-
-Note: The Hugging Face `datasets` package is included in the project dependencies (used by `notebooks/parquet.ipynb` and HF-related helpers). Run `uv sync` to install it into your environment.
+uv sync            # installs runtime dependencies
+uv sync --group dev  # add dev dependencies for testing and linting
 ```
 
-## Usage
-
-PASSAGE provides three main commands: `download`, `calibrate`, and `generate`.
-
-### 1. Download Tiles
-
-Download ALOS AW3D30 DSM tiles from JAXA servers:
+Alternatively, you can use your system Python and `pip`:
 
 ```bash
-# Download all available tiles (default)
-uv run passage download
-
-# Custom output directory
-uv run passage download --outputs-dirpath /path/to/downloads
-
-# Start fresh (ignore existing progress)
-uv run passage download --no-resume
-
-# Use specific number of CPUs
-uv run passage download --num-cpus 4
+python -m venv .venv && source .venv/bin/activate
+pip install -e .[dev]
 ```
 
-### 2. Calibrate
+---
 
-Scan downloaded tiles to find global min/max elevation values:
+## Configuration (.env & .env.secret) 🔐
+
+PASSAGE supports uploading prepared exports to Hugging Face. Store credentials in project-root files (never commit secrets):
+
+- `.env` — public-ish settings
+  - HF_USER_NAME=your-hf-username
+  - HF_REPO_NAME=your-repo-name
+
+- `.env.secret` — private token
+  - HF_TOKEN=hf_xxx
+
+Examples:
 
 ```bash
-# Calibrate using default paths
-uv run passage calibrate
+# .env
+HF_USER_NAME=alice
+HF_REPO_NAME=passage-dataset
 
-# Custom paths
-uv run passage calibrate \
-    --outputs-dirpath outputs/calibrate \
-    --tiles-dirpath outputs/download/tiles
-
-# Recompute all tiles (ignore previous results)
-uv run passage calibrate --no-resume
+# .env.secret (keep this private)
+HF_TOKEN=hf_XXXXXXXXXXXXXXXXXXXXXXXX
 ```
 
-This creates `outputs/calibrate/calibrate.json` with:
-- Global min/max elevation values
-- Per-tile statistics (min, max, lat, lon)
-- Elevation visualization maps
+Notes:
+- `passage export` reads credentials from `.env` / `.env.secret` by default.
+- You can override via `--repo-id username/repo` or pass `--env-path` / `--secret-path` if you store them elsewhere.
 
-### 3. Generate Dataset
+---
 
-Generate normalized elevation datasets from calibrated tiles:
+## Usage (CLI summary)
+
+PASSAGE provides these main subcommands: `download`, `calibrate`, `generate`, `export` (direct HF push).
+Run `passage --help` or `passage <subcommand> --help` to see full options for any subcommand. See `USAGE.md` for a longer guide and examples.
+
+### Examples
 
 ```bash
-# Generate with default settings (from config.yaml)
-uv run passage generate
+# Download tiles (default outputs to outputs/download)
+passage download
 
-# Generate at specific resolution(s)
-uv run passage generate --resolution 256
-uv run passage generate --resolution 64 128 256 512
+# Calibrate (scan tiles to compute global min/max elevation)
+passage calibrate --no-resume
 
-# Generate specific number of samples
-uv run passage generate --num-samples 1000
+# Generate datasets (reads config/config.yaml by default)
+passage generate --resolution 64 128 256 --num-samples 1000 --num-cpus 8
 
-# Skip PNG image generation (tensors only)
-uv run passage generate --no-images
+# Push to Hugging Face (direct) with executed notebooks
+passage export --repo-id alice/passage-dataset
 
-# Force regeneration (delete existing and start fresh)
-uv run passage generate --force
-
-# Sequential processing (useful for debugging)
-uv run passage generate --num-cpus 0
-
-# Full example with all options
-uv run passage generate \
-    --resolution 64 128 \
-    --num-samples 500 \
-    --tiles-dirpath outputs/download/tiles \
-    --outputs-dirpath outputs/dataset \
-    --num-cpus 8
+# Dry-run export (execute notebooks, skip push)
+passage export --no-exec-notebooks --no-upload
 ```
 
-#### Resume Behavior
+Important flags include:
+- `--outputs-dirpath`, `--tiles-dirpath`, `--config` (for `generate`), `--resolution`, `--num-samples`, `--no-images`, `--force` (for `generate`)
+- `--no-resume` (for `download` & `calibrate`), `--num-cpus`, `--log-level`
+- `--no-exec-notebooks`, `--max-notebook-retries`, `--no-upload`, `--repo-id`, `--env-path`, `--secret-path` (for `export`)
+## Example workflow — end-to-end 🔁
 
-By default, `generate` resumes from existing samples:
-- Counts valid samples (tensor + metadata + image files)
-- Generates only missing samples to reach `--num-samples`
-- Logs a warning about potential calibration inconsistency
-- Deletes any partial/incomplete sample files
-
-Use `--force` to delete existing directories and regenerate all samples.
-
-### Prepare for Hugging Face (local, no upload)
-
-Generate an HF-friendly export under `outputs/export` with parquet shards per resolution and split:
+1. Download ALOS tiles:
 
 ```bash
-# Prepare all resolutions
-uv run passage prepare
-
-# Prepare specific resolutions
-uv run passage prepare --resolution 256 512 1024
+passage download --outputs-dirpath outputs/download
 ```
 
-This creates `outputs/export/` with:
+2. Calibrate elevations across tiles:
 
-```
-outputs/export/
-├── README.md
-├── notebooks/                 # Documentation notebooks (copied)
-├── 256/
-│   ├── dataset.ipynb          # Executed with RESOLUTION=256
-│   ├── train/                 # data-00000.parquet, data-00001.parquet, ...
-│   ├── calibration/
-│   ├── validation/
-│   └── test/
-└── ...
+```bash
+passage calibrate --tiles-dirpath outputs/download/tiles --outputs-dirpath outputs/calibrate
 ```
 
-#### Using the prepared parquet shards
+3. Generate datasets:
 
-```python
-from datasets import load_dataset
-
-dataset = load_dataset("username/passage", "256")
-print(dataset["train"][0].keys())
+```bash
+passage generate --tiles-dirpath outputs/download/tiles --outputs-dirpath outputs/dataset --resolution 256 --num-samples 10000
 ```
 
-#### Exporting Notebooks as Documentation
+4. Export directly to the Hugging Face Hub (notebooks executed by default). Use `--no-upload` for a dry run that only executes notebooks:
 
-To publish notebooks to Hugging Face, use the `huggingface_hub` Python client or the web UI. For example, use `huggingface_hub` to create a dataset-or-docs repo and upload the `notebooks/` folder.
+```bash
+passage export --dataset-dirpath outputs/dataset --calibrate-dirpath outputs/calibrate --repo-id alice/passage-dataset
+# dry-run (no push): passage export --no-upload --no-exec-notebooks
+```
 
-Notebooks on Hugging Face:
-- Are rendered as interactive documentation
-- Can be downloaded and run locally
-- Provide examples of how to use the dataset
+---
 
-## Configuration
+## Configuration file (`config/config.yaml`)
 
-Default settings are in `config/config.yaml`:
+Core settings live in `config/config.yaml`. Example keys:
 
 ```yaml
-resolutions:
-  - 64
-  - 128
-  - 256
-  - 512
-  - 1024
-  - 2048
-  - 4096
+resolutions: [64, 128, 256]
+# num_samples can be a single integer or a mapping per-resolution, e.g.:
+# num_samples: {64: 1000, 128: 500, 256: 200}
 num_samples: 10
-```
-
-CLI arguments override these values.
-
-## Output Structure
-
-```
-outputs/
-├── download/
-│   ├── download.csv       # URL status tracking
-│   ├── download.png       # Visual status map
-│   ├── archives/          # Downloaded zip files (temporary)
-│   └── tiles/             # Extracted DSM tiles
-├── calibrate/
-│   ├── calibrate.json     # Global stats and per-tile data
-│   ├── max_elevation_map.png
-│   └── ptp_elevation_map.png
-└── dataset/
-    ├── summary.json       # Generation summary
-    ├── 64/
-    │   ├── tensors/       # .npy.zst files (H×W×3 float32, zstd-compressed)
-    │   ├── images/        # .png visualization
-    │   └── metadata/      # .yaml sample info
-    ├── 128/
-    │   └── ...
-    └── ...
-```
-
-### Tensor Format
-
-Each `.npy.zst` tensor is a zstd-compressed `(H, W, 3)` float32 array:
-- **Channel 0**: Normalized elevation (0-1 range using global min/max)
-- **Channel 1**: Marker channel (two pixels set to 1.0, rest 0.0)
-- **Channel 2**: Obstacles mask (1.0 for blocked, 0.0 for free)
-
-### Metadata Format
-
-Each `.yaml` metadata file contains:
-
-```yaml
-index: 0
-resolution: 64
-target_elevation: 1073.07
-tile_min_elevation: 500.0
-tile_max_elevation: 2000.0
-crop_min_elevation: 800.0
-crop_max_elevation: 1200.0
-center:
-  lat: 45.123
-  lon: 10.456
-top_left:
-  lat: 45.132
-  lon: 10.447
-bottom_right:
-  lat: 45.114
-  lon: 10.465
-source_tile:
-  lat: 45
-  lon: 10
-  name: N045E010
-markers:
-  - {i: 10, j: 20, elevation: 950.5}
-  - {i: 50, j: 40, elevation: 1100.2}
-paths:
-  without_obstacles:
-    length: 120
-    pixels:
-      - {i: 10, j: 20}
-      - {i: 11, j: 21}
-  with_obstacles:
-    length: 135
-    pixels:
-      - {i: 10, j: 20}
-      - {i: 10, j: 21}
 obstacles:
   enabled: true
   ratio_max: 0.30
   ratio_target: 0.12
-  ratio_actual: 0.11
-  size_min_ratio: 0.10
-  size_max_ratio: 0.25
-  penalty: 100000000.0
-timestamp: 2026-01-13T10:30:00
 ```
 
-### Image Format
+CLI options override config file values.
 
-PNG images use BGR color mapping:
-- **Blue channel**: Elevation (normalized to 0-255)
-- **Green channel**: Markers (255 at marker positions, 0 elsewhere)
-- **Red channel**: Obstacles and path overlay (obstacles up to 180, path at 255)
+---
 
-## Development
+## Notebooks 📓
 
-### Running Tests
+The `notebooks/` directory contains interactive analysis and documentation including:
+- `dataset.ipynb` — full dataset exploration and statistics (executed for each resolution during export unless `--no-exec-notebooks` is passed)
+- `demo.ipynb` — quick demo: load a sample for a chosen resolution/split and visualize elevation, obstacles and markers
+- `parquet.ipynb` — examples loading parquet shards with `datasets`
+- `display.ipynb`, `metrics.ipynb`, `obstacles.ipynb`, `solve.ipynb`, `costmodel.ipynb`
+
+Loading & decoding tensors (from `notebooks/demo.ipynb`):
+
+```python
+from datasets import load_dataset
+from passage.utils import decode_tensor_blob
+
+RESOLUTION = 256
+# load the HF dataset for a given resolution
+ds = load_dataset("your-username/passage-dataset", name=f"{RESOLUTION}x{RESOLUTION}")
+sample = ds["train"][0]
+
+# tensors are stored compressed ('.npy.zst') — decode before use:
+tensor = decode_tensor_blob(sample["tensor"], (RESOLUTION, RESOLUTION, 3))
+
+# channels:
+# 0: elevation (normalized in [0,1]) — denormalize with metadata 'calibration' if needed
+# 1: markers (-1 background, 0 start, 1 goal)
+# 2: obstacles (binary mask)
+elevation = tensor[:, :, 0]
+marker = tensor[:, :, 1]
+obstacles = tensor[:, :, 2]
+```
+
+Open them locally or view rendered versions in the prepared export on Hugging Face if uploaded.
+
+---
+
+## Output structure
+
+Standard output folders:
+
+```
+outputs/
+├── download/       # tile archives, download.csv, extracted tiles
+├── calibrate/      # calibrate.json and visual stats
+└── dataset/        # generated samples (tensors/images/metadata) per resolution
+```
+
+Each tensor is stored as `.npy.zst` with shape `(H, W, 3)` — channels: elevation, markers, obstacles.
+Metadata is stored alongside as YAML files with tile and path information.
+
+---
+
+## Development & Tests 🧪
+
+Run tests and quality checks:
 
 ```bash
-# Run all tests
 uv run pytest
-
-# Run with coverage
-uv run pytest --cov
-
-# Run tests in parallel
-uv run pytest -n auto
-
-# Run specific test markers
-uv run pytest -m unit           # Fast unit tests only
-uv run pytest -m generate       # Generate module tests
-uv run pytest -m download       # Download module tests
-uv run pytest -m calibrate      # Calibrate module tests
-uv run pytest -m integration    # Integration tests
-
-# Generate HTML coverage report
-uv run pytest --cov --cov-report=html
-
-# View test report
-open outputs/tests/report.html
-```
-
-### Test Markers
-
-- `@pytest.mark.unit` - Fast, isolated unit tests
-- `@pytest.mark.integration` - Tests requiring external resources
-- `@pytest.mark.download` - Download module tests
-- `@pytest.mark.calibrate` - Calibrate module tests
-- `@pytest.mark.generate` - Generate module tests
-
-### Code Quality
-
-```bash
-# Run linter
 uv run ruff check src/
-
-# Run formatter
 uv run ruff format src/
-
-# Run pre-commit hooks
-uv run pre-commit run --all-files
 ```
 
-## License
+Use `uv sync --group dev` earlier to ensure dev dependencies are available.
 
-See [LICENSE](LICENSE) for details.
+---
+
+## Contributing & License
+
+Contributions welcome — please open issues or pull requests. The project is MIT licensed (see `LICENSE`).
+
+---
+
+## Further reading & resources
+
+- Full CLI help: `passage --help` and `passage <subcommand> --help`
+- Usage guide: `USAGE.md` (examples and deeper explanations)
+- Notebooks: `notebooks/` for analysis and reproducible documentation
+
+---
+
+If you'd like, I can also add a short `README` snippet that describes how to create `.env` / `.env.secret` safely and add a `env.example` template. Would you like that? ✅

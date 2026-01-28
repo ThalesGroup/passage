@@ -21,15 +21,15 @@ def tensor_to_image(
             treated as obstacles; path pixels should still be provided via `path_pixels`.
 
     This function now supports drawing two paths at once for comparison:
-        - `path_pixels`: primary path (drawn in green by default)
-        - `alt_path_pixels`: secondary path (drawn in blue by default)
+        - `path_pixels`: primary path (drawn in yellow by default)
+        - `alt_path_pixels`: secondary path (drawn in green by default)
 
     Color mapping and overlays:
         - Elevation -> rendered with matplotlib 'terrain' colormap (base image)
         - Markers -> highlighted (start_point lime, end_point cyan)
-        - Primary path -> green overlay (drawn as polyline/contours)
-        - Secondary path -> blue overlay (drawn as polyline/contours)
-        - Obstacles -> red overlay (applied last)
+        - Primary path -> yellow overlay (drawn as polyline/contours)
+        - Secondary path -> green overlay (drawn as polyline/contours and drawn last on top)
+        - Obstacles -> red overlay (drawn before paths)
 
     Args:
         tensor: float32 array of shape (H, W, 2) or (H, W, 3).
@@ -156,11 +156,11 @@ def tensor_to_image(
     obst_color = (0, 0, 255)  # red
     start_color = (255, 255, 0)  # cyan
     end_color = (255, 0, 0)  # blue
-    # Primary path colors: polyline (yellow) for multi-pixel paths, single-pixel points drawn green
+    # Primary path colors: polyline and single-pixel points are yellow (path without obstacles)
     path_poly_color = (0, 255, 255)  # yellow (B low, G high, R high)
-    path_point_color = (0, 255, 0)  # green
-    # Alternate/with-obstacles path uses blue
-    alt_poly_color = (255, 0, 0)
+    path_point_color = path_poly_color  # yellow for single-pixel path points
+    # Alternate/with-obstacles path uses green and is drawn last on top
+    alt_poly_color = (0, 255, 0)  # green
 
     # 1) Draw obstacles on top of elevation
     if np.any(obst_mask):

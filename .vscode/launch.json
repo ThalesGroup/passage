@@ -61,6 +61,17 @@
                 "10",
                 "--force"
             ]
+        },
+        {
+            "name": "export",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "src/passage/__init__.py",
+            "console": "integratedTerminal",
+            // "args": "${command:pickArgs}"
+            "args": [
+                "export",
+            ]
         }
     ]
 }

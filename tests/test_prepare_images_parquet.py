@@ -1,13 +1,13 @@
 import io
-from pathlib import Path
 
-import pyarrow.parquet as pq
+import pytest
 from PIL import Image
 
-from passage.prepare import _write_parquet_shard
+from passage.export import _rows_to_dataset
 
 
-def test_write_parquet_writes_image_and_sets_path(tmp_path: Path):
+@pytest.mark.unit
+def test_rows_to_dataset_builds_image_feature():
     # Create a tiny PNG in-memory
     im = Image.new("RGB", (8, 8), color=(255, 0, 0))
     buf = io.BytesIO()
@@ -25,26 +25,10 @@ def test_write_parquet_writes_image_and_sets_path(tmp_path: Path):
         }
     ]
 
-    shard_path = tmp_path / "data-00000.parquet"
-    images_dir = tmp_path / "images" / "256" / "train"
+    ds = _rows_to_dataset(rows)
 
-    # Run the function under test
-    _write_parquet_shard(rows, shard_path, 256, images_dir=images_dir)
-
-    assert shard_path.exists()
-
-    table = pq.read_table(shard_path)
-    assert "image" in table.schema.names
-
-    image_field = table.column("image").to_pylist()[0]
-    assert isinstance(image_field, dict)
-    assert "bytes" in image_field and isinstance(image_field["bytes"], (bytes, bytearray))
-    assert "path" in image_field and image_field["path"] is not None
-
-    path_value = image_field["path"]
-    # Strip leading slash if present
-    if isinstance(path_value, str) and path_value.startswith("/"):
-        path_value = path_value[1:]
-
-    file_path = tmp_path / path_value
-    assert file_path.exists()
+    assert len(ds) == 1
+    row = ds[0]
+    assert row["id"] == "123"
+    assert row["image"] is not None
+    assert isinstance(row["tensor"], (bytes, bytearray))

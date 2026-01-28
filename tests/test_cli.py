@@ -316,6 +316,7 @@ class TestMainCLI:
                 mock_export.assert_called_once()
                 _, kwargs = mock_export.call_args
                 assert kwargs.get("repo_id") is None
+                assert kwargs.get("skip_upload") is True
 
     @pytest.mark.unit
     def test_export_passes_explicit_repo_id(self):

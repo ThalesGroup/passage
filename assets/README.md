@@ -7,7 +7,7 @@
 PASSAGE is a professionally maintained toolkit for generating elevation-based datasets from the [JAXA ALOS AW3D30 DSM (Digital Surface Model)](https://www.eorc.jaxa.jp/ALOS/en/dataset/aw3d30/aw3d30_e.htm).
 It facilitates reproducible dataset creation and benchmarking for machine learning models that address terrain-based pathfinding challenges, such as surrogate models of classical algorithms such as A*, or more advanced methods combining for example Graph Neural Networks or Reinforcement Learning.
 
-> The dataset is generated according to the 23993 tiles availables at resolution of 3600x3600 px.
+> The dataset is generated according to the **23993** tiles availables at resolution of 3600x3600 px.
 
 ---
 
@@ -38,7 +38,7 @@ The dataset generators allow to consider the worldwide elevation as publicly pro
 This map shows the 5x5 packed tiles downloaded from the [JAXA ALOS AW3D30 DSM](https://www.eorc.jaxa.jp/ALOS/en/dataset/aw3d30/aw3d30_e.htm) website. Each cell represents a 5x5 grid of 1°×1° tile (3600×3600 pixels at 30m resolution). The dataset leverages this globally distributed elevation data to ensure diverse terrain samples spanning mountains, valleys, plains, and coastal regions. If the cell is black, there is no available tile for this region, thus we consider an equivalent flat tile at sea level during dataset generation.
 
 <p align="center">
-  <img src="calibrate/max_elevation_map.png" alt="Maximum Elevation Map" />
+  <img src="calibration/max_elevation_map.png" alt="Maximum Elevation Map" />
 </p>
 
 This visualization shows the **normalized maximum elevation** within each downloaded tile. Brighter regions indicate tiles containing higher terrain (mountain peaks, elevated plateaus), while darker regions correspond to low-lying areas (coastal zones, river basins). This map helps understand the global elevation distribution used for sampling.
@@ -49,25 +49,16 @@ This visualization shows the **normalized maximum elevation** within each downlo
 >
 > - Global minimum elevation: **-430.0 m**
 > - Global maximum elevation: **8767.0 m**
+>
+> Detailed information are available in [calibrate.json](calibration/calibrate.json).
 
 ### Peak-to-Peak elevation map
 
 <p align="center">
-  <img src="calibrate/ptp_elevation_map.png" alt="Peak-to-Peak Elevation Map" />
+  <img src="calibration/ptp_elevation_map.png" alt="Peak-to-Peak Elevation Map" />
 </p>
 
 The **peak-to-peak (PTP) elevation map** displays the elevation range (max − min) within each tile. High PTP values (bright regions) indicate tiles with significant topographic variation—suitable for challenging pathfinding scenarios. Low PTP values suggest relatively flat terrain. This metric is useful for understanding terrain complexity.
-
-
-
-📈 Calibration Statistics
-This export was generated with the following calibration data:
-
-Global minimum elevation: -430.0 m
-Global maximum elevation: 8767.0 m
-Tiles analyzed: 23993
-
----
 
 ## 🎯 Dataset sampling procedure
 
@@ -172,23 +163,23 @@ Each sample consists of:
 2. **Channel 1 (Markers)**: $-1$ everywhere, $0$ at start, $1$ at goal
 3. **Channel 2 (Obstacles)**: Binary mask ($0$ = free, $1$ = obstacle)
 
+Note: tensors are stored as compressed `.npy.zst` blobs. Use `decode_tensor_blob` from `passage.utils` to uncompress a tensor before using it. Example:
+
+```python
+from passage.utils import decode_tensor_blob
+
+# R is the resolution (e.g., 64, 128, 256)
+tensor = decode_tensor_blob(sample["tensor"], (R, R, 3))
+elevation = tensor[..., 0]  # normalized [0,1]
+# denormalize to meters using sample['metadata']['calibration'] if needed:
+# elevation_m = elevation * (meta['calibration']['max'] - meta['calibration']['min']) + meta['calibration']['min']
+```
+
+See `notebooks/demo.ipynb` for a complete loading & visualization example.
+
 ---
 
 ## ⚡ Quick start
-
-```bash
-# Install dependencies
-uv sync
-
-# Generate the dataset
-uv run passage generate --resolution 256 --num-samples 1000
-
-# Prepare for export
-uv run passage prepare --repo-id your-username/passage-dataset
-
-# Upload to Hugging Face
-cd outputs/export && uv run hf upload . your-username/passage-dataset --repo-type dataset
-```
 
 ### Loading the Dataset
 
@@ -196,7 +187,7 @@ cd outputs/export && uv run hf upload . your-username/passage-dataset --repo-typ
 from datasets import load_dataset
 
 # Load a specific resolution
-dataset = load_dataset("your-username/passage-dataset", "256")
+dataset = load_dataset("your-username/passage-dataset", name="64x64", split="train")
 
 # Access a sample
 sample = dataset["train"][0]
@@ -205,17 +196,19 @@ print(f"Path length (free): {len(sample['path_free'])}")
 print(f"Path length (obstacles): {len(sample['path_obstacles'])}")
 ```
 
+### Playing with the data
+
+The [demo](notebooks/demo.ipynb) notebook introduces how to access the data using the Hugging Face `datasets` package.
+
 ---
 
 ## 📓 Notebooks
 
 Detailed analysis and visualization are available in the `notebooks/` folder:
 
-- **`dataset.ipynb`** — Comprehensive dataset exploration, statistics, and visualizations
-- **`costmodel.ipynb`** — Pathfinding cost model analysis
-- **`display.ipynb`** — Sample visualization utilities
-- **`metrics.ipynb`** — Path quality metrics
-- **`obstacles.ipynb`** — Obstacle generation analysis
+- **`demo.ipynb`** — Demonstration notebook to access the dataset configurations and splits
+- **`obstacles.ipynb`** — Obstacle generation examples
+- **`costmodel.ipynb`** — Pathfinding cost model comparisons
 - **`solve.ipynb`** — Pathfinding solver comparisons
 
 For in-depth documentation of the sampling procedure, obstacle generation, and dataset statistics, please refer to the **`dataset.ipynb`** notebook included with each resolution export.

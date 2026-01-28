@@ -12,6 +12,7 @@ The generation process:
 5. Handle latitude bounds and longitude wrapping at -180/180.
 """
 
+import csv
 import json
 import math
 import multiprocessing
@@ -1037,12 +1038,8 @@ def generate_sample(
 
             # Save as .npy (3-channel float32) into 'tensors'
             base_res_dir = outputs_dirpath / str(resolution)
-            if split_name == "train":
-                tensors_dir = base_res_dir / "tensors" / f"{lat_to_str(center_lat)}" / f"{lon_to_str(center_lon)}"
-            else:
-                tensors_dir = (
-                    base_res_dir / split_name / "tensors" / f"{lat_to_str(center_lat)}" / f"{lon_to_str(center_lon)}"
-                )
+            split_root = base_res_dir / split_name
+            tensors_dir = split_root / "tensors" / f"{lat_to_str(center_lat)}" / f"{lon_to_str(center_lon)}"
             tensors_dir.mkdir(parents=True, exist_ok=True)
             tensor_path = tensors_dir / f"{index:010d}{TENSOR_SUFFIX}"
             try:
@@ -1188,17 +1185,12 @@ def generate_sample(
 
             # Save metadata into metadata folder *before* images so visualization can read it
             base_res_dir = outputs_dirpath / str(resolution)
-            if split_name == "train":
-                metadata_dir = base_res_dir / "metadata" / f"{lat_to_str(center_lat)}" / f"{lon_to_str(center_lon)}"
-            else:
-                metadata_dir = (
-                    base_res_dir / split_name / "metadata" / f"{lat_to_str(center_lat)}" / f"{lon_to_str(center_lon)}"
-                )
+            split_root = base_res_dir / split_name
+            metadata_dir = split_root / "metadata" / f"{lat_to_str(center_lat)}" / f"{lon_to_str(center_lon)}"
             metadata = {
                 "index": index,
                 "resolution": resolution,
                 "split": split_name,
-                "target_elevation": float(target_elev),
                 "calibration": {
                     "min": float(global_min),
                     "max": float(global_max),
@@ -1300,41 +1292,30 @@ def generate_sample(
                 lon_dir = f"{lon_to_str(center_lon)}"
 
                 base_res_dir = outputs_dirpath / str(resolution)
-                # Free path (without obstacles)
-                if split_name == "train":
-                    free_dir = base_res_dir / "paths" / "free" / lat_dir / lon_dir
-                else:
-                    free_dir = base_res_dir / split_name / "paths" / "free" / lat_dir / lon_dir
+                free_dir = base_res_dir / split_name / "paths" / "free" / lat_dir / lon_dir
                 free_dir.mkdir(parents=True, exist_ok=True)
-                # Write flattened XY coordinates (x0 y0 x1 y1 ...) with leading class "0"
-                free_txt_file = free_dir / f"{index:010d}.txt"
-                free_pairs = [[int(pi), int(pj)] for pi, pj in path_without]
-                with open(free_txt_file, "w") as ff:
-                    json.dump(free_pairs, ff)
+                free_csv_file = free_dir / f"{index:010d}.csv"
+                with open(free_csv_file, "w", newline="") as ff:
+                    writer = csv.writer(ff)
+                    for pi, pj in path_without:
+                        writer.writerow([int(pi), int(pj)])
 
                 # Obstacles path (with obstacles)
-                if split_name == "train":
-                    obs_dir = base_res_dir / "paths" / "obstacles" / lat_dir / lon_dir
-                else:
-                    obs_dir = base_res_dir / split_name / "paths" / "obstacles" / lat_dir / lon_dir
+                obs_dir = base_res_dir / split_name / "paths" / "obstacles" / lat_dir / lon_dir
                 obs_dir.mkdir(parents=True, exist_ok=True)
-                # Write flattened XY coordinates (x0 y0 x1 y1 ...) with leading class "0"
-                obs_txt_file = obs_dir / f"{index:010d}.txt"
-                obs_pairs = [[int(pi), int(pj)] for pi, pj in path_with]
-                with open(obs_txt_file, "w") as ff:
-                    json.dump(obs_pairs, ff)
+                obs_csv_file = obs_dir / f"{index:010d}.csv"
+                with open(obs_csv_file, "w", newline="") as ff:
+                    writer = csv.writer(ff)
+                    for pi, pj in path_with:
+                        writer.writerow([int(pi), int(pj)])
             except Exception as e:  # pragma: no cover
                 logger.warning(f"Failed saving pixel-index paths for sample {index}: {e}")
 
             # Save visual image at full resolution in 'images' unless disabled
             if not disable_images:
                 base_res_dir = outputs_dirpath / str(resolution)
-                if split_name == "train":
-                    images_dir = base_res_dir / "images" / f"{lat_to_str(center_lat)}" / f"{lon_to_str(center_lon)}"
-                else:
-                    images_dir = (
-                        base_res_dir / split_name / "images" / f"{lat_to_str(center_lat)}" / f"{lon_to_str(center_lon)}"
-                    )
+                split_root = base_res_dir / split_name
+                images_dir = split_root / "images" / f"{lat_to_str(center_lat)}" / f"{lon_to_str(center_lon)}"
                 images_dir.mkdir(parents=True, exist_ok=True)
                 # Convert tensor to BGR image using helper function, drawing BOTH paths (without and with obstacles)
                 # Primary path (no obstacles) is drawn in green; secondary path (with obstacles) is drawn in blue.
@@ -1661,18 +1642,15 @@ def run_generate(
         logger.error(f"Resolution values must be positive integers: {resolutions}")
         return
 
-    samples_count = num_samples if num_samples is not None else config.get("num_samples", 100)
+    # num_samples can be either a single integer (global) or a mapping per-resolution
+    cfg_num_samples = num_samples if num_samples is not None else config.get("num_samples", 100)
 
     splits_cfg = config.get("splits", {}) if isinstance(config, dict) else {}
     splits_enabled = bool(splits_cfg.get("enabled", True))
     split_ratios = splits_cfg.get("ratios", {}) if splits_enabled else {"train": 1.0}
     split_seed = int(splits_cfg.get("seed", 42) if splits_enabled else 42)
-    split_assignments = (
-        _assign_splits(samples_count, split_ratios, seed=split_seed)
-        if splits_enabled
-        else {i: "train" for i in range(samples_count)}
-    )
-    split_names = sorted(set(split_assignments.values()), key=_split_sort_key)
+    # Note: split assignments will be computed per-resolution below using the per-resolution sample count
+    split_assignments = None  # placeholder (computed per-resolution)
 
     outputs_path = Path(outputs_dirpath)
     tiles_path = Path(tiles_dirpath)
@@ -1729,12 +1707,42 @@ def run_generate(
     cpus = num_cpus if num_cpus is not None else os.cpu_count()
     logger.info(
         f"Starting generate: outputs={outputs_path}, tiles={tiles_path}, resolution_override={resolution}, "
-        f"num_samples={samples_count}, cpus={cpus}, disable_images={disable_images}"
+        f"num_samples={cfg_num_samples}, cpus={cpus}, disable_images={disable_images}"
     )
 
     # Generate samples for each resolution
     for res in resolutions:
         res_dir = outputs_path / str(res)
+
+        # Resolve per-resolution sample count (accept dict keys as int or str, support 'default' or '*' fallback)
+        if isinstance(cfg_num_samples, dict):
+            samples_for_res = (
+                cfg_num_samples.get(res)
+                or cfg_num_samples.get(str(res))
+                or cfg_num_samples.get("default")
+                or cfg_num_samples.get("*")
+                or 100
+            )
+        else:
+            samples_for_res = int(cfg_num_samples)
+
+        try:
+            samples_for_res = int(samples_for_res)
+        except Exception:
+            logger.error(f"Invalid num_samples value for resolution {res}: {samples_for_res}")
+            return
+
+        if samples_for_res <= 0:
+            logger.error(f"num_samples for resolution {res} must be a positive integer")
+            return
+
+        # Compute split assignments for this resolution
+        split_assignments = (
+            _assign_splits(samples_for_res, split_ratios, seed=split_seed)
+            if splits_enabled
+            else {i: "train" for i in range(samples_for_res)}
+        )
+        split_names = sorted(set(split_assignments.values()), key=_split_sort_key)
 
         # Determine start index based on force flag and existing samples
         start_index = 0
@@ -1748,20 +1756,22 @@ def run_generate(
             else:
                 # Count valid samples and resume from there
                 start_index = count_valid_samples(res_dir, disable_images, split_assignments)
-                if start_index >= samples_count:
-                    logger.info(f"Resolution {res} already complete ({start_index}/{samples_count} samples), skipping")
+                if start_index >= samples_for_res:
+                    logger.info(
+                        f"Resolution {res} already complete ({start_index}/{samples_for_res} samples), skipping"
+                    )
                     continue
                 if start_index > 0:
                     logger.info(
                         f"Resuming generation for resolution {res}: found {start_index} valid samples, "
-                        f"generating {samples_count - start_index} more"
+                        f"generating {samples_for_res - start_index} more"
                     )
                     logger.warning(
                         "Note: Calibration data may have changed since previous generation — "
                         "samples may have inconsistent normalization"
                     )
 
-        samples_to_generate = samples_count - start_index
+        samples_to_generate = samples_for_res - start_index
         # Compute and log how many tiles will be concatenated to generate the crop for this resolution
         N, total_tiles, half_tiles = tiles_needed_for_resolution(res)
         grid_pixels = N * TILE_SIZE_PX
@@ -1784,7 +1794,7 @@ def run_generate(
         args_list = []
         split_requested = {s: 0 for s in split_names}
         split_success = {s: 0 for s in split_names}
-        for i in range(start_index, samples_count):
+        for i in range(start_index, samples_for_res):
             split = split_assignments.get(i, "train")
             split_requested[split] = split_requested.get(split, 0) + 1
             args_list.append(
@@ -1841,7 +1851,8 @@ def run_generate(
         mean_time = float(sum(durations) / len(durations)) if len(durations) > 0 else 0.0
         res_summary = {
             "resolution": res,
-            "requested_samples": samples_count,
+            "requested_samples": samples_for_res,
+            "num_samples": samples_for_res,
             "start_index": start_index,
             "generated_samples": samples_to_generate,
             "successful_samples": successful,
@@ -1880,7 +1891,7 @@ def run_generate(
     )
     summary = {
         "resolutions": resolutions,
-        "num_samples": samples_count,
+        "num_samples": cfg_num_samples,
         "tiles_count": len(tile_stats_df),
         "tiles_dirpath": str(tiles_path),
         "global_min": global_min,

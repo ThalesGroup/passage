@@ -9,7 +9,7 @@ import pytest
 import yaml
 
 import passage.generate as gen
-from passage.utils import save_tensor, TENSOR_SUFFIX
+from passage.utils import TENSOR_SUFFIX, save_tensor
 
 # =============================================================================
 # Unit tests for helper functions
@@ -334,6 +334,58 @@ class TestCountValidSamples:
         count = gen.count_valid_samples(res_dir, disable_images=False)
         assert count == 0
 
+    @pytest.mark.unit
+    @pytest.mark.generate
+    def test_count_valid_samples_split_layout(self, tmp_path):
+        """Test split-aware counting across multiple splits, with partial cleanup."""
+        res_dir = tmp_path / "256"
+        lat_dir = gen.lat_to_str(0)
+        lon_dir = gen.lon_to_str(0)
+
+        # Assign indices to splits (0,1,2,3)
+        split_assignments = {0: "train", 1: "validation", 2: "train", 3: "validation"}
+
+        # Create valid files for indices 0 and 1, make index 2 partial (missing metadata), index 3 valid
+        import yaml
+
+        # index 0 -> train (valid)
+        tensors_dir = res_dir / "train" / "tensors" / lat_dir / lon_dir
+        metadata_dir = res_dir / "train" / "metadata" / lat_dir / lon_dir
+        tensors_dir.mkdir(parents=True)
+        metadata_dir.mkdir(parents=True)
+        save_tensor(np.zeros((256, 256, 3), dtype=np.float32), tensors_dir / f"{0:010d}{TENSOR_SUFFIX}")
+        with open(metadata_dir / f"{0:010d}.yaml", "w") as f:
+            yaml.dump({"index": 0}, f)
+
+        # index 1 -> validation (valid)
+        tensors_dir = res_dir / "validation" / "tensors" / lat_dir / lon_dir
+        metadata_dir = res_dir / "validation" / "metadata" / lat_dir / lon_dir
+        tensors_dir.mkdir(parents=True)
+        metadata_dir.mkdir(parents=True)
+        save_tensor(np.zeros((256, 256, 3), dtype=np.float32), tensors_dir / f"{1:010d}{TENSOR_SUFFIX}")
+        with open(metadata_dir / f"{1:010d}.yaml", "w") as f:
+            yaml.dump({"index": 1}, f)
+
+        # index 2 -> train (partial: tensor only)
+        tensors_dir = res_dir / "train" / "tensors" / lat_dir / lon_dir
+        tensors_dir.mkdir(parents=True, exist_ok=True)
+        save_tensor(np.zeros((256, 256, 3), dtype=np.float32), tensors_dir / f"{2:010d}{TENSOR_SUFFIX}")
+
+        # index 3 -> validation (valid but after partial index so should not be counted)
+        tensors_dir = res_dir / "validation" / "tensors" / lat_dir / lon_dir
+        metadata_dir = res_dir / "validation" / "metadata" / lat_dir / lon_dir
+        tensors_dir.mkdir(parents=True, exist_ok=True)
+        metadata_dir.mkdir(parents=True, exist_ok=True)
+        save_tensor(np.zeros((256, 256, 3), dtype=np.float32), tensors_dir / f"{3:010d}{TENSOR_SUFFIX}")
+        with open(metadata_dir / f"{3:010d}.yaml", "w") as f:
+            yaml.dump({"index": 3}, f)
+
+        # Count should stop at index 2 (first incomplete) and delete partial tensor at index 2
+        count = gen.count_valid_samples(res_dir, disable_images=True, split_assignments=split_assignments)
+        assert count == 2
+        partial_tensor = res_dir / "train" / "tensors" / lat_dir / lon_dir / f"{2:010d}{TENSOR_SUFFIX}"
+        assert not partial_tensor.exists()
+
 
 # =============================================================================
 # Tests for load_tile_grid
@@ -452,7 +504,10 @@ class TestGenerateSample:
         if success:
             import yaml
 
-            metadata_matches = list((outputs_dir / "8" / "metadata").rglob("0000000000.yaml"))
+            # Prefer split-aware path (res/8/train/metadata) then fall back to legacy res/8/metadata
+            metadata_matches = list((outputs_dir / "8" / "train" / "metadata").rglob("0000000000.yaml"))
+            if not metadata_matches:
+                metadata_matches = list((outputs_dir / "8" / "metadata").rglob("0000000000.yaml"))
             assert metadata_matches
             metadata_path = metadata_matches[0]
             with open(metadata_path) as f:
@@ -516,26 +571,75 @@ class TestGenerateSample:
         assert isinstance(duration, float)
 
         if success:
-            all_txt = list((outputs_dir / "8").rglob("0000000000.txt"))
-            free_matches = [p for p in all_txt if "paths" in p.parts and "free" in p.parts]
-            obs_matches = [p for p in all_txt if "paths" in p.parts and "obstacles" in p.parts]
+            all_paths = list((outputs_dir / "8").rglob("0000000000.csv"))
+            free_matches = [p for p in all_paths if "paths" in p.parts and "free" in p.parts]
+            obs_matches = [p for p in all_paths if "paths" in p.parts and "obstacles" in p.parts]
 
             assert free_matches
             assert obs_matches
 
-            import json
+            import csv
 
-            with open(free_matches[0]) as f:
-                free_list = json.load(f)
+            with open(free_matches[0], newline="") as f:
+                free_list = list(csv.reader(f))
             assert isinstance(free_list, list)
-            assert all(isinstance(pair, list) and len(pair) == 2 for pair in free_list)
-            assert all(0 <= pair[0] < 8 and 0 <= pair[1] < 8 for pair in free_list)
+            assert all(len(pair) == 2 for pair in free_list)
+            assert all(0 <= int(pair[0]) < 8 and 0 <= int(pair[1]) < 8 for pair in free_list)
 
-            with open(obs_matches[0]) as f:
-                obs_list = json.load(f)
+            with open(obs_matches[0], newline="") as f:
+                obs_list = list(csv.reader(f))
             assert isinstance(obs_list, list)
-            assert all(isinstance(pair, list) and len(pair) == 2 for pair in obs_list)
-            assert all(0 <= pair[0] < 8 and 0 <= pair[1] < 8 for pair in obs_list)
+            assert all(len(pair) == 2 for pair in obs_list)
+            assert all(0 <= int(pair[0]) < 8 and 0 <= int(pair[1]) < 8 for pair in obs_list)
+
+    @pytest.mark.unit
+    @pytest.mark.generate
+    def test_generate_sample_uses_split_subdirs(self, monkeypatch, tmp_path, mock_tile_stats_df):
+        """Ensure generate_sample writes tensors, metadata, images and paths under the provided split subdir."""
+        monkeypatch.setattr(gen, "TILE_SIZE_PX", 16)
+
+        tiles_dir = tmp_path / "tiles"
+        tiles_dir.mkdir()
+
+        outputs_dir = tmp_path / "outputs"
+        outputs_dir.mkdir()
+
+        solver_config = {"name": "astar", "diagonal_movement": "always", "weight": 1.0, "max_marker_retries": 10}
+        obstacle_settings = gen._resolve_obstacle_config({"obstacles": {"enabled": True}})
+
+        # Pass explicit split name different from default 'train'
+        idx, success, msg, duration = gen.generate_sample(
+            (
+                0,
+                tiles_dir,
+                outputs_dir,
+                8,
+                mock_tile_stats_df,
+                0.0,
+                2000.0,
+                False,
+                solver_config,
+                obstacle_settings,
+                "validation",
+            )
+        )
+        assert isinstance(duration, float)
+
+        if success:
+            base = outputs_dir / "8" / "validation"
+            # Tensor
+            tensor_matches = list((base / "tensors").rglob(f"0000000000{TENSOR_SUFFIX}"))
+            assert tensor_matches, "Tensor file not saved under split-aware tensors dir"
+            # Metadata
+            metadata_matches = list((base / "metadata").rglob("0000000000.yaml"))
+            assert metadata_matches, "Metadata file not saved under split-aware metadata dir"
+            # Images
+            images_matches = list((base / "images").rglob("0000000000.png"))
+            assert images_matches, "Image file not saved under split-aware images dir"
+            # Paths
+            free_matches = list((base / "paths" / "free").rglob("0000000000.csv"))
+            obs_matches = list((base / "paths" / "obstacles").rglob("0000000000.csv"))
+            assert free_matches and obs_matches, "Path files not saved under split-aware paths dirs"
 
     @pytest.mark.unit
     @pytest.mark.generate
@@ -594,10 +698,10 @@ class TestTensorToImage:
         assert image[0, 0].sum() > 0  # elevation colormap produced a non-black pixel
         # Start marker at (1,1) should be visible (green channel is filled)
         assert image[1, 1, 1] == 255
-        # Path at (1,2) should be green
-        assert image[1, 2, 1] == 255
-        # Red should be 0 when no obstacles
-        assert image[1, 2, 2] == 0
+        # Path at (1,2) should be yellow (B low, G high, R high)
+        assert (image[1, 2, 1] >= 200) and (image[1, 2, 2] >= 200) and (image[1, 2, 0] < 100)
+        # Red channel now used for the yellow path overlay
+        assert image[1, 2, 2] >= 200
 
     @pytest.mark.unit
     @pytest.mark.generate
@@ -625,6 +729,20 @@ class TestTensorToImage:
 
         assert primary64 > 0, "No primary (yellow) pixels found for small resolution path"
         assert primary256 > primary64, "Primary path did not scale up for higher resolution"
+
+    @pytest.mark.unit
+    @pytest.mark.generate
+    def test_tensor_to_image_alt_path_overrides_primary(self):
+        """Alternate (with-obstacles) path should be green and override primary when overlapping."""
+        tensor = np.zeros((8, 8, 3), dtype=np.float32)
+        tensor[:, :, 0] = 0.5
+        tensor[:, :, 1] = -1.0
+        # Place both primary and alternate path at the same pixel
+        path_pixels = [(3, 3)]
+        alt_path_pixels = [(3, 3)]
+        img = gen.tensor_to_image(tensor, path_pixels=path_pixels, alt_path_pixels=alt_path_pixels)
+        # The pixel should be green (alt path drawn last on top of primary)
+        assert (img[3, 3, 1] == 255) and (img[3, 3, 2] < 100) and (img[3, 3, 0] < 100)
 
     @pytest.mark.unit
     @pytest.mark.generate
@@ -676,8 +794,8 @@ class TestTensorToImage:
         image = gen.tensor_to_image(tensor, path_pixels=path_pixels)
         # obstacle should show in red channel (255)
         assert image[1, 1, 2] == 255
-        # path pixel should be green at (2,2)
-        assert image[2, 2, 1] == 255
+        # path pixel should be yellow at (2,2)
+        assert (image[2, 2, 1] >= 200) and (image[2, 2, 2] >= 200) and (image[2, 2, 0] < 100)
 
     @pytest.mark.unit
     @pytest.mark.generate
@@ -787,13 +905,18 @@ class TestTensorToImage:
 
         if success:
             # Load the tensor and convert to image (pass path from metadata)
-            tensor_matches = list((outputs_dir / "8" / "tensors").rglob(f"0000000000{TENSOR_SUFFIX}"))
+            # Prefer split-aware paths (res/8/train/...) then fall back to legacy res/8/... locations
+            tensor_matches = list((outputs_dir / "8" / "train" / "tensors").rglob(f"0000000000{TENSOR_SUFFIX}"))
+            if not tensor_matches:
+                tensor_matches = list((outputs_dir / "8" / "tensors").rglob(f"0000000000{TENSOR_SUFFIX}"))
             assert tensor_matches
             tensor_path = tensor_matches[0]
             from passage.utils import load_tensor
 
             tensor = load_tensor(tensor_path, (8, 8, 3), "float32")
-            metadata_matches = list((outputs_dir / "8" / "metadata").rglob("0000000000.yaml"))
+            metadata_matches = list((outputs_dir / "8" / "train" / "metadata").rglob("0000000000.yaml"))
+            if not metadata_matches:
+                metadata_matches = list((outputs_dir / "8" / "metadata").rglob("0000000000.yaml"))
             assert metadata_matches
             metadata_path = metadata_matches[0]
             with open(metadata_path) as f:
@@ -807,7 +930,10 @@ class TestTensorToImage:
             # Load the saved image
             import cv2
 
-            image_matches = list((outputs_dir / "8" / "images").rglob("0000000000.png"))
+            # Prefer split-aware images dir, then fall back to legacy top-level images
+            image_matches = list((outputs_dir / "8" / "train" / "images").rglob("0000000000.png"))
+            if not image_matches:
+                image_matches = list((outputs_dir / "8" / "images").rglob("0000000000.png"))
             assert image_matches
             image_path = image_matches[0]
             saved_image = cv2.imread(str(image_path))
@@ -887,8 +1013,13 @@ class TestTilesNeeded:
         assert 160 in summary.get("resolutions", []) or 160 in [int(r) for r in summary.get("resolutions", [])]
 
         # Check that sample metadata and tensor were written
-        metadata_matches = list((outputs_dir / "160" / "metadata").rglob("0000000000.yaml"))
-        tensor_matches = list((outputs_dir / "160" / "tensors").rglob(f"0000000000{TENSOR_SUFFIX}"))
+        # Prefer split-aware locations (res/160/train/...) then fall back to legacy res/160/...
+        metadata_matches = list((outputs_dir / "160" / "train" / "metadata").rglob("0000000000.yaml"))
+        if not metadata_matches:
+            metadata_matches = list((outputs_dir / "160" / "metadata").rglob("0000000000.yaml"))
+        tensor_matches = list((outputs_dir / "160" / "train" / "tensors").rglob(f"0000000000{TENSOR_SUFFIX}"))
+        if not tensor_matches:
+            tensor_matches = list((outputs_dir / "160" / "tensors").rglob(f"0000000000{TENSOR_SUFFIX}"))
         assert metadata_matches
         assert tensor_matches
         metadata_path = metadata_matches[0]
@@ -1012,5 +1143,5 @@ class TestMetadataCache:
 
         tensor = np.zeros((4, 4, 2), dtype=np.float32)
         img = gen.tensor_to_image(tensor, path_pixels=path_pixels)
-        # The green channel at (1,2) should be set by the provided path pixels
-        assert img[1, 2, 1] == 255
+        # The path pixel at (1,2) should be yellow
+        assert (img[1, 2, 1] >= 200) and (img[1, 2, 2] >= 200) and (img[1, 2, 0] < 100)

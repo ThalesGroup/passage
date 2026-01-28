@@ -1,7 +1,7 @@
 import subprocess
 
 
-from passage.prepare import _execute_notebook_with_papermill
+from passage.export import _execute_notebook_with_papermill
 
 
 def test_uv_run_success(monkeypatch, tmp_path):
@@ -39,12 +39,12 @@ def test_uv_run_fails_fallback_to_pm(monkeypatch, tmp_path):
     monkeypatch.setattr(subprocess, "run", fake_run)
 
     # Simulate papermill being available and executing successfully
-    monkeypatch.setattr("passage.prepare.PAPERMILL_AVAILABLE", True)
+    monkeypatch.setattr("passage.export.PAPERMILL_AVAILABLE", True)
 
     def fake_exec(input_nb, output_nb, parameters, kernel_name=None):
         return None
 
-    monkeypatch.setattr("passage.prepare.pm.execute_notebook", fake_exec)
+    monkeypatch.setattr("passage.export.pm.execute_notebook", fake_exec)
 
     ok = _execute_notebook_with_papermill(in_nb, out_nb, parameters={"MAX_SAMPLES": 0}, cwd=tmp_path)
     assert ok is True
@@ -59,7 +59,7 @@ def test_uv_and_pm_fail(monkeypatch, tmp_path):
         raise subprocess.CalledProcessError(returncode=2, cmd=cmd)
 
     monkeypatch.setattr(subprocess, "run", fake_run)
-    monkeypatch.setattr("passage.prepare.PAPERMILL_AVAILABLE", False)
+    monkeypatch.setattr("passage.export.PAPERMILL_AVAILABLE", False)
 
     ok = _execute_notebook_with_papermill(in_nb, out_nb, parameters={}, cwd=tmp_path)
     assert ok is False
