@@ -1020,39 +1020,19 @@ def export_and_upload(
         repo_id = f"{username}/{repo_name}"
 
     if True:
-        # login(token=token)
-        # api = HfApi()
-        # if create_repo:
-        #     api.create_repo(repo_id=repo_id, repo_type="dataset", private=private, exist_ok=True)
-
         assets_readme_path = notebooks_path.parent / "assets" / "README.md"
         readme_text = _load_and_customize_readme(
             assets_readme_path, repo_id, resolutions, split_names, cfg["export"]["default"]
         )
         with open(export_dirpath / "README.md", "w", encoding="utf-8") as fh:
             fh.write(readme_text)
-        # _upload_readme(api, repo_id, readme_text)
 
-        # for image_filepath in (notebooks_path.parent / "assets").glob("*.png"):
-        #     api.upload_file(
-        #         path_or_fileobj=str(image_filepath.resolve()),
-        #         path_in_repo=f"assets/{image_filepath.name}",
-        #         repo_id=repo_id,
-        #         repo_type="dataset",
-        #     )
         (export_dirpath / "assets").mkdir(parents=True, exist_ok=True)
         for image_filepath in (notebooks_path.parent / "assets").glob("*.png"):
             shutil.copy2(
                 str(image_filepath.resolve()), str((export_dirpath / "assets" / image_filepath.name).resolve())
             )
 
-        # for filepath in calibrate_path.glob("*"):
-        #     api.upload_file(
-        #         path_or_fileobj=str(filepath.resolve()),
-        #         path_in_repo=f"calibration/{filepath.name}",
-        #         repo_id=repo_id,
-        #         repo_type="dataset",
-        #     )
         (export_dirpath / "calibration").mkdir(parents=True, exist_ok=True)
         for filepath in calibrate_path.glob("*"):
             if ".bak" in filepath.name:
@@ -1076,10 +1056,7 @@ def export_and_upload(
                         continue
                     export_path = export_dirpath / config_name / split
                     export_path.mkdir(parents=True, exist_ok=True)
-                    # TODO: replace here multiprocessing, merging _push_resolution
-                    # rows = _load_rows_for_split(split_dir, resolution=res)
                     metadata_root = split_dir / "metadata"
-                    # metadata_filepaths = sorted(p for p in metadata_root.rglob("*.yaml") if p.stem.isdigit())
                     metadata_filepaths = list(metadata_root.rglob("*.yaml"))
                     with mp.Pool(processes=max(os.cpu_count() - 1, 1)) as pool:
                         rows: list[dict] = []
@@ -1111,6 +1088,9 @@ def export_and_upload(
                                     compression="zstd",
                                     compression_level=cfg["export"]["compression_level"],
                                 )
+                                logger.info(
+                                    f"Writing chunk {num_chunk + 1}/{num_chunks} for {config_name}/{split} with {len(rows)} rows: {parquet_filepath} - done"
+                                )
                                 rows = []
                                 num_chunk += 1
                             if rows_max is not None and len(rows) >= rows_max:
@@ -1130,37 +1110,11 @@ def export_and_upload(
                                 compression="zstd",
                                 compression_level=cfg["export"]["compression_level"],
                             )
+                            logger.info(
+                                f"Writing final chunk for {config_name}/{split} with {len(rows)} rows: {parquet_filepath} - done"
+                            )
                             rows = []
                             num_chunk += 1
-
-                #     rows: list[dict] = []
-                #     for p in metadata_filepaths:
-                #         rows.append(_process_meta_for_prepare(str(p), res))
-                #     # return rows
-                #     if not rows:
-                #         continue
-                #     split_datasets[split] = _rows_to_dataset(rows)
-
-                # if not split_datasets:
-                #     continue
-
-                # _push_resolution(
-                #     api=api,
-                #     export_dirpath=export_dirpath,
-                #     token=token,
-                #     repo_id=repo_id,
-                #     resolution=res,
-                #     split_datasets=split_datasets,
-                #     private=private,
-                #     chunk_size=chunk_sizes[res],
-                # )
-
-                # _create_parquets(
-                #     export_dirpath=export_dirpath,
-                #     resolution=res,
-                #     split_datasets=split_datasets,
-                #     chunk_size=chunk_sizes[res],
-                # )
 
                 if execute_notebooks and not sample:
                     output_notebook = export_dirpath / config_name / "dataset.ipynb"
@@ -1181,30 +1135,23 @@ def export_and_upload(
                         max_retries=retries,
                         retry_delay=notebook_retry_delay,
                     )
-                    # _upload_notebook(api, repo_id, output_notebook, res)
 
-        if execute_notebooks:
-            for notebook_filepath in notebooks_path.glob("*.ipynb"):
-                if notebook_filepath.name.startswith("_"):
-                    logger.info(f"Skipping notebook {notebook_filepath.name} (starts with '_')")
-                    continue
-                output_notebook = export_dirpath / "notebooks" / notebook_filepath.name
-                output_notebook.parent.mkdir(parents=True, exist_ok=True)
-                retries = None if max_notebook_retries == 0 else max_notebook_retries
-                _execute_notebook_with_retries(
-                    notebook_filepath,
-                    output_notebook,
-                    parameters={},
-                    cwd=notebooks_path,
-                    max_retries=retries,
-                    retry_delay=notebook_retry_delay,
-                )
-                # api.upload_file(
-                #     path_or_fileobj=str(output_notebook.resolve()),
-                #     path_in_repo=f"notebooks/{notebook_filepath.name}",
-                #     repo_id=repo_id,
-                #     repo_type="dataset",
-                # )
+        for notebook_filepath in notebooks_path.glob("*.ipynb"):
+            if notebook_filepath.name.startswith("_"):
+                logger.info(f"Skipping notebook {notebook_filepath.name} (starts with '_')")
+                continue
+            output_notebook = export_dirpath / "notebooks" / notebook_filepath.name
+            output_notebook.parent.mkdir(parents=True, exist_ok=True)
+            # retries = None if max_notebook_retries == 0 else max_notebook_retries
+            # _execute_notebook_with_retries(
+            #     notebook_filepath,
+            #     output_notebook,
+            #     parameters={},
+            #     cwd=notebooks_path,
+            #     max_retries=retries,
+            #     retry_delay=notebook_retry_delay,
+            # )
+            shutil.copy2(str(notebook_filepath.resolve()), str(output_notebook.resolve()))
 
     if skip_upload:
         logger.info("Skipping upload as requested; notebooks (if any) executed")

@@ -564,7 +564,8 @@ def _assemble_crop_from_tiles(
     x1: int,
     resolution: int,
     center_tile: np.ndarray,
-) -> np.ndarray:
+    return_loaded_tiles: bool = False,
+) -> np.ndarray | tuple[np.ndarray, list[tuple[int, int, int, int]]]:
     """Assemble a crop of size (resolution, resolution) from tile windows.
 
     The center tile is provided (full TILE_SIZE_PX x TILE_SIZE_PX) to avoid reloading it.
@@ -574,11 +575,18 @@ def _assemble_crop_from_tiles(
     x2 = x1 + resolution
     crop = np.zeros((resolution, resolution), dtype=np.float32)
 
-    for row_idx in range(N):
+    loaded_tiles: list[tuple[int, int, int, int]] = []
+
+    row_start = max(0, y1 // TILE_SIZE_PX)
+    row_end = min(N - 1, (y2 - 1) // TILE_SIZE_PX)
+    col_start = max(0, x1 // TILE_SIZE_PX)
+    col_end = min(N - 1, (x2 - 1) // TILE_SIZE_PX)
+
+    for row_idx in range(row_start, row_end + 1):
         dlat = half_tiles - row_idx
         tile_lat = center_lat + dlat
         tile_top = row_idx * TILE_SIZE_PX
-        for col_idx in range(N):
+        for col_idx in range(col_start, col_end + 1):
             dlon = -half_tiles + col_idx
             tile_lon = wrap_lon(center_lon + dlon)
             tile_left = col_idx * TILE_SIZE_PX
@@ -594,14 +602,19 @@ def _assemble_crop_from_tiles(
             if h <= 0 or w <= 0:
                 continue
 
+            loaded_tiles.append((tile_lat, tile_lon, row_idx, col_idx))
+
             # Destination indices in crop
             dest_y1 = tile_top + overlap_y1 - y1
             dest_y2 = dest_y1 + h
             dest_x1 = tile_left + overlap_x1 - x1
             dest_x2 = dest_x1 + w
 
+            # If latitude is out of bounds, use zero tiles (consistent with load_tile_grid)
+            if tile_lat < MIN_LAT or tile_lat >= MAX_LAT:
+                block = np.zeros((int(h), int(w)), dtype=np.float32)
             # If this is the center tile, use the provided array
-            if dlat == 0 and dlon == 0:
+            elif dlat == 0 and dlon == 0:
                 block = center_tile[int(overlap_y1) : int(overlap_y2), int(overlap_x1) : int(overlap_x2)]
             else:
                 block = load_tile_window(
@@ -610,6 +623,8 @@ def _assemble_crop_from_tiles(
 
             crop[dest_y1:dest_y2, dest_x1:dest_x2] = block
 
+    if return_loaded_tiles:
+        return crop, loaded_tiles
     return crop
 
 
@@ -845,35 +860,24 @@ def generate_sample(
             center_lat = int(selected["lat"])
             center_lon = int(selected["lon"])
 
-            # 5. Load the full grid of tiles (may be larger but simplifies processing)
-            logger.debug(f"Loading full grid for center=({center_lat},{center_lon}) half_tiles={half_tiles}")
+            # 5. Load the center tile first; only intersecting tiles will be loaded for the crop later
+            logger.debug(f"Loading center tile for center=({center_lat},{center_lon}) half_tiles={half_tiles}")
             t_tile = time.time()
-            grid, loaded_tiles = load_tile_grid(
-                tiles_dirpath, center_lat, center_lon, half_tiles=half_tiles, return_loaded_tiles=True
-            )
-            tile_loading_time = time.time() - t_tile
-            logger.debug(f"grid min/max: {grid.min()}/{grid.max()} (tile_load_seconds={tile_loading_time:.3f})")
+            center_tile = load_tile(tiles_dirpath, center_lat, center_lon)
 
             # Offset (in pixels) from grid origin to start of center tile
             center_offset = TILE_SIZE_PX * half_tiles
-            grid_h, grid_w = grid.shape
+            grid_h = (2 * half_tiles + 1) * TILE_SIZE_PX
+            grid_w = grid_h
 
-            # 6. Find the pixel with the closest elevation to target_elev within the center tile region
-            center_tile_y1 = center_offset
-            center_tile_y2 = center_offset + TILE_SIZE_PX
-            center_tile_x1 = center_offset
-            center_tile_x2 = center_offset + TILE_SIZE_PX
-
-            center_tile_region = grid[center_tile_y1:center_tile_y2, center_tile_x1:center_tile_x2]
-
-            # Find pixel with minimum absolute difference to target_elev
-            abs_diff = np.abs(center_tile_region - target_elev)
+            # 6. Find the pixel with the closest elevation to target_elev within the center tile
+            abs_diff = np.abs(center_tile - target_elev)
             min_idx = np.argmin(abs_diff)
             target_row, target_col = divmod(min_idx, TILE_SIZE_PX)
 
             # Convert to grid coordinates
-            target_grid_y = center_tile_y1 + target_row
-            target_grid_x = center_tile_x1 + target_col
+            target_grid_y = center_offset + target_row
+            target_grid_x = center_offset + target_col
 
             # 7. Generate a random crop containing the target pixel with random offsets
             crop_y1_min = max(0, target_grid_y - resolution + 1)
@@ -890,8 +894,23 @@ def generate_sample(
             y2 = y1 + resolution
             x2 = x1 + resolution
 
-            # Extract the crop directly from the loaded grid
-            crop = grid[y1:y2, x1:x2]
+            # Assemble the crop using only intersecting tiles
+            crop, loaded_tiles = _assemble_crop_from_tiles(
+                tiles_dirpath,
+                center_lat,
+                center_lon,
+                half_tiles,
+                y1,
+                x1,
+                resolution,
+                center_tile,
+                return_loaded_tiles=True,
+            )
+            tile_loading_time = time.time() - t_tile
+            logger.debug(
+                f"crop_shape={crop.shape} grid_shape=({grid_h},{grid_w}) tiles_loaded={len(loaded_tiles)} "
+                f"tile_load_seconds={tile_loading_time:.3f}"
+            )
 
             # 8. Calculate marker 1 position (the target pixel) in crop coordinates
             i1 = target_grid_y - y1
@@ -1056,10 +1075,7 @@ def generate_sample(
             # Build list of tiles used to generate the elevation crop from loaded_tiles
             tiles_used = []
             tiles_overlapping = []
-            N = 2 * half_tiles + 1
-            for k, (tile_lat, tile_lon) in enumerate(loaded_tiles):
-                row_idx = k // N
-                col_idx = k % N
+            for tile_lat, tile_lon, row_idx, col_idx in loaded_tiles:
                 tile_top = row_idx * TILE_SIZE_PX
                 tile_left = col_idx * TILE_SIZE_PX
                 # Skip out-of-bounds latitudes (consistent with earlier behavior)

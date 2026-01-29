@@ -60,6 +60,98 @@ This visualization shows the **normalized maximum elevation** within each downlo
 
 The **peak-to-peak (PTP) elevation map** displays the elevation range (max − min) within each tile. High PTP values (bright regions) indicate tiles with significant topographic variation—suitable for challenging pathfinding scenarios. Low PTP values suggest relatively flat terrain. This metric is useful for understanding terrain complexity.
 
+---
+
+## ⚡ Quick start
+
+### Loading the Dataset
+
+```python
+from datasets import load_dataset
+
+# Load a specific resolution
+dataset = load_dataset("your-username/passage-dataset", name="64x64", split="train")
+
+# Access a sample
+sample = dataset["train"][0]
+print(f"Sample ID: {sample['id']}")
+print(f"Path length (free): {len(sample['path_free'])}")
+print(f"Path length (obstacles): {len(sample['path_obstacles'])}")
+```
+
+### Playing with the data
+
+The [demo](notebooks/demo.ipynb) notebook introduces how to access the data using the Hugging Face `datasets` package.
+
+---
+
+## 📦 Dataset structure
+
+Each sample consists of:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `tensor` | `float32[H, W, 3]` | 3-channel tensor: elevation, markers, obstacles |
+| `image` | `bytes` | PNG visualization of the sample |
+| `path_free` | `list[[i, j], ...]` | Optimal path without obstacles |
+| `path_obstacles` | `list[[i, j], ...]` | Optimal path with obstacles |
+| `metadata` | `dict` | Sample metadata (coordinates, elevations, stats) |
+
+### Tensor Channels
+
+1. **Channel 0 (Elevation)**: Normalized elevation in $[0, 1]$
+2. **Channel 1 (Markers)**: $-1$ everywhere, $0$ at start, $1$ at goal
+3. **Channel 2 (Obstacles)**: Binary mask ($0$ = free, $1$ = obstacle)
+
+**Note**: tensors are stored as compressed `.npy.zst` blobs.
+
+Example:
+
+```python
+import numpy as np
+import zstandard as zstd
+
+resolution = sample["metadata"]["resolution"]
+
+# uncompress the tensor
+d = zstd.ZstdDecompressor()
+b = d.decompress(sample["tensor"])
+tensor = np.frombuffer(b, dtype=np.dtype(dtype)).reshape((resolution, resolution, 3))
+
+# unravel dimensions
+elevation = tensor[:, :, 0]
+markers = tensor[:, :, 1]
+obstacles = tensor[:, :, 2]
+
+# denormalize elevation map
+global_min = sample["metadata"]["calibration"]["min"]
+global_max = sample["metadata"]["calibration"]["max"]
+elevation_m = (elevation * (global_max - global_min)) + global_min
+```
+
+See `notebooks/demo.ipynb` for a complete loading & visualization example.
+
+## 📓 Notebooks
+
+Detailed analysis and visualization are available in the `notebooks/` folder:
+
+- **[`demo.ipynb`](./notebooks/demo.ipynb)** — Demonstration notebook to access the dataset configurations and splits
+- **[`obstacles.ipynb`](./notebooks/obstacles.ipynb)** — Obstacle generation examples
+- **[`costmodel.ipynb`](./notebooks/costmodel.ipynb)** — Pathfinding cost model comparisons
+- **[`solve.ipynb`](./notebooks/solve.ipynb)** — Pathfinding solver comparisons
+
+For in-depth documentation of the sampling procedure, obstacle generation, and dataset statistics, please refer to the **`dataset.ipynb`** notebook included with each resolution export:
+
+- **`64x64`**: In-depth analysis [notebook](./64x64/dataset.ipynb)
+- **`128x128`**: In-depth analysis [notebook](./128x128/dataset.ipynb)
+- **`256x256`**: In-depth analysis [notebook](./256x256/dataset.ipynb)
+- **`512x512`**: In-depth analysis [notebook](./512x512/dataset.ipynb)
+- **`1024x1024`**: In-depth analysis [notebook](./1024x1024/dataset.ipynb)
+- **`2048x2048`**: In-depth analysis [notebook](./2048x2048/dataset.ipynb)
+- **`4096x4096`**: In-depth analysis [notebook](./4096x4096/dataset.ipynb)
+
+---
+
 ## 🎯 Dataset sampling procedure
 
 Each sample in the dataset is generated through a carefully designed stochastic process that ensures diversity across elevations, geographic locations, and terrain types.
@@ -145,76 +237,6 @@ Obstacles are iteratively added until the coverage approaches $r_{\text{target}}
 
 ---
 
-## 📦 Dataset structure
-
-Each sample consists of:
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `tensor` | `float32[H, W, 3]` | 3-channel tensor: elevation, markers, obstacles |
-| `image` | `bytes` | PNG visualization of the sample |
-| `path_free` | `list[[i, j], ...]` | Optimal path without obstacles |
-| `path_obstacles` | `list[[i, j], ...]` | Optimal path with obstacles |
-| `metadata` | `dict` | Sample metadata (coordinates, elevations, stats) |
-
-### Tensor Channels
-
-1. **Channel 0 (Elevation)**: Normalized elevation in $[0, 1]$
-2. **Channel 1 (Markers)**: $-1$ everywhere, $0$ at start, $1$ at goal
-3. **Channel 2 (Obstacles)**: Binary mask ($0$ = free, $1$ = obstacle)
-
-Note: tensors are stored as compressed `.npy.zst` blobs. Use `decode_tensor_blob` from `passage.utils` to uncompress a tensor before using it. Example:
-
-```python
-from passage.utils import decode_tensor_blob
-
-# R is the resolution (e.g., 64, 128, 256)
-tensor = decode_tensor_blob(sample["tensor"], (R, R, 3))
-elevation = tensor[..., 0]  # normalized [0,1]
-# denormalize to meters using sample['metadata']['calibration'] if needed:
-# elevation_m = elevation * (meta['calibration']['max'] - meta['calibration']['min']) + meta['calibration']['min']
-```
-
-See `notebooks/demo.ipynb` for a complete loading & visualization example.
-
----
-
-## ⚡ Quick start
-
-### Loading the Dataset
-
-```python
-from datasets import load_dataset
-
-# Load a specific resolution
-dataset = load_dataset("your-username/passage-dataset", name="64x64", split="train")
-
-# Access a sample
-sample = dataset["train"][0]
-print(f"Sample ID: {sample['id']}")
-print(f"Path length (free): {len(sample['path_free'])}")
-print(f"Path length (obstacles): {len(sample['path_obstacles'])}")
-```
-
-### Playing with the data
-
-The [demo](notebooks/demo.ipynb) notebook introduces how to access the data using the Hugging Face `datasets` package.
-
----
-
-## 📓 Notebooks
-
-Detailed analysis and visualization are available in the `notebooks/` folder:
-
-- **`demo.ipynb`** — Demonstration notebook to access the dataset configurations and splits
-- **`obstacles.ipynb`** — Obstacle generation examples
-- **`costmodel.ipynb`** — Pathfinding cost model comparisons
-- **`solve.ipynb`** — Pathfinding solver comparisons
-
-For in-depth documentation of the sampling procedure, obstacle generation, and dataset statistics, please refer to the **`dataset.ipynb`** notebook included with each resolution export.
-
----
-
 ## 📜 License
 
 This dataset is released under the MIT License. The underlying elevation data is sourced from JAXA's ALOS AW3D30 product, which is freely available for research purposes.
@@ -227,3 +249,7 @@ This dataset is released under the MIT License. The underlying elevation data is
 - Open-source community 🌍 — contributions to pathfinding algorithms and geospatial tooling
 
 ---
+
+## Contact
+
+Geoffrey Delhomme - geoffrey.delhomme@thalesgroup.com
