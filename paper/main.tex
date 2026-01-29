@@ -19,7 +19,10 @@
 \usepackage{xcolor}
 \usepackage{subcaption}
 \usepackage{algorithm}
+\let\authAND\AND
+\let\AND\relax
 \usepackage{algorithmic}
+\let\AND\authAND
 \usepackage{multirow}
 \usepackage{siunitx}
 \usepackage{enumitem}
@@ -40,23 +43,22 @@
 
 % Custom commands
 \newcommand{\dataset}{\textsc{Passage}}
-\newcommand{\ie}{\textit{i.e.}}
-\newcommand{\eg}{\textit{e.g.}}
-\newcommand{\cf}{\textit{cf.}}
-\newcommand{\etal}{\textit{et al.}}
+\providecommand{\ie}{\textit{i.e.}}
+\providecommand{\eg}{\textit{e.g.}}
+\providecommand{\cf}{\textit{cf.}}
+\providecommand{\etal}{\textit{et al.}}
 
 % Title
-\title{PASSAGE: A Multi-Resolution Elevation-Based Pathfinding Dataset\\for Certified Machine Learning Systems}
+\title{PASSAGE: A Multi-Resolution Pathfinding Dataset mixing Complex Obstacles and Elevation-based tiles towards Certified Machine Learning Systems}
 
 % Authors
 \author{%
-  Author One\thanks{Corresponding author. Equal contribution.} \\
-  Affiliation One\\
-  \texttt{author1@example.com} \\
-  \And
-  Author Two\footnotemark[1] \\
-  Affiliation Two\\
-  \texttt{author2@example.com} \\
+  Geoffrey Delhomme\thanks{Main contributor} \\
+  Thales\\
+  \texttt{geoffrey.delhomme@thalesgroup.com} \\
+  François Trap\thanks{Main contributor}\\
+  Thales\\
+  \texttt{francois.trap@thalesgroup.com} \\
 }
 
 \begin{document}
@@ -67,7 +69,7 @@
 % ABSTRACT
 % ============================================================================
 \begin{abstract}
-We present \dataset{}, a large-scale, multi-resolution pathfinding benchmark derived from the JAXA ALOS AW3D30 Digital Surface Model. Unlike existing grid-based benchmarks that rely on binary obstacles and fixed resolutions, \dataset{} provides continuous elevation-derived cost maps, procedurally generated superellipse obstacles with configurable shape distributions, and ground-truth paths computed by multiple solver backends. The dataset spans seven resolution levels (64$\times$64 to 4096$\times$4096 pixels) with 13,875 samples in repository defaults, organized into stratified train/calibration/validation/test splits. We provide five physically-motivated cost models (elevation, distance, slope-uphill, energy, absolute-elevation) and three solver backends (NetworkX, pathfinding, NumPy-grid) supporting A*, Dijkstra, and bidirectional variants. Designed with aerospace certification standards (ARP6983, ED-324) in mind, \dataset{} offers deterministic generation, complete provenance metadata, and a dedicated calibration split for certification-oriented experiments. The toolkit includes direct Hugging Face Hub export with zstd-compressed shards and configurable chunk sizes. We release the full generation pipeline, configuration utilities, and baseline experiments to enable reproducible research in supervised surrogate modeling, reinforcement learning, and graph neural networks for pathfinding. The dataset and code are available at \url{https://huggingface.co/datasets/passage}.
+We present \dataset{}, a large-scale, multi-resolution pathfinding benchmark derived from the JAXA ALOS AW3D30 Digital Surface Model. Unlike existing grid-based benchmarks that rely on binary obstacles and fixed resolutions, \dataset{} provides continuous elevation-derived cost maps, procedurally generated superellipse obstacles with configurable shape distributions, and ground-truth paths computed by multiple solver backends. The dataset spans seven resolution levels (64$\times$64 to 4096$\times$4096 pixels) with 141{,}300 samples in repository defaults, organized into stratified train/calibration/validation/test splits (0.90/0.02/0.04/0.04). We provide five physically-motivated cost models (elevation, distance, slope-uphill, energy, absolute-elevation) and three solver backends (NetworkX, pathfinding, NumPy-grid) supporting A*, Dijkstra, and bidirectional variants. Designed with aerospace certification standards (ARP6983, ED-324) in mind, \dataset{} offers deterministic generation, complete provenance metadata (including per-sample timing breakdowns), and a dedicated calibration split for certification-oriented experiments. The toolkit includes direct Hugging Face Hub export with zstd-compressed shards and configurable chunk sizes. We release the full generation pipeline, configuration utilities, analysis notebooks, and baseline experiments to enable reproducible research in supervised surrogate modeling, reinforcement learning, and graph neural networks for pathfinding. The dataset and code are available at \url{https://huggingface.co/datasets/passage}.
 \end{abstract}
 
 % ============================================================================
@@ -100,13 +102,13 @@ We identify the following gaps in current pathfinding datasets:
 We address these gaps with the following contributions:
 
 \begin{enumerate}[noitemsep]
-    \item \textbf{\dataset{} Dataset}: A large-scale, multi-resolution pathfinding benchmark with 13,875 samples (repository defaults) across seven resolutions (64$\times$64 to 4096$\times$4096), derived from real-world elevation data (JAXA ALOS AW3D30).
+    \item \textbf{\dataset{} Dataset}: A large-scale, multi-resolution pathfinding benchmark with 141{,}300 samples (repository defaults) across seven resolutions (64$\times$64 to 4096$\times$4096), derived from real-world elevation data (JAXA ALOS AW3D30).
 
     \item \textbf{Procedural Obstacle Generation}: Configurable superellipse-based obstacles (Lamé curves) with flexible shape distributions (log-uniform, uniform, beta, exponential), size ratios, rotation angles, and coverage constraints up to 30\%.
 
     \item \textbf{Multi-Backend Solver Framework}: Three solver backends (NetworkX, pathfinding, NumPy-grid) implementing A*, Dijkstra, bidirectional variants, and Bellman-Ford, with five physically-motivated cost models.
 
-    \item \textbf{Certification-Oriented Design}: Bounded ODD definition, deterministic generation with configurable seeds, complete provenance metadata per sample, and a dedicated calibration split (10\%) for conformal prediction and uncertainty quantification experiments.
+    \item \textbf{Certification-Oriented Design}: Bounded ODD definition, deterministic generation with configurable seeds, complete provenance metadata per sample (including timing traces), and a dedicated calibration split (2\%) for conformal prediction and uncertainty quantification experiments.
 
     \item \textbf{Open-Source Toolkit}: Complete pipeline from tile download through Hugging Face Hub export, with zstd-compressed shards and configurable per-resolution chunk sizes for efficient storage and streaming.
 \end{enumerate}
@@ -175,7 +177,7 @@ Certifying neural pathfinders requires addressing formal verification of network
 
 \begin{itemize}[noitemsep]
     \item \textbf{Resolution}: 30-meter ground sampling distance (1 arcsecond)
-    \item \textbf{Coverage}: Near-global ($\pm 60°$ latitude)
+    \item \textbf{Coverage}: Near-global ($\pm 60^\circ$ latitude)
     \item \textbf{Format}: GeoTIFF tiles, 3600$\times$3600 pixels per 1°$\times$1° tile
     \item \textbf{Elevation units}: Meters above EGM96 geoid
     \item \textbf{Accuracy}: $\sim$5m vertical RMSE
@@ -196,8 +198,8 @@ Following certification guidelines, we explicitly define the ODD:
 \toprule
 \textbf{Parameter} & \textbf{Bounds} \\
 \midrule
-Geographic latitude & $[-60°, +60°]$ \\
-Geographic longitude & $[-180°, +180°]$ \\
+Geographic latitude & $[-60^\circ, +60^\circ]$ \\
+Geographic longitude & $[-180^\circ, +180^\circ]$ \\
 Elevation range & [calibrated global min, max] \\
 Grid resolutions & $\{64, 128, 256, 512, 1024, 2048, 4096\}$ \\
 Obstacle coverage & $[0\%, 30\%]$ \\
@@ -226,15 +228,15 @@ Sample counts are intentionally skewed toward smaller resolutions where training
 \toprule
 Resolution & Samples & Grid Cells & Physical Extent & Complexity \\
 \midrule
-64$\times$64     & 10,000 & 4,096       & 1.9$\times$1.9 km & Lightweight \\
-128$\times$128   & 2,500  & 16,384      & 3.8$\times$3.8 km & Small \\
-256$\times$256   & 1,000  & 65,536      & 7.7$\times$7.7 km & Medium \\
-512$\times$512   & 250    & 262,144     & 15.4$\times$15.4 km & Large \\
-1024$\times$1024 & 100    & 1,048,576   & 30.7$\times$30.7 km & Heavy \\
-2048$\times$2048 & 20     & 4,194,304   & 61.4$\times$61.4 km & Very Heavy \\
-4096$\times$4096 & 5      & 16,777,216  & 122.9$\times$122.9 km & Extreme \\
+64$\times$64     & 100,000 & 4,096       & 1.9$\times$1.9 km & Lightweight \\
+128$\times$128   & 25,000  & 16,384      & 3.8$\times$3.8 km & Small \\
+256$\times$256   & 10,000  & 65,536      & 7.7$\times$7.7 km & Medium \\
+512$\times$512   & 5,000   & 262,144     & 15.4$\times$15.4 km & Large \\
+1024$\times$1024 & 1,000   & 1,048,576   & 30.7$\times$30.7 km & Heavy \\
+2048$\times$2048 & 200     & 4,194,304   & 61.4$\times$61.4 km & Very Heavy \\
+4096$\times$4096 & 100     & 16,777,216  & 122.9$\times$122.9 km & Extreme \\
 \midrule
-\textbf{Total}   & \textbf{13,875} & --- & --- & --- \\
+\textbf{Total}   & \textbf{141,300} & --- & --- & --- \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -245,16 +247,16 @@ We provide stratified splits for reproducible evaluation:
 
 \begin{table}[h]
 \centering
-\caption{Dataset split ratios.}
+\caption{Dataset split ratios (repository defaults).}
 \label{tab:splits}
 \begin{tabular}{lr}
 \toprule
 Split & Ratio \\
 \midrule
-Train & 70\% \\
-Calibration & 10\% \\
-Validation & 10\% \\
-Test & 10\% \\
+Train & 90\% \\
+Calibration & 2\% \\
+Validation & 4\% \\
+Test & 4\% \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -297,9 +299,13 @@ Exponential & Rapid decay & Primarily round shapes \\
 
 The generation algorithm (Algorithm~\ref{alg:obstacles}) iteratively places non-overlapping superellipses until reaching a target coverage ratio (sampled uniformly from $[0, \text{ratio\_max}]$).
 
+In the repository defaults, obstacle sizes are sampled as fractions of the image width/height (min/max size ratios 0.02/0.25), and generation is tuned by a fixed number of attempts (50) and candidate shapes per attempt (200). Marker positions are protected by rejecting candidates that overlap start or goal pixels.
+
 \begin{algorithm}[h]
 \caption{Obstacle Generation}
 \label{alg:obstacles}
+\begingroup
+\let\AND\relax
 \begin{algorithmic}[1]
 \REQUIRE Resolution $R$, config $C$ with ratio\_max, shape params
 \STATE $\text{mask} \gets \mathbf{0}_{R \times R}$
@@ -319,6 +325,7 @@ The generation algorithm (Algorithm~\ref{alg:obstacles}) iteratively places non-
 \ENDFOR
 \RETURN mask
 \end{algorithmic}
+\endgroup
 \end{algorithm}
 
 \subsection{Obstacle Enforcement}
@@ -359,6 +366,8 @@ Where:
     \item $\Delta e$: Elevation difference (destination $-$ source)
 \end{itemize}
 
+In the repository defaults, the grid backend uses the energy model with $\alpha=100$ and Euclidean heuristic.
+
 \subsection{Data Representation}
 
 Each sample consists of:
@@ -366,20 +375,27 @@ Each sample consists of:
 \paragraph{Tensor Format.} A $(H, W, 3)$ float32 NumPy array:
 \begin{itemize}[noitemsep]
     \item Channel 0: Normalized elevation $\in [0, 1]$
-    \item Channel 1: Marker channel (start$=1.0$, goal$=0.5$, path$=0.25$)
+    \item Channel 1: Marker channel (background $=-1$, start $=0$, goal $=1$)
     \item Channel 2: Obstacle mask ($0$=free, $1$=blocked)
 \end{itemize}
 
 \paragraph{Metadata.} A YAML file with complete provenance:
 \begin{itemize}[noitemsep]
-    \item Sample ID, resolution, generation timestamp
-    \item Source tile filename, crop offset, center coordinates
+    \item Sample ID, resolution, split, and generation timestamp
+    \item Source tile identifiers (center, used, overlapping) and crop geo-coordinates
     \item Global elevation min/max used for normalization
-    \item Start/goal marker positions
-    \item Obstacle coverage ratio
-    \item Path lengths (free and with obstacles)
-    \item Solver configuration (name, cost model, weight, heuristic)
+    \item Start/goal marker positions and elevations
+    \item Obstacle coverage target/actual ratios and penalty
+    \item Path lengths, per-pixel elevations, and cost values (with/without obstacles)
+    \item Solver configuration (backend, name, cost model, weight, heuristic)
+    \item Timing breakdowns (tile loading, graph prebuild, obstacle generation, pathfinding, I/O)
 \end{itemize}
+
+Tensors are stored on disk as zstd-compressed NumPy blobs (\texttt{.npy.zst}) for compactness and loaded losslessly during export and analysis.
+
+\subsection{Deterministic Sampling Strategy}
+
+For each sample, we draw a target elevation, select a tile whose min/max spans that elevation, and load a local grid of neighboring tiles to ensure full-coverage crops at large resolutions. We then select a random crop that contains the target-elevation pixel and place markers by fixing the start at the target pixel and sampling a distinct end pixel. This procedure guarantees that each crop includes a representative elevation target while maintaining stochastic diversity.
 
 % ============================================================================
 % 4. GENERATION PIPELINE
@@ -417,13 +433,13 @@ These statistics enable consistent normalization across all samples and stratifi
 For each target resolution $R$:
 \begin{enumerate}[noitemsep]
     \item Draw random target elevation from $[\text{global\_min}, \text{global\_max}]$
-    \item Filter tiles containing target elevation
-    \item Select random tile; load with neighbors (handling $\pm 180°$ wrapping)
-    \item Sample random $R \times R$ crop
-    \item Sample start/goal markers (ensuring they don't land on obstacles)
-    \item Generate obstacle mask via Algorithm~\ref{alg:obstacles}
-    \item Compute ground-truth paths (free terrain and with obstacles)
-    \item Save tensor, metadata, and optional PNG visualization
+    \item Filter tiles whose min/max spans the target elevation; sample a center tile
+    \item Load a grid of neighboring tiles (handling $\pm 180^\circ$ wrapping) and find the closest pixel to the target elevation within the center tile
+    \item Sample a random $R \times R$ crop that contains the target pixel
+    \item Place markers: start at the target pixel, goal at a distinct random pixel with a valid path
+    \item Generate obstacle mask via Algorithm~\ref{alg:obstacles} (with marker protection)
+    \item Compute ground-truth paths (free terrain and with obstacles) and path costs
+    \item Save tensor, metadata (including timing), and optional PNG visualization
 \end{enumerate}
 
 \subsection{Export to Hugging Face Hub}
@@ -461,6 +477,8 @@ Grid & NumPy/Numba & JIT-compiled, all cost models & Large grids \\
 \bottomrule
 \end{tabular}
 \end{table}
+
+The grid backend uses NumPy with optional Numba JIT compilation when available; the NetworkX backend reuses cached graph templates and updates edge weights per crop to reduce overhead.
 
 \subsection{Solver Algorithms}
 
@@ -519,6 +537,16 @@ Euclidean is recommended for 8-connectivity; Manhattan for 4-connectivity.
     \item \textbf{IoU}: $|P_{\text{pred}} \cap P_{\text{true}}| / |P_{\text{pred}} \cup P_{\text{true}}|$
     \item \textbf{MSE}: Mean squared error for cost-to-go prediction
     \item \textbf{Hausdorff distance}: Maximum path shape deviation
+\end{itemize}
+
+\paragraph{Path Divergence Metrics.}
+For comparing two paths as ordered point sequences $P$ and $Q$, we also provide notebook implementations for:
+\begin{itemize}[noitemsep]
+    \item \textbf{Normalized Hausdorff distance}: $H(P,Q)/D$ where $D$ is the straight-line marker distance
+    \item \textbf{Chamfer (mean deviation)}: symmetric average nearest-neighbor distance normalized by $D$
+    \item \textbf{Discrete Fr\'{e}chet distance}: ordering-aware deviation, normalized by $D$
+    \item \textbf{DTW distance}: Dynamic Time Warping normalized by $\max(|P|,|Q|)\,D$
+    \item \textbf{Area between paths}: filled polygon area normalized by $D^2$
 \end{itemize}
 
 \paragraph{Certification Metrics.}
@@ -606,6 +634,18 @@ $\bullet$ Ground-truth path (yellow line)\\
 \label{fig:samples}
 \end{figure*}
 
+\subsection{Cost Model Sensitivity}
+
+We provide a dedicated notebook to compare all cost models under a fixed solver (grid A*) and multiple weight settings. The analysis highlights how the same terrain induces different path morphologies when optimizing elevation, slope-uphill, energy, or pure distance. This study is useful for selecting cost models that best match a given operational objective.
+
+\subsection{Path Divergence Metrics}
+
+Another notebook evaluates path divergence metrics (Hausdorff, Fr\'{e}chet, DTW, Chamfer, and area-based measures) across pairs of elevation crops with identical markers. Metrics are normalized by marker distance to reduce resolution sensitivity. This provides a quantitative lens on how terrain variability affects path stability.
+
+\subsection{Dataset Insights}
+
+The dataset-insights notebook computes global statistics from stored metadata without recomputing paths. It produces a path occurrence heatmap, tile coverage distribution, elevation histograms (start points and all path pixels), path length distributions, normalized relative elevation profiles, normalized Hausdorff distances (clean vs straight, obstacle vs clean), and identical path counts. These analyses serve as sanity checks and provide high-level dataset diagnostics.
+
 \subsection{Baseline Learning Models}
 
 We evaluate three baseline architectures on \dataset{}:
@@ -614,7 +654,7 @@ We evaluate three baseline architectures on \dataset{}:
 A standard U-Net~\cite{ronneberger2015unet} trained to predict path masks. Input: 3-channel tensor (elevation, markers, obstacles). Output: binary path mask. Loss: weighted cross-entropy.
 
 \paragraph{GNN for Node Classification.}
-We convert elevation grids to PyTorch Geometric graphs and train a 4-layer GCN~\cite{kipf2017semi} for node-level path prediction. Edge weights encode cost model values.
+We convert elevation grids to PyTorch Geometric graphs and train a 4-layer GCN~\cite{kipf2017gcn} for node-level path prediction. Edge weights encode cost model values.
 
 \paragraph{PPO for Navigation.}
 A Proximal Policy Optimization~\cite{schulman2017ppo} agent learns navigation policies on 64$\times$64 and 128$\times$128 grids. Reward: negative step cost under energy model. Episode terminates on goal reach or collision.
@@ -741,7 +781,7 @@ Full dataset generation requires significant computation. We provide pre-generat
 We introduced \dataset{}, a large-scale, multi-resolution elevation-based pathfinding dataset designed for certifiable machine learning systems. Key features include:
 
 \begin{itemize}[noitemsep]
-    \item \textbf{Scale}: 13,875 samples across seven resolutions (64$\times$64 to 4096$\times$4096)
+    \item \textbf{Scale}: 141{,}300 samples across seven resolutions (64$\times$64 to 4096$\times$4096)
     \item \textbf{Realism}: Continuous elevation data from JAXA ALOS AW3D30
     \item \textbf{Flexibility}: Five cost models, three solver backends, configurable superellipse obstacles
     \item \textbf{Certification alignment}: Bounded ODD, provenance metadata, calibration split
@@ -762,7 +802,6 @@ We thank JAXA for providing the ALOS AW3D30 data. Compute resources were provide
 % ============================================================================
 % REFERENCES
 % ============================================================================
-\bibliographystyle{plain}
 \bibliography{references}
 
 % ============================================================================
@@ -779,50 +818,50 @@ The full configuration schema (\texttt{config/config.yaml}):
 resolutions: [64, 128, 256, 512, 1024, 2048, 4096]
 
 num_samples:
-  64: 10000
-  128: 2500
-  256: 1000
-  512: 250
-  1024: 100
-  2048: 20
-  4096: 5
+    64: 100000
+    128: 25000
+    256: 10000
+    512: 5000
+    1024: 1000
+    2048: 200
+    4096: 100
 
 splits:
-  enabled: true
-  ratios:
-    train: 0.7
-    calibration: 0.1
-    validation: 0.1
-    test: 0.1
-  seed: 42
+    enabled: true
+    ratios:
+        train: 0.9
+        calibration: 0.02
+        validation: 0.04
+        test: 0.04
+    seed: 42
 
 solver:
-  name: grid:astar
-  grid:
-    weight: 100.0
-    cost_model: energy
-    heuristic: euclidean
+    name: grid:astar
+    grid:
+        weight: 100.0
+        cost_model: energy
+        heuristic: euclidean
 
 obstacles:
-  enabled: true
-  ratio_max: 0.30
-  shape:
-    n:
-      min: 1.0
-      max: 80.0
-      distribution:
-        type: log_uniform
-  obstacle_penalty: 1e8
+    enabled: true
+    ratio_max: 0.30
+    shape:
+        n:
+            min: 1.0
+            max: 80.0
+            distribution:
+                type: log_uniform
+    obstacle_penalty: 1e8
 
 export:
-  chunk_size:
-    64: 38400
-    128: 2700
-    256: 1200
-    512: 390
-    1024: 100
-    2048: 25
-    4096: 6
+    chunk_size:
+        64: 107820
+        128: 39079
+        256: 12133
+        512: 4425
+        1024: 909
+        2048: 280
+        4096: 83
 \end{lstlisting}
 
 \section{CLI Reference}

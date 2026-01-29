@@ -36,8 +36,7 @@ except ImportError:
 #   distance          - distance only (flat)
 #   slope_uphill      - penalize uphill elevation changes (distance-scaled)
 #   energy            - distance + weight * max(0, elevation_gain)
-#   absolute_elevation- distance * (1 + weight * normalized_abs_elevation)
-COST_MODELS = {"elevation", "distance", "slope_uphill", "energy", "absolute_elevation"}
+COST_MODELS = {"elevation", "distance", "slope_uphill", "energy"}
 
 # Diagonal movement options
 # Controls which neighbors are connected in the graph:
@@ -1002,14 +1001,18 @@ def _grid_astar(
         return [(si, sj)]
 
     if cost_model not in COST_MODELS:
+        logger.warning(f"Unknown cost_model '{cost_model}', falling back to 'elevation'")
         cost_model = "elevation"
-    normalized, abs_norm, elev_range = _normalize_elevation_arrays(crop)
+
     if cost_model == "elevation":
+        normalized, abs_norm, elev_range = _normalize_elevation_arrays(crop)
         dest_factor = 1.0 + weight * normalized
     elif cost_model == "absolute_elevation":
+        normalized, abs_norm, elev_range = _normalize_elevation_arrays(crop)
         dest_factor = 1.0 + weight * abs_norm
     else:
         dest_factor = None
+        logger.warning(f"Unknown cost_model '{cost_model}', falling back to default dest_factor")
 
     neighbors = _grid_solvers_neighbors(diagonal_movement)
 

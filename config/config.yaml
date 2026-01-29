@@ -11,7 +11,7 @@ export:
   default: 1024x1024_sample
   sample:
     num_samples: 20
-  compression_level: 12
+  compression_level: 4
   chunk_size:
     64: 107820
     128: 39079
@@ -26,14 +26,22 @@ export:
 # num_samples: 100        # 100 samples for every resolution
 # num_samples: { 64: 1000, 128: 500, 256: 200 }  # per-resolution counts
 # num_samples: 10
+# num_samples:
+#   64: 1000000
+#   128: 250000
+#   256: 100000
+#   512: 50000
+#   1024: 10000
+#   2048: 2000
+#   4096: 1000
 num_samples:
-  64: 1000000
-  128: 250000
-  256: 100000
-  512: 50000
-  1024: 10000
-  2048: 2000
-  4096: 1000
+  64: 10000
+  128: 2500
+  256: 1000
+  512: 500
+  1024: 100
+  2048: 20
+  4096: 10
 
 # Dataset split configuration
 splits:
