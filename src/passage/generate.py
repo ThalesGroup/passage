@@ -10,6 +10,12 @@ The generation process:
 3. Select a random tile from the filtered set.
 4. Load surrounding tiles as needed for the requested resolution.
 5. Handle latitude bounds and longitude wrapping at -180/180.
+
+Geographic hold-out regions:
+- The hold_out_mask.png (config/hold_out_mask.png) defines regions reserved for testing.
+- For 'test' split: only tiles within the hold-out mask are used.
+- For other splits (train, validation, calibration): tiles in the hold-out mask are excluded.
+- The mask is 181x361 pixels (1 degree per pixel), covering lat -90 to +90, lon -180 to +180.
 """
 
 import csv
@@ -31,6 +37,7 @@ import pandas as pd
 import rasterio
 import yaml
 from loguru import logger
+from PIL import Image
 from rasterio.windows import Window
 from tqdm import tqdm
 
@@ -105,6 +112,161 @@ PATHFINDING_SOLVERS = {"astar", "dijkstra", "best_first"}
 GRID_SOLVERS = {"grid_astar", "grid_dijkstra"}
 
 SPLIT_ORDER = ["train", "calibration", "validation", "test"]
+
+# Default path for hold-out mask (relative to config directory)
+DEFAULT_HOLD_OUT_MASK_PATH = "config/hold_out_mask.png"
+
+# Global cache for hold-out mask (loaded once at startup)
+_HOLD_OUT_MASK: np.ndarray | None = None
+_HOLD_OUT_MASK_PATH: str | None = None
+
+
+def load_hold_out_mask(mask_path: str | Path | None = None) -> np.ndarray | None:
+    """Load the hold-out mask from a PNG file.
+
+    The mask is a 181x361 pixel image (1 degree per pixel) where:
+    - Row 0 = latitude +90, Row 180 = latitude -90
+    - Col 0 = longitude -180, Col 360 = longitude +180
+    - Non-zero RGB values indicate hold-out (test-only) regions
+
+    Args:
+        mask_path: Path to the mask PNG file. If None, uses DEFAULT_HOLD_OUT_MASK_PATH.
+
+    Returns:
+        2D numpy array (181, 361) with 0/1 values, or None if mask doesn't exist.
+    """
+    global _HOLD_OUT_MASK, _HOLD_OUT_MASK_PATH
+
+    if mask_path is None:
+        mask_path = DEFAULT_HOLD_OUT_MASK_PATH
+
+    mask_path = Path(mask_path)
+
+    # Return cached mask if same path
+    if _HOLD_OUT_MASK is not None and _HOLD_OUT_MASK_PATH == str(mask_path):
+        return _HOLD_OUT_MASK
+
+    if not mask_path.exists():
+        logger.debug(f"Hold-out mask not found at {mask_path}, hold-out filtering disabled")
+        _HOLD_OUT_MASK = None
+        _HOLD_OUT_MASK_PATH = None
+        return None
+
+    try:
+        img = Image.open(mask_path)
+        arr = np.array(img)
+
+        # Handle different image formats (RGBA, RGB, grayscale)
+        if arr.ndim == 3:
+            # Use R channel (all RGB channels should be identical)
+            mask_2d = arr[:, :, 0]
+        else:
+            mask_2d = arr
+
+        # Convert to binary mask (0 or 1)
+        binary_mask = (mask_2d > 0).astype(np.uint8)
+
+        # Validate expected dimensions
+        expected_shape = (181, 361)  # lat: -90 to +90, lon: -180 to +180
+        if binary_mask.shape != expected_shape:
+            logger.warning(
+                f"Hold-out mask has unexpected shape {binary_mask.shape}, expected {expected_shape}. "
+                f"Mask will be resized."
+            )
+            # Resize if needed (shouldn't happen with correct mask)
+            binary_mask = np.array(Image.fromarray(binary_mask).resize((361, 181), Image.NEAREST))
+
+        _HOLD_OUT_MASK = binary_mask
+        _HOLD_OUT_MASK_PATH = str(mask_path)
+
+        hold_out_count = np.sum(binary_mask > 0)
+        logger.info(f"Loaded hold-out mask from {mask_path}: {hold_out_count} tiles in hold-out region")
+
+        return _HOLD_OUT_MASK
+
+    except Exception as e:
+        logger.warning(f"Failed to load hold-out mask from {mask_path}: {e}")
+        _HOLD_OUT_MASK = None
+        _HOLD_OUT_MASK_PATH = None
+        return None
+
+
+def is_tile_in_hold_out(lat: int, lon: int, mask: np.ndarray | None = None) -> bool:
+    """Check if a tile at (lat, lon) is in the hold-out region.
+
+    Args:
+        lat: Tile latitude (integer, -90 to +89)
+        lon: Tile longitude (integer, -180 to +179)
+        mask: Hold-out mask array (181x361). If None, uses global cached mask.
+
+    Returns:
+        True if the tile is in the hold-out region, False otherwise.
+    """
+    if mask is None:
+        mask = _HOLD_OUT_MASK
+
+    if mask is None:
+        return False
+
+    # Convert lat/lon to mask pixel coordinates
+    # Row: lat +90 -> row 0, lat -90 -> row 180
+    # Col: lon -180 -> col 0, lon +180 -> col 360
+    row = 90 - lat
+    col = lon + 180
+
+    # Clamp to valid range
+    row = max(0, min(180, row))
+    col = max(0, min(360, col))
+
+    return bool(mask[row, col] > 0)
+
+
+def filter_tiles_by_hold_out(
+    tile_stats_df: pd.DataFrame,
+    split_name: str,
+    mask: np.ndarray | None = None,
+) -> pd.DataFrame:
+    """Filter tile_stats DataFrame based on hold-out mask and split type.
+
+    For 'test' split: only include tiles IN the hold-out region.
+    For other splits (train, validation, calibration): EXCLUDE tiles in the hold-out region.
+
+    Args:
+        tile_stats_df: DataFrame with 'lat' and 'lon' columns.
+        split_name: Name of the split ('train', 'validation', 'calibration', 'test').
+        mask: Hold-out mask array. If None, uses global cached mask.
+
+    Returns:
+        Filtered DataFrame.
+    """
+    if mask is None:
+        mask = _HOLD_OUT_MASK
+
+    if mask is None:
+        logger.debug(f"No hold-out mask loaded, returning all {len(tile_stats_df)} tiles for split '{split_name}'")
+        return tile_stats_df
+
+    # Create boolean mask for each tile
+    in_hold_out = tile_stats_df.apply(
+        lambda row: is_tile_in_hold_out(int(row["lat"]), int(row["lon"]), mask),
+        axis=1,
+    )
+
+    if split_name == "test":
+        # For test: only use tiles IN the hold-out region
+        filtered_df = tile_stats_df[in_hold_out]
+        logger.debug(
+            f"Split '{split_name}': filtered to {len(filtered_df)}/{len(tile_stats_df)} tiles (hold-out region only)"
+        )
+    else:
+        # For train/validation/calibration: EXCLUDE tiles in hold-out region
+        filtered_df = tile_stats_df[~in_hold_out]
+        logger.debug(
+            f"Split '{split_name}': filtered to {len(filtered_df)}/{len(tile_stats_df)} tiles "
+            f"(excluding hold-out region)"
+        )
+
+    return filtered_df
 
 
 def _split_sort_key(name: str) -> tuple[int, str]:
@@ -846,7 +1008,15 @@ def generate_sample(
         try:
             # New sampling strategy: pick a random tile first, then draw target elevation from that tile's range.
             # This reduces failed elevation attempts caused by drawing elevations not covered by any tile.
-            candidates = tile_stats_df
+            # Apply hold-out mask filtering based on split type
+            candidates = filter_tiles_by_hold_out(tile_stats_df, split_name)
+
+            if candidates.empty:
+                logger.warning(
+                    f"No tiles available for split '{split_name}' after hold-out filtering. "
+                    f"Check hold_out_mask.png configuration."
+                )
+                continue
 
             target_elev = random.uniform(float(global_min), float(global_max))
 
@@ -1677,6 +1847,30 @@ def run_generate(
     # Load tile_stats into pandas DataFrame
     tile_stats_df = pd.DataFrame(tile_stats)
     logger.info(f"Loaded {len(tile_stats_df)} tiles into DataFrame")
+
+    # Load hold-out mask for geographic split filtering
+    # The mask path can be specified in config or use default
+    hold_out_cfg = config.get("hold_out", {}) if isinstance(config, dict) else {}
+    hold_out_enabled = hold_out_cfg.get("enabled", True)  # Enabled by default if mask exists
+    hold_out_mask_path = hold_out_cfg.get("mask_path", DEFAULT_HOLD_OUT_MASK_PATH)
+
+    if hold_out_enabled:
+        hold_out_mask = load_hold_out_mask(hold_out_mask_path)
+
+        if hold_out_mask is not None:
+            # Log statistics about tile distribution
+            test_tiles = filter_tiles_by_hold_out(tile_stats_df, "test", hold_out_mask)
+            train_tiles = filter_tiles_by_hold_out(tile_stats_df, "train", hold_out_mask)
+            logger.info(
+                f"Hold-out mask applied: {len(test_tiles)} tiles for test (hold-out region), "
+                f"{len(train_tiles)} tiles for train/val/calibration (outside hold-out)"
+            )
+    else:
+        logger.info("Hold-out geographic filtering is disabled in config")
+        # Clear any cached mask to ensure no filtering happens
+        global _HOLD_OUT_MASK, _HOLD_OUT_MASK_PATH
+        _HOLD_OUT_MASK = None
+        _HOLD_OUT_MASK_PATH = None
 
     # Load solvers configuration from 'solvers' key (list of solver configs)
     solvers_configs = config.get("solvers", [])

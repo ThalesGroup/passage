@@ -60,6 +60,14 @@ This visualization shows the **normalized maximum elevation** within each downlo
 
 The **peak-to-peak (PTP) elevation map** displays the elevation range (max − min) within each tile. High PTP values (bright regions) indicate tiles with significant topographic variation—suitable for challenging pathfinding scenarios. Low PTP values suggest relatively flat terrain. This metric is useful for understanding terrain complexity.
 
+### Hold out
+
+In order to assess generalization of trained models, a region containing South America is put as hold out. This region has been chosen and associated tile hand picked as it represents a wide range of elevation, condensing ranges from all other places in the world map.
+
+<p align="center">
+  <img src="assets/hold_out_mask.png" alt="Maximum Elevation Map" />
+</p>
+
 ---
 
 ## ⚡ Quick start
