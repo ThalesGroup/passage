@@ -53,69 +53,102 @@ splits:
     test: 0.04
   seed: 42
 
-# Pathfinding solver configuration
-# Use a name prefix to select backend:
-#   networkx:   NetworkX graph solvers (supports all cost models)
-#   pathfinding: pathfinding package solvers (grid-based, no directional cost models)
-#   grid:       internal NumPy grid solvers (grid_astar/grid_dijkstra)
-# Edge weights = distance_m * (1 + weight * normalized_elevation)
-# Cardinal moves: 30m, Diagonal moves: 30*sqrt(2) ≈ 42.43m
-solver:
-  # Solver name (with prefix):
-  #   networkx: astar, astar_bi, dijkstra, dijkstra_bi, bellman_ford, unweighted
-  #   pathfinding: astar, dijkstra, best_first
-  #   grid: astar, dijkstra (mapped to grid_astar/grid_dijkstra)
-  #
-  # Example (NetworkX A*):
-  #   name: networkx:astar
-  # Example (Pathfinding Dijkstra):
-  #   name: pathfinding:dijkstra
-  # Example (Grid A*):
-  #   name: grid:astar
-  name: grid:astar
-
-  # Parameters shared by all backends
-  common:
+solvers:
+  - name: astar_elevation
+    # Use a name prefix to select backend:
+    #   networkx:   NetworkX graph solvers (supports all cost models)
+    #   pathfinding: pathfinding package solvers (grid-based, no directional cost models)
+    #   grid:       internal NumPy grid solvers (grid_astar/grid_dijkstra)
+    backend: grid
     # Diagonal movement - controls graph connectivity:
     #   always  - 8-connectivity (cardinal 30m + diagonal 42.43m) [DEFAULT]
     #   never   - 4-connectivity (cardinal only: N/S/E/W, 30m each)
     diagonal_movement: always
-
     # Maximum retries for marker sampling before trying new elevation
     max_marker_retries: 10
-
-  # Parameters for NetworkX backend (all cost models supported)
-  networkx:
-    # Weight multiplier for elevation cost (higher = prefer flat paths)
-    # Set very high to strongly penalize high-elevation cells so the path follows valleys more aggressively.
-    # Note: this multiplies the normalized elevation term, so large values (100+) heavily favor low-elevation routes.
-    weight: 100.0
-
+    # Solver name:
+    #   networkx: astar, astar_bi, dijkstra, dijkstra_bi, bellman_ford, unweighted
+    #   pathfinding: astar, dijkstra, best_first
+    #   grid: astar, dijkstra (mapped to grid_astar/grid_dijkstra)
+    solver: astar
     # Edge cost model:
     #   elevation          - distance * (1 + weight * normalized_elevation) [DEFAULT]
     #   distance           - flat distance only (ignore elevation)
     #   slope_uphill       - penalize uphill elevation changes (distance-scaled)
     #   energy             - distance + weight * max(0, elevation_gain)
-    #   absolute_elevation - distance * (1 + weight * normalized_abs_elevation)
     cost_model: elevation
-
+    # Weight multiplier for elevation cost (higher = prefer flat paths)
+    # Set very high to strongly penalize high-elevation cells so the path follows valleys more aggressively.
+    # Note: this multiplies the normalized elevation term, so large values (100+) heavily favor low-elevation routes.
+    weight: 2000.0
     # Heuristic function for A* search (used by astar/astar_bi):
     #   euclidean  - Euclidean distance in meters (best for 8-connectivity) [DEFAULT]
     #   manhattan  - Manhattan distance in meters (best for 4-connectivity)
     #   chebyshev  - Chebyshev distance in meters (alternative for 8-connectivity)
     heuristic: euclidean
-
-  # Parameters for pathfinding backend (no directional cost models: slope_uphill, energy)
-  pathfinding:
-    weight: 100.0
-    cost_model: elevation
-    heuristic: euclidean
-
-  # Parameters for grid backend (all cost models supported)
-  grid:
-    weight: 100.0
-    # cost_model: elevation
+  - name: astar_energy
+    # Use a name prefix to select backend:
+    #   networkx:   NetworkX graph solvers (supports all cost models)
+    #   pathfinding: pathfinding package solvers (grid-based, no directional cost models)
+    #   grid:       internal NumPy grid solvers (grid_astar/grid_dijkstra)
+    backend: grid
+    # Diagonal movement - controls graph connectivity:
+    #   always  - 8-connectivity (cardinal 30m + diagonal 42.43m) [DEFAULT]
+    #   never   - 4-connectivity (cardinal only: N/S/E/W, 30m each)
+    diagonal_movement: always
+    # Maximum retries for marker sampling before trying new elevation
+    max_marker_retries: 10
+    # Solver name:
+    #   networkx: astar, astar_bi, dijkstra, dijkstra_bi, bellman_ford, unweighted
+    #   pathfinding: astar, dijkstra, best_first
+    #   grid: astar, dijkstra (mapped to grid_astar/grid_dijkstra)
+    solver: astar
+    # Edge cost model:
+    #   elevation          - distance * (1 + weight * normalized_elevation) [DEFAULT]
+    #   distance           - flat distance only (ignore elevation)
+    #   slope_uphill       - penalize uphill elevation changes (distance-scaled)
+    #   energy             - distance + weight * max(0, elevation_gain)
     cost_model: energy
+    # Weight multiplier for elevation cost (higher = prefer flat paths)
+    # Set very high to strongly penalize high-elevation cells so the path follows valleys more aggressively.
+    # Note: this multiplies the normalized elevation term, so large values (100+) heavily favor low-elevation routes.
+    weight: 4000.0
+    # Heuristic function for A* search (used by astar/astar_bi):
+    #   euclidean  - Euclidean distance in meters (best for 8-connectivity) [DEFAULT]
+    #   manhattan  - Manhattan distance in meters (best for 4-connectivity)
+    #   chebyshev  - Chebyshev distance in meters (alternative for 8-connectivity)
+    heuristic: euclidean
+  - name: astar_slope
+    # Use a name prefix to select backend:
+    #   networkx:   NetworkX graph solvers (supports all cost models)
+    #   pathfinding: pathfinding package solvers (grid-based, no directional cost models)
+    #   grid:       internal NumPy grid solvers (grid_astar/grid_dijkstra)
+    backend: grid
+    # Diagonal movement - controls graph connectivity:
+    #   always  - 8-connectivity (cardinal 30m + diagonal 42.43m) [DEFAULT]
+    #   never   - 4-connectivity (cardinal only: N/S/E/W, 30m each)
+    diagonal_movement: always
+    # Maximum retries for marker sampling before trying new elevation
+    max_marker_retries: 10
+    # Solver name:
+    #   networkx: astar, astar_bi, dijkstra, dijkstra_bi, bellman_ford, unweighted
+    #   pathfinding: astar, dijkstra, best_first
+    #   grid: astar, dijkstra (mapped to grid_astar/grid_dijkstra)
+    solver: astar
+    # Edge cost model:
+    #   elevation          - distance * (1 + weight * normalized_elevation) [DEFAULT]
+    #   distance           - flat distance only (ignore elevation)
+    #   slope_uphill       - penalize uphill elevation changes (distance-scaled)
+    #   energy             - distance + weight * max(0, elevation_gain)
+    cost_model: slope_uphill
+    # Weight multiplier for elevation cost (higher = prefer flat paths)
+    # Set very high to strongly penalize high-elevation cells so the path follows valleys more aggressively.
+    # Note: this multiplies the normalized elevation term, so large values (100+) heavily favor low-elevation routes.
+    weight: 100000.0
+    # Heuristic function for A* search (used by astar/astar_bi):
+    #   euclidean  - Euclidean distance in meters (best for 8-connectivity) [DEFAULT]
+    #   manhattan  - Manhattan distance in meters (best for 4-connectivity)
+    #   chebyshev  - Chebyshev distance in meters (alternative for 8-connectivity)
     heuristic: euclidean
 
 # Obstacle generation configuration (used by obstacles notebook)

@@ -468,11 +468,30 @@ class TestGenerateSample:
         outputs_dir = tmp_path / "outputs"
         outputs_dir.mkdir()
 
-        solver_config = {"name": "astar", "diagonal_movement": "always", "weight": 1.0, "max_marker_retries": 10}
+        solvers_configs = [
+            {
+                "name": "test_solver",
+                "backend": "grid",
+                "common": {"diagonal_movement": "always", "max_marker_retries": 10},
+                "grid": {"solver": "astar", "cost_model": "elevation", "weight": 1.0},
+            }
+        ]
         obstacle_settings = gen._resolve_obstacle_config({"obstacles": {"enabled": False}})
 
         idx, success, msg, duration = gen.generate_sample(
-            (0, tiles_dir, outputs_dir, 8, mock_tile_stats_df, 0.0, 2000.0, False, solver_config, obstacle_settings)
+            (
+                0,
+                tiles_dir,
+                outputs_dir,
+                8,
+                mock_tile_stats_df,
+                0.0,
+                2000.0,
+                False,
+                solvers_configs,
+                obstacle_settings,
+                "train",
+            )
         )
         assert isinstance(duration, float)
 
@@ -493,11 +512,30 @@ class TestGenerateSample:
         outputs_dir = tmp_path / "outputs"
         outputs_dir.mkdir()
 
-        solver_config = {"name": "astar", "diagonal_movement": "always", "weight": 1.0, "max_marker_retries": 10}
+        solvers_configs = [
+            {
+                "name": "test_solver",
+                "backend": "grid",
+                "common": {"diagonal_movement": "always", "max_marker_retries": 10},
+                "grid": {"solver": "astar", "cost_model": "elevation", "weight": 1.0},
+            }
+        ]
         obstacle_settings = gen._resolve_obstacle_config({"obstacles": {"enabled": False}})
 
         idx, success, msg, duration = gen.generate_sample(
-            (0, tiles_dir, outputs_dir, 8, mock_tile_stats_df, 0.0, 2000.0, False, solver_config, obstacle_settings)
+            (
+                0,
+                tiles_dir,
+                outputs_dir,
+                8,
+                mock_tile_stats_df,
+                0.0,
+                2000.0,
+                False,
+                solvers_configs,
+                obstacle_settings,
+                "train",
+            )
         )
         assert isinstance(duration, float)
 
@@ -516,7 +554,6 @@ class TestGenerateSample:
             # Check all expected fields exist
             assert "index" in metadata
             assert "resolution" in metadata
-            assert "target_elevation" in metadata
             assert "tile" in metadata
             assert "stats" in metadata["tile"]
             assert "min_elevation" in metadata["tile"]["stats"]
@@ -524,13 +561,14 @@ class TestGenerateSample:
             assert "crop" in metadata
             assert "min_elevation" in metadata["crop"]
             assert "max_elevation" in metadata["crop"]
+            assert "target_elevation" in metadata["crop"]
             assert "markers" in metadata
             assert "start_point" in metadata["markers"]
             assert "end_point" in metadata["markers"]
             assert "elevation" in metadata["markers"]["start_point"]
             assert "elevation" in metadata["markers"]["end_point"]
             assert "paths" in metadata
-            assert "without_obstacles" in metadata["paths"]
+            assert "solvers" in metadata
             assert "obstacles" in metadata
 
             # Timing diagnostics should be present
@@ -538,11 +576,7 @@ class TestGenerateSample:
             for key in [
                 "tile_loading_seconds",
                 "marker_search_seconds",
-                "marker_find_path_without_seconds",
-                "marker_find_path_with_seconds",
-                "graph_prebuild_seconds",
                 "obstacle_generation_seconds",
-                "cost_compute_seconds",
                 "tensor_save_seconds",
                 "metadata_write_seconds",
                 "image_conversion_seconds",
@@ -562,15 +596,35 @@ class TestGenerateSample:
         outputs_dir = tmp_path / "outputs"
         outputs_dir.mkdir()
 
-        solver_config = {"name": "astar", "diagonal_movement": "always", "weight": 1.0, "max_marker_retries": 10}
+        solvers_configs = [
+            {
+                "name": "test_solver",
+                "backend": "grid",
+                "common": {"diagonal_movement": "always", "max_marker_retries": 10},
+                "grid": {"solver": "astar", "cost_model": "elevation", "weight": 1.0},
+            }
+        ]
         obstacle_settings = gen._resolve_obstacle_config({"obstacles": {"enabled": True}})
 
         idx, success, msg, duration = gen.generate_sample(
-            (0, tiles_dir, outputs_dir, 8, mock_tile_stats_df, 0.0, 2000.0, False, solver_config, obstacle_settings)
+            (
+                0,
+                tiles_dir,
+                outputs_dir,
+                8,
+                mock_tile_stats_df,
+                0.0,
+                2000.0,
+                False,
+                solvers_configs,
+                obstacle_settings,
+                "train",
+            )
         )
         assert isinstance(duration, float)
 
         if success:
+            # Paths are now under paths/<solver_name>/free and paths/<solver_name>/obstacles
             all_paths = list((outputs_dir / "8").rglob("0000000000.csv"))
             free_matches = [p for p in all_paths if "paths" in p.parts and "free" in p.parts]
             obs_matches = [p for p in all_paths if "paths" in p.parts and "obstacles" in p.parts]
@@ -604,7 +658,14 @@ class TestGenerateSample:
         outputs_dir = tmp_path / "outputs"
         outputs_dir.mkdir()
 
-        solver_config = {"name": "astar", "diagonal_movement": "always", "weight": 1.0, "max_marker_retries": 10}
+        solvers_configs = [
+            {
+                "name": "test_solver",
+                "backend": "grid",
+                "common": {"diagonal_movement": "always", "max_marker_retries": 10},
+                "grid": {"solver": "astar", "cost_model": "elevation", "weight": 1.0},
+            }
+        ]
         obstacle_settings = gen._resolve_obstacle_config({"obstacles": {"enabled": True}})
 
         # Pass explicit split name different from default 'train'
@@ -618,7 +679,7 @@ class TestGenerateSample:
                 0.0,
                 2000.0,
                 False,
-                solver_config,
+                solvers_configs,
                 obstacle_settings,
                 "validation",
             )
@@ -636,9 +697,9 @@ class TestGenerateSample:
             # Images
             images_matches = list((base / "images").rglob("0000000000.png"))
             assert images_matches, "Image file not saved under split-aware images dir"
-            # Paths
-            free_matches = list((base / "paths" / "free").rglob("0000000000.csv"))
-            obs_matches = list((base / "paths" / "obstacles").rglob("0000000000.csv"))
+            # Paths (now under paths/<solver_name>/free and paths/<solver_name>/obstacles)
+            free_matches = list((base / "paths").rglob("free/**/0000000000.csv"))
+            obs_matches = list((base / "paths").rglob("obstacles/**/0000000000.csv"))
             assert free_matches and obs_matches, "Path files not saved under split-aware paths dirs"
 
     @pytest.mark.unit
@@ -653,11 +714,30 @@ class TestGenerateSample:
         outputs_dir = tmp_path / "outputs"
         outputs_dir.mkdir()
 
-        solver_config = {"name": "astar", "diagonal_movement": "always", "weight": 1.0, "max_marker_retries": 10}
+        solvers_configs = [
+            {
+                "name": "test_solver",
+                "backend": "grid",
+                "common": {"diagonal_movement": "always", "max_marker_retries": 10},
+                "grid": {"solver": "astar", "cost_model": "elevation", "weight": 1.0},
+            }
+        ]
         obstacle_settings = gen._resolve_obstacle_config({"obstacles": {"enabled": False}})
 
         idx, success, msg, duration = gen.generate_sample(
-            (0, tiles_dir, outputs_dir, 8, mock_tile_stats_df, 0.0, 2000.0, True, solver_config, obstacle_settings)
+            (
+                0,
+                tiles_dir,
+                outputs_dir,
+                8,
+                mock_tile_stats_df,
+                0.0,
+                2000.0,
+                True,
+                solvers_configs,
+                obstacle_settings,
+                "train",
+            )
         )
         assert isinstance(duration, float)
 
@@ -894,12 +974,31 @@ class TestTensorToImage:
         outputs_dir = tmp_path / "outputs"
         outputs_dir.mkdir()
 
-        solver_config = {"name": "astar", "diagonal_movement": "always", "weight": 1.0, "max_marker_retries": 10}
+        solvers_configs = [
+            {
+                "name": "test_solver",
+                "backend": "grid",
+                "common": {"diagonal_movement": "always", "max_marker_retries": 10},
+                "grid": {"solver": "astar", "cost_model": "elevation", "weight": 1.0},
+            }
+        ]
         obstacle_settings = gen._resolve_obstacle_config({"obstacles": {"enabled": False}})
 
         # Generate with images enabled
         idx, success, msg, duration = gen.generate_sample(
-            (0, tiles_dir, outputs_dir, 8, mock_tile_stats_df, 0.0, 2000.0, False, solver_config, obstacle_settings)
+            (
+                0,
+                tiles_dir,
+                outputs_dir,
+                8,
+                mock_tile_stats_df,
+                0.0,
+                2000.0,
+                False,
+                solvers_configs,
+                obstacle_settings,
+                "train",
+            )
         )
         assert isinstance(duration, float)
 
@@ -921,10 +1020,22 @@ class TestTensorToImage:
             metadata_path = metadata_matches[0]
             with open(metadata_path) as f:
                 md = yaml.safe_load(f)
-            path_section = md.get("paths", {}).get("without_obstacles") or md.get("paths", {}).get("with_obstacles")
-            if path_section is None:
-                path_section = md.get("path", {})
-            path_pixels = [(p["i"], p["j"]) for p in path_section.get("pixels", [])]
+            # New format: paths is keyed by solver name, with "free" and "obstacles" sub-keys
+            first_solver = list(md.get("paths", {}).keys())[0] if md.get("paths") else None
+            if first_solver:
+                # Read path from CSV file instead of metadata (metadata no longer stores full pixel list)
+                path_csv_matches = list(
+                    (outputs_dir / "8" / "train" / "paths" / first_solver / "free").rglob("0000000000.csv")
+                )
+                if path_csv_matches:
+                    import csv
+
+                    with open(path_csv_matches[0], newline="") as f:
+                        path_pixels = [(int(row[0]), int(row[1])) for row in csv.reader(f)]
+                else:
+                    path_pixels = []
+            else:
+                path_pixels = []
             reconstructed_image = gen.tensor_to_image(tensor, path_pixels=path_pixels)
 
             # Load the saved image
@@ -990,8 +1101,19 @@ class TestTilesNeeded:
         with open(calib_dir / "calibrate.json", "w") as f:
             json.dump(calibrate, f)
 
-        # Create config file with a single large resolution
-        cfg = {"resolutions": [160], "num_samples": 1}
+        # Create config file with a single large resolution and solvers list
+        cfg = {
+            "resolutions": [160],
+            "num_samples": 1,
+            "solvers": [
+                {
+                    "name": "test_solver",
+                    "backend": "grid",
+                    "common": {"diagonal_movement": "always", "max_marker_retries": 10},
+                    "grid": {"solver": "astar", "cost_model": "elevation", "weight": 1.0},
+                }
+            ],
+        }
         cfg_path = tmp_path / "config.yaml"
         with open(cfg_path, "w") as f:
             yaml.dump(cfg, f)
@@ -1029,7 +1151,8 @@ class TestTilesNeeded:
 
         with open(metadata_path) as f:
             md = yaml.safe_load(f)
-        assert "paths" in md and "without_obstacles" in md["paths"]
+        # New format: paths is keyed by solver name
+        assert "paths" in md and "solvers" in md
 
         from passage.utils import load_tensor
 

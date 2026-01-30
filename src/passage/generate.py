@@ -42,7 +42,6 @@ from passage.pathfinding_utils import (
     _find_path_pathfinding,
     _grid_astar,
     _grid_dijkstra,
-    _path_cost_from_graph,
     build_graph_from_elevation,
     check_path_collision,
 )
@@ -116,10 +115,20 @@ def _split_sort_key(name: str) -> tuple[int, str]:
 
 
 def _parse_solver_backend_and_name(solver_config: dict) -> tuple[str, str]:
-    raw_name = solver_config.get("name", "astar")
-    backend = solver_config.get("backend")
-    solver_name = raw_name
+    """Parse backend and solver algorithm name from config.
 
+    Handles multiple formats:
+    1. name: "backend:solver" (e.g., "grid:astar")
+    2. backend: "grid", solver: "astar" or solver_algorithm: "astar"
+    3. Defaults to networkx backend and astar solver
+    """
+    backend = solver_config.get("backend")
+
+    # Check for solver algorithm specified via solver_algorithm or solver key
+    solver_name = solver_config.get("solver_algorithm") or solver_config.get("solver", "astar")
+
+    # Check if name contains backend:solver format
+    raw_name = solver_config.get("name", "")
     if isinstance(raw_name, str) and ":" in raw_name:
         prefix, name = raw_name.split(":", 1)
         backend = prefix
@@ -138,29 +147,31 @@ def _parse_solver_backend_and_name(solver_config: dict) -> tuple[str, str]:
 
 
 def _resolve_solver_config(solver_config: dict) -> dict:
-    """Merge common + backend-specific solver config sections.
+    """Resolve solver config to a flat dictionary with solver_algorithm key.
 
-    Accepts either a flat config or a structured config like:
+    Accepts a flat config like:
     solver:
-      name: networkx:astar
-      common: {...}
-      networkx: {...}
-      pathfinding: {...}
-      grid: {...}
+      name: astar_elevation
+      backend: grid
+      solver: astar
+      cost_model: elevation
+      ...
+
+    The 'solver' key specifies the actual algorithm (astar, dijkstra, etc.).
     """
     if not isinstance(solver_config, dict):
         return {}
 
-    has_sections = any(key in solver_config for key in ("common", "networkx", "pathfinding", "grid"))
-    if not has_sections:
-        return solver_config
+    resolved = dict(solver_config)
 
-    backend, _ = _parse_solver_backend_and_name(solver_config)
-    resolved = {}
-    resolved.update(solver_config.get("common", {}))
-    resolved.update(solver_config.get(backend, {}))
-    if "name" in solver_config:
-        resolved["name"] = solver_config["name"]
+    # If the config has a 'solver' key, use it as the actual solver algorithm name
+    if "solver" in resolved:
+        resolved["solver_algorithm"] = resolved["solver"]
+
+    # Default backend to 'grid' if not specified
+    if "backend" not in resolved:
+        resolved["backend"] = "grid"
+
     return resolved
 
 
@@ -776,55 +787,44 @@ def tiles_needed_for_resolution(resolution: int) -> tuple[int, int, int]:
 
 @_log_timing
 def generate_sample(
-    args: tuple[int, Path, Path, int, pd.DataFrame, float, float, bool, dict, dict, str],
+    args: tuple[int, Path, Path, int, pd.DataFrame, float, float, bool, list, dict, str],
 ) -> tuple[int, bool, str]:
     """
     Generate a single dataset sample.
 
     Args:
           args: Tuple of (index, tiles_dirpath, outputs_dirpath, resolution,
-              tile_stats_df, global_min, global_max, disable_images, solver_config,
+              tile_stats_df, global_min, global_max, disable_images, solvers_configs,
               obstacle_settings, split_name).
 
     Returns:
         Tuple of (index, success, message).
     """
-    # Backwards-compatible unpacking: accept either 10- or 11-element tuples.
-    if len(args) == 11:
-        (
-            index,
-            tiles_dirpath,
-            outputs_dirpath,
-            resolution,
-            tile_stats_df,
-            global_min,
-            global_max,
-            disable_images,
-            solver_config,
-            obstacle_settings,
-            split_name,
-        ) = args
-    elif len(args) == 10:
-        (
-            index,
-            tiles_dirpath,
-            outputs_dirpath,
-            resolution,
-            tile_stats_df,
-            global_min,
-            global_max,
-            disable_images,
-            solver_config,
-            obstacle_settings,
-        ) = args
-        split_name = "train"
-    else:
-        raise ValueError("generate_sample expects a 10- or 11-element args tuple")
+    # Unpack args tuple
+    if len(args) != 11:
+        raise ValueError("generate_sample expects an 11-element args tuple")
+    (
+        index,
+        tiles_dirpath,
+        outputs_dirpath,
+        resolution,
+        tile_stats_df,
+        global_min,
+        global_max,
+        disable_images,
+        solvers_configs,
+        obstacle_settings,
+        split_name,
+    ) = args
 
-    solver_config = _resolve_solver_config(solver_config)
+    # Validate solvers_configs is a non-empty list
+    if not solvers_configs or not isinstance(solvers_configs, list):
+        raise ValueError("solvers_configs must be a non-empty list of solver configurations")
+
     obstacle_settings = obstacle_settings or {}
-    max_marker_retries = solver_config.get("max_marker_retries", 10)
-    backend, solver_name = _parse_solver_backend_and_name(solver_config)
+    # Use max_marker_retries from the first solver's common config (they should all be the same)
+    first_solver_resolved = _resolve_solver_config(solvers_configs[0])
+    max_marker_retries = first_solver_resolved.get("max_marker_retries", 10)
     max_elevation_retries = 10  # Total attempts for different elevations
 
     start_time = datetime.now()
@@ -916,41 +916,31 @@ def generate_sample(
             i1 = target_grid_y - y1
             j1 = target_grid_x - x1
 
-            # 9. Try to find a path with retry logic
+            # 9. Try to find valid markers with retry logic (use first solver for validation)
             h, w = crop.shape
             total_pixels = h * w
             marker1_flat_idx = i1 * w + j1
 
-            # Optionally prebuild NetworkX graph once for this crop when networkx solver is selected
-            prebuilt_graph = None
-            graph_prebuild_time = 0.0
-            if backend == "networkx" or solver_name in NETWORKX_SOLVERS:
-                t_graph = time.time()
-                try:
-                    prebuilt_graph = build_graph_from_elevation(
-                        crop,
-                        weight=solver_config.get("weight", 1.0),
-                        diagonal_movement=solver_config.get("diagonal_movement", "always"),
-                        cost_model=solver_config.get("cost_model", "elevation"),
-                    )
-                    graph_prebuild_time = time.time() - t_graph
-                except Exception as e:
-                    graph_prebuild_time = time.time() - t_graph
-                    logger.warning(f"Failed to prebuild NetworkX graph for crop: {e}")
-                    prebuilt_graph = None
+            # Extract obstacle settings
+            obstacles_cfg = obstacle_settings.get("config", {})
+            obstacles_enabled = bool(obstacle_settings.get("enabled", False))
+            obstacle_ratio_max = float(obstacle_settings.get("ratio_max", 0.0))
+            size_min_ratio = float(obstacle_settings.get("size_min_ratio", 0.20))
+            size_max_ratio = float(obstacle_settings.get("size_max_ratio", 0.50))
+            generation_cfg = obstacle_settings.get("generation_cfg", {})
+            obstacle_penalty = float(obstacle_settings.get("obstacle_penalty", 1e8))
 
-            path_without = []
-            path_with = []
+            # Use first solver for marker validation
+            first_solver_config = _resolve_solver_config(solvers_configs[0])
+
             obstacles_mask = None
             obstacle_target_ratio = 0.0
             obstacle_ratio = 0.0
-            path_without_crosses_obstacles = False
+            i2, j2 = 0, 0
 
             t_marker = time.time()
-            t_marker_find_path_without = 0.0
-            t_marker_find_path_with = 0.0
             marker_attempts_used = 0
-            found_valid_paths = False
+            found_valid_markers = False
             for marker_attempt in range(max_marker_retries):
                 marker_attempts_used += 1
                 # Generate marker 2 randomly, distinct from marker 1
@@ -959,22 +949,12 @@ def generate_sample(
                     idx2 += 1
                 i2, j2 = divmod(idx2, w)
 
-                # Try to find path between markers (without obstacles)
-                t_marker_find_path_without = time.time()
-                path_without = find_path(crop, (i1, j1), (i2, j2), solver_config, prebuilt_graph=prebuilt_graph)
-                t_marker_find_path_without = time.time() - t_marker_find_path_without
-                if len(path_without) == 0:
-                    continue  # No path without obstacles, try other markers
+                # Try to find path between markers using first solver (without obstacles) to validate
+                test_path = find_path(crop, (i1, j1), (i2, j2), first_solver_config)
+                if len(test_path) == 0:
+                    continue  # No path possible, try other markers
 
-                # Generate obstacles mask (if enabled) and compute path with obstacles
-                obstacles_cfg = obstacle_settings.get("config", {})
-                obstacles_enabled = bool(obstacle_settings.get("enabled", False))
-                obstacle_ratio_max = float(obstacle_settings.get("ratio_max", 0.0))
-                size_min_ratio = float(obstacle_settings.get("size_min_ratio", 0.20))
-                size_max_ratio = float(obstacle_settings.get("size_max_ratio", 0.50))
-                generation_cfg = obstacle_settings.get("generation_cfg", {})
-                obstacle_penalty = float(obstacle_settings.get("obstacle_penalty", 1e8))
-
+                # Generate obstacles mask (if enabled)
                 marker_positions = [(i1, j1), (i2, j2)]
                 obstacle_gen_time = 0.0
                 if obstacles_enabled:
@@ -996,38 +976,135 @@ def generate_sample(
 
                 obstacle_ratio = float(np.mean(obstacles_mask))
 
-                # Check if path_without crosses obstacles
-                path_without_crosses_obstacles = check_path_collision(path_without, obstacles_mask)
-
+                # Validate that a path with obstacles exists using first solver
                 masked_elevation = crop.copy()
                 if obstacles_enabled and obstacle_penalty > 0:
                     masked_elevation[obstacles_mask == 1] = masked_elevation.max() + obstacle_penalty
 
-                t_marker_find_path_with = time.time()
-                path_with = find_path(masked_elevation, (i1, j1), (i2, j2), solver_config)
-                t_marker_find_path_with = time.time() - t_marker_find_path_with
+                test_path_with = find_path(masked_elevation, (i1, j1), (i2, j2), first_solver_config)
 
-                # Check if path_with crosses obstacles (should not happen if penalty is high enough and path exists)
-                if obstacles_enabled and check_path_collision(path_with, obstacles_mask):
-                    logger.debug(f"path_with crosses obstacles (attempt {marker_attempt}), retrying markers")
+                # Check if path_with crosses obstacles (should not happen if penalty is high enough)
+                if obstacles_enabled and check_path_collision(test_path_with, obstacles_mask):
+                    logger.debug(f"test path_with crosses obstacles (attempt {marker_attempt}), retrying markers")
                     continue
 
-                # Assert path_with is same as path_without if no obstacle cross the first path
-                if not path_without_crosses_obstacles:
-                    assert path_with == path_without, (
-                        f"Sample {index}: path_with != path_without despite no obstacle collision. "
-                        f"lengths: with={len(path_with)}, without={len(path_without)}"
-                    )
-
-                found_valid_paths = True
-                break  # Found valid paths
+                found_valid_markers = True
+                break  # Found valid markers
 
             marker_search_time = time.time() - t_marker
-            if not found_valid_paths:
+            if not found_valid_markers:
                 logger.debug(
-                    f"No valid paths found after {marker_attempts_used} marker attempts; retrying elevation (marker_search_seconds={marker_search_time:.3f})"
+                    f"No valid markers found after {marker_attempts_used} attempts; retrying elevation (marker_search_seconds={marker_search_time:.3f})"
                 )
                 continue  # Try another elevation
+
+            # Now compute paths for ALL solvers
+            # Structure: solver_results[solver_name] = {config, path_free, path_obstacles, costs, timing, ...}
+            solver_results: dict[str, dict] = {}
+
+            for solver_cfg in solvers_configs:
+                solver_cfg_resolved = _resolve_solver_config(solver_cfg)
+                solver_name = solver_cfg.get("name", "unknown")
+                backend, parsed_solver_name = _parse_solver_backend_and_name(solver_cfg_resolved)
+
+                t_solver_start = time.time()
+
+                # Compute path without obstacles (free)
+                t_path_free = time.time()
+                path_free = find_path(crop, (i1, j1), (i2, j2), solver_cfg_resolved)
+                t_path_free = time.time() - t_path_free
+
+                # Compute path with obstacles
+                t_path_obstacles = time.time()
+                path_obstacles = find_path(masked_elevation, (i1, j1), (i2, j2), solver_cfg_resolved)
+                t_path_obstacles = time.time() - t_path_obstacles
+
+                # Check if free path crosses obstacles
+                path_free_crosses_obstacles = check_path_collision(path_free, obstacles_mask)
+
+                # Compute costs using the solver's cost model
+                def _sum_costs_for_solver(elevation_arr, path_list, cfg):
+                    """Compute path cost using solver's cost model."""
+                    if not path_list:
+                        return 0.0
+
+                    normalized, abs_norm, elev_range = _normalize_elevation_arrays(elevation_arr)
+                    weight_param = float(cfg.get("weight", 1.0))
+                    cost_model = cfg.get("cost_model", "elevation")
+
+                    def _edge_weight(a, b):
+                        ai, aj = int(a[0]), int(a[1])
+                        bi, bj = int(b[0]), int(b[1])
+                        di = bi - ai
+                        dj = bj - aj
+
+                        if abs(di) == 1 and abs(dj) == 1:
+                            dist_m = DIAGONAL_DISTANCE_M
+                        else:
+                            dist_m = PIXEL_SIZE_M * math.hypot(di, dj)
+
+                        if cost_model == "distance":
+                            return float(dist_m)
+                        if cost_model == "absolute_elevation":
+                            dst_val = float(abs_norm[bi, bj])
+                            return float(dist_m * (1.0 + weight_param * dst_val))
+                        if cost_model == "slope_uphill":
+                            if elev_range > 0:
+                                delta = float(elevation_arr[bi, bj] - elevation_arr[ai, aj])
+                                slope_norm = max(0.0, delta) / elev_range
+                            else:
+                                slope_norm = 0.0
+                            return float(dist_m * (1.0 + weight_param * slope_norm))
+                        if cost_model == "energy":
+                            delta = float(elevation_arr[bi, bj] - elevation_arr[ai, aj])
+                            return float(dist_m + weight_param * max(0.0, delta))
+                        # default: 'elevation'
+                        dst_val = float(normalized[bi, bj])
+                        return float(dist_m * (1.0 + weight_param * dst_val))
+
+                    total = 0.0
+                    for a, b in zip(path_list, path_list[1:]):
+                        try:
+                            total += _edge_weight(a, b)
+                        except Exception:
+                            total += float(math.hypot(b[0] - a[0], b[1] - a[1]))
+                    return total
+
+                t_cost = time.time()
+                cost_free = _sum_costs_for_solver(crop, path_free, solver_cfg_resolved)
+                cost_obstacles = _sum_costs_for_solver(masked_elevation, path_obstacles, solver_cfg_resolved)
+                t_cost = time.time() - t_cost
+
+                # Compute cost difference percentage
+                if cost_free > 0:
+                    cost_diff_percent = float((cost_obstacles - cost_free) / cost_free * 100.0)
+                else:
+                    cost_diff_percent = 0.0
+
+                solver_total_time = time.time() - t_solver_start
+
+                solver_results[solver_name] = {
+                    "config": {
+                        "backend": backend,
+                        "solver": parsed_solver_name,
+                        "diagonal_movement": solver_cfg_resolved.get("diagonal_movement", "always"),
+                        "weight": solver_cfg_resolved.get("weight", 1.0),
+                        "heuristic": solver_cfg_resolved.get("heuristic", "euclidean"),
+                        "cost_model": solver_cfg_resolved.get("cost_model", "elevation"),
+                    },
+                    "path_free": path_free,
+                    "path_obstacles": path_obstacles,
+                    "path_free_crosses_obstacles": path_free_crosses_obstacles,
+                    "cost_free": cost_free,
+                    "cost_obstacles": cost_obstacles,
+                    "cost_diff_percent": cost_diff_percent,
+                    "timing": {
+                        "path_free_seconds": float(t_path_free),
+                        "path_obstacles_seconds": float(t_path_obstacles),
+                        "cost_compute_seconds": float(t_cost),
+                        "total_seconds": float(solver_total_time),
+                    },
+                }
 
             # Successfully found a path - proceed with sample generation
             # Normalize to float32 in [0, 1] using global_min/global_max
@@ -1114,90 +1191,27 @@ def generate_sample(
             geo_bottom_right_lat = center_lat + 1.0 - (bottom_right_px_in_center_tile_y / px_per_deg)
             geo_bottom_right_lon = _wrap_lon_float(center_lon + (bottom_right_px_in_center_tile_x / px_per_deg))
 
-            # Compute path costs (avoid building full NetworkX graphs; use template edge weights and sum along path)
-            cost_compute_time = 0.0
-            try:
+            # Build metadata with per-solver paths and configs
+            # Structure: solvers[solver_name] = {config, paths: {free, obstacles}, timing}
+            solvers_metadata: dict[str, dict] = {}
+            paths_metadata: dict[str, dict] = {}
 
-                def _sum_costs_from_template(elevation_arr, path_list):
-                    """Efficient per-edge cost summation using local neighbor logic.
-
-                    This computes each edge's weight on-the-fly from the elevations and
-                    cost model without constructing the full edge map or a NetworkX graph.
-                    """
-                    if not path_list:
-                        return 0.0
-
-                    # Precompute normalized arrays once per crop for fast lookup
-                    normalized, abs_norm, elev_range = _normalize_elevation_arrays(elevation_arr)
-                    weight_param = float(solver_config.get("weight", 1.0))
-                    cost_model = solver_config.get("cost_model", "elevation")
-
-                    def _edge_weight(a, b):
-                        ai, aj = int(a[0]), int(a[1])
-                        bi, bj = int(b[0]), int(b[1])
-                        di = bi - ai
-                        dj = bj - aj
-
-                        # Determine physical distance in meters for the step
-                        if abs(di) == 1 and abs(dj) == 1:
-                            dist_m = DIAGONAL_DISTANCE_M
-                        else:
-                            # covers cardinal moves and any unexpected multi-step (fallback)
-                            dist_m = PIXEL_SIZE_M * math.hypot(di, dj)
-
-                        # Choose cost model
-                        if cost_model == "distance":
-                            return float(dist_m)
-
-                        if cost_model == "absolute_elevation":
-                            dst_val = float(abs_norm[bi, bj])
-                            return float(dist_m * (1.0 + weight_param * dst_val))
-
-                        if cost_model == "slope_uphill":
-                            if elev_range > 0:
-                                delta = float(elevation_arr[bi, bj] - elevation_arr[ai, aj])
-                                slope_norm = max(0.0, delta) / elev_range
-                            else:
-                                slope_norm = 0.0
-                            return float(dist_m * (1.0 + weight_param * slope_norm))
-
-                        if cost_model == "energy":
-                            delta = float(elevation_arr[bi, bj] - elevation_arr[ai, aj])
-                            return float(dist_m + weight_param * max(0.0, delta))
-
-                        # default: 'elevation'
-                        dst_val = float(normalized[bi, bj])
-                        return float(dist_m * (1.0 + weight_param * dst_val))
-
-                    total = 0.0
-                    for a, b in zip(path_list, path_list[1:]):
-                        try:
-                            total += _edge_weight(a, b)
-                        except Exception:
-                            # Best-effort fallback: Euclidean pixel distance
-                            total += float(math.hypot(b[0] - a[0], b[1] - a[1]))
-                    return total
-
-                t_cost = time.time()
-                # cost_without: prefer template-sum to avoid building graphs; if prebuilt_graph exists use it (faster)
-                if prebuilt_graph is not None and (backend != "grid" and solver_name not in GRID_SOLVERS):
-                    cost_without = _path_cost_from_graph(prebuilt_graph, path_without)
-                else:
-                    cost_without = _sum_costs_from_template(crop, path_without)
-
-                # cost_with: compute along masked elevation using template-sum (avoids building graph)
-                cost_with = _sum_costs_from_template(masked_elevation, path_with)
-                cost_compute_time = time.time() - t_cost
-            except Exception:
-                cost_without = 0.0
-                cost_with = 0.0
-                cost_compute_time = 0.0
-
-            # Percentage cost difference (with - without) / without * 100
-            if cost_without > 0:
-                cost_diff_percent = float((cost_with - cost_without) / cost_without * 100.0)
-            else:
-                cost_diff_percent = 0.0
+            for solver_name, result in solver_results.items():
+                solvers_metadata[solver_name] = result["config"]
+                paths_metadata[solver_name] = {
+                    "free": {
+                        "length": len(result["path_free"]),
+                        "crosses_obstacles": bool(result["path_free_crosses_obstacles"]),
+                        "cost": float(result["cost_free"]),
+                    },
+                    "obstacles": {
+                        "length": len(result["path_obstacles"]),
+                        "crosses_obstacles": False,
+                        "cost": float(result["cost_obstacles"]),
+                        "cost_diff_percent": float(result["cost_diff_percent"]),
+                    },
+                    "timing": result["timing"],
+                }
 
             # Save metadata into metadata folder *before* images so visualization can read it
             base_res_dir = outputs_dirpath / str(resolution)
@@ -1236,35 +1250,6 @@ def generate_sample(
                     "start_point": {"i": int(i1), "j": int(j1), "elevation": marker_1_elev},
                     "end_point": {"i": int(i2), "j": int(j2), "elevation": marker_2_elev},
                 },
-                "paths": {
-                    "without_obstacles": {
-                        "length": len(path_without),
-                        "pixels": [
-                            {
-                                "i": int(pi),
-                                "j": int(pj),
-                                "elevation": float(crop[pi, pj]),
-                            }
-                            for pi, pj in path_without
-                        ],
-                        "crosses_obstacles": bool(path_without_crosses_obstacles),
-                        "cost": float(cost_without),
-                    },
-                    "with_obstacles": {
-                        "length": len(path_with),
-                        "pixels": [
-                            {
-                                "i": int(pi),
-                                "j": int(pj),
-                                "elevation": float(crop[pi, pj]),
-                            }
-                            for pi, pj in path_with
-                        ],
-                        "crosses_obstacles": False,
-                        "cost": float(cost_with),
-                        "cost_diff_percent": float(cost_diff_percent),
-                    },
-                },
                 "obstacles": {
                     "enabled": obstacles_enabled,
                     "ratio_max": obstacle_ratio_max,
@@ -1274,22 +1259,12 @@ def generate_sample(
                     "size_max_ratio": size_max_ratio,
                     "penalty": obstacle_penalty,
                 },
-                "solver": {
-                    "backend": backend,
-                    "name": solver_name,
-                    "diagonal_movement": solver_config.get("diagonal_movement", "always"),
-                    "weight": solver_config.get("weight", 1.0),
-                    "heuristic": solver_config.get("heuristic", "euclidean"),
-                    "cost_model": solver_config.get("cost_model", "elevation"),
-                },
+                "solvers": solvers_metadata,
+                "paths": paths_metadata,
                 "timing": {
                     "tile_loading_seconds": float(tile_loading_time),
                     "marker_search_seconds": float(marker_search_time),
-                    "marker_find_path_without_seconds": float(t_marker_find_path_without),
-                    "marker_find_path_with_seconds": float(t_marker_find_path_with),
-                    "graph_prebuild_seconds": float(graph_prebuild_time),
                     "obstacle_generation_seconds": float(obstacle_gen_total),
-                    "cost_compute_seconds": float(cost_compute_time),
                     "tensor_save_seconds": float(tensor_save_time),
                     "metadata_write_seconds": float(metadata_write_time),
                     "image_conversion_seconds": float(image_conversion_time),
@@ -1302,32 +1277,40 @@ def generate_sample(
             with open(metadata_path, "w") as f:
                 yaml.dump(metadata, f, default_flow_style=False, sort_keys=False)
 
-            # Save pixel-index paths as JSON lists in text files under paths/free and paths/obstacles
+            # Save pixel-index paths as CSV files under paths/<solver_name>/free and paths/<solver_name>/obstacles
             try:
                 lat_dir = f"{lat_to_str(center_lat)}"
                 lon_dir = f"{lon_to_str(center_lon)}"
-
                 base_res_dir = outputs_dirpath / str(resolution)
-                free_dir = base_res_dir / split_name / "paths" / "free" / lat_dir / lon_dir
-                free_dir.mkdir(parents=True, exist_ok=True)
-                free_csv_file = free_dir / f"{index:010d}.csv"
-                with open(free_csv_file, "w", newline="") as ff:
-                    writer = csv.writer(ff)
-                    for pi, pj in path_without:
-                        writer.writerow([int(pi), int(pj)])
 
-                # Obstacles path (with obstacles)
-                obs_dir = base_res_dir / split_name / "paths" / "obstacles" / lat_dir / lon_dir
-                obs_dir.mkdir(parents=True, exist_ok=True)
-                obs_csv_file = obs_dir / f"{index:010d}.csv"
-                with open(obs_csv_file, "w", newline="") as ff:
-                    writer = csv.writer(ff)
-                    for pi, pj in path_with:
-                        writer.writerow([int(pi), int(pj)])
+                for solver_name, result in solver_results.items():
+                    # Free path (without obstacles)
+                    free_dir = base_res_dir / split_name / "paths" / solver_name / "free" / lat_dir / lon_dir
+                    free_dir.mkdir(parents=True, exist_ok=True)
+                    free_csv_file = free_dir / f"{index:010d}.csv"
+                    with open(free_csv_file, "w", newline="") as ff:
+                        writer = csv.writer(ff)
+                        for pi, pj in result["path_free"]:
+                            writer.writerow([int(pi), int(pj)])
+
+                    # Obstacles path (with obstacles)
+                    obs_dir = base_res_dir / split_name / "paths" / solver_name / "obstacles" / lat_dir / lon_dir
+                    obs_dir.mkdir(parents=True, exist_ok=True)
+                    obs_csv_file = obs_dir / f"{index:010d}.csv"
+                    with open(obs_csv_file, "w", newline="") as ff:
+                        writer = csv.writer(ff)
+                        for pi, pj in result["path_obstacles"]:
+                            writer.writerow([int(pi), int(pj)])
             except Exception as e:  # pragma: no cover
                 logger.warning(f"Failed saving pixel-index paths for sample {index}: {e}")
 
             # Save visual image at full resolution in 'images' unless disabled
+            # Use paths from first solver for visualization
+            first_solver_name = list(solver_results.keys())[0]
+            first_result = solver_results[first_solver_name]
+            path_without = first_result["path_free"]
+            path_with = first_result["path_obstacles"]
+
             if not disable_images:
                 base_res_dir = outputs_dirpath / str(resolution)
                 split_root = base_res_dir / split_name
@@ -1361,8 +1344,6 @@ def generate_sample(
                         "image_write_seconds": float(image_write_time),
                         "tile_loading_seconds": float(tile_loading_time),
                         "marker_search_seconds": float(marker_search_time),
-                        "marker_find_path_without_seconds": float(t_marker_find_path_without),
-                        "marker_find_path_with_seconds": float(t_marker_find_path_with),
                         "obstacle_generation_seconds": float(obstacle_gen_total),
                     }
                 )
@@ -1376,11 +1357,12 @@ def generate_sample(
             # Log per-sample diagnostics
             end_time = datetime.now()
             duration = (end_time - start_time).total_seconds()
+            num_solvers = len(solver_results)
+            first_solver_name = list(solver_results.keys())[0]
             logger.info(
                 f"Resolution: {resolution} / Sample {index}: success=True, elevation_attempts={elevation_attempts}, "
                 f"marker_retries={marker_attempt + 1 if 'marker_attempt' in locals() else 0}, "
-                f"path_length_no_obstacles={len(path_without)}, "
-                f"path_length_with_obstacles={len(path_with)}, "
+                f"solvers={num_solvers}, first_solver_path_len={len(solver_results[first_solver_name]['path_free'])}, "
                 f"grid_shape=({grid_h},{grid_w}), duration={duration:.2f}s"
             )
 
@@ -1696,17 +1678,22 @@ def run_generate(
     tile_stats_df = pd.DataFrame(tile_stats)
     logger.info(f"Loaded {len(tile_stats_df)} tiles into DataFrame")
 
-    # Load solver configuration
-    solver_config = _resolve_solver_config(config.get("solver", {}))
-    backend, solver_name = _parse_solver_backend_and_name(solver_config)
-    logger.info(
-        f"Solver config: backend={backend}, "
-        f"name={solver_name}, "
-        f"diagonal={solver_config.get('diagonal_movement', 'always')}, "
-        f"weight={solver_config.get('weight', 1.0)}, "
-        f"cost_model={solver_config.get('cost_model', 'elevation')}, "
-        f"max_marker_retries={solver_config.get('max_marker_retries', 10)}"
-    )
+    # Load solvers configuration from 'solvers' key (list of solver configs)
+    solvers_configs = config.get("solvers", [])
+    if not solvers_configs or not isinstance(solvers_configs, list):
+        logger.error("No 'solvers' configuration found in config file. Expected a list of solver configs.")
+        return
+
+    logger.info(f"Loaded {len(solvers_configs)} solver configurations:")
+    for solver_cfg in solvers_configs:
+        solver_name = solver_cfg.get("name", "unknown")
+        resolved = _resolve_solver_config(solver_cfg)
+        backend, parsed_name = _parse_solver_backend_and_name(resolved)
+        logger.info(
+            f"  - {solver_name}: backend={backend}, solver={parsed_name}, "
+            f"cost_model={resolved.get('cost_model', 'elevation')}, "
+            f"weight={resolved.get('weight', 1.0)}"
+        )
 
     # Load obstacle configuration
     obstacle_settings = _resolve_obstacle_config(config)
@@ -1823,7 +1810,7 @@ def run_generate(
                     global_min,
                     global_max,
                     disable_images,
-                    solver_config,
+                    solvers_configs,
                     obstacle_settings,
                     split,
                 )

@@ -1,34 +1,35 @@
-import io
-
 import pytest
-from PIL import Image
 
-from passage.export import _rows_to_dataset
+from passage.export import _features
 
 
 @pytest.mark.unit
-def test_rows_to_dataset_builds_image_feature():
-    # Create a tiny PNG in-memory
-    im = Image.new("RGB", (8, 8), color=(255, 0, 0))
-    buf = io.BytesIO()
-    im.save(buf, format="PNG")
-    img_bytes = buf.getvalue()
+def test_features_builds_dynamic_path_columns():
+    """Test that _features creates dynamic path columns for each solver."""
+    solver_names = ["astar_elevation", "astar_energy"]
 
-    rows = [
-        {
-            "image": img_bytes,
-            "id": "123",
-            "tensor": b"\x00\x01",
-            "path_free": [[1, 2], [3, 4]],
-            "path_obstacles": [],
-            "metadata": {"k": "v"},
-        }
-    ]
+    features = _features(sample=True, solver_names=solver_names)
 
-    ds = _rows_to_dataset(rows)
+    # Check basic columns exist
+    assert "id" in features
+    assert "tensor" in features
+    assert "image" in features
+    assert "metadata" in features
 
-    assert len(ds) == 1
-    row = ds[0]
-    assert row["id"] == "123"
-    assert row["image"] is not None
-    assert isinstance(row["tensor"], (bytes, bytearray))
+    # Check dynamic path columns exist for each solver
+    for solver in solver_names:
+        assert f"path_{solver}_free" in features
+        assert f"path_{solver}_obstacles" in features
+
+
+@pytest.mark.unit
+def test_features_no_image_when_not_sample():
+    """Test that _features excludes image column when sample=False."""
+    solver_names = ["astar_elevation"]
+
+    features = _features(sample=False, solver_names=solver_names)
+
+    assert "id" in features
+    assert "tensor" in features
+    assert "image" not in features
+    assert "metadata" in features
