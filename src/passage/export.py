@@ -7,7 +7,6 @@ and a `max_shard_size` target of ~10 GB.
 """
 
 import csv
-import json
 import multiprocessing as mp
 import os
 import shutil
@@ -49,7 +48,7 @@ def parse_path_csv(csv_path: Path) -> list[list[int]]:
     return out
 
 
-def _process_meta_for_prepare(resolution: int, sample: bool, metadata_filepath: str) -> dict:
+def _process_meta_for_prepare(resolution: int, sample: bool, solver_names: list[str], metadata_filepath: str) -> dict:
     """Process a single metadata file into a serializable dict for HF dataset rows."""
 
     metadata_filepath = Path(metadata_filepath)
@@ -60,316 +59,184 @@ def _process_meta_for_prepare(resolution: int, sample: bool, metadata_filepath: 
 
     tensor_filepath = split_dirpath / "tensors" / lat_dir / lon_dir / f"{stem}.npy.zst"
     image_filepath = split_dirpath / "images" / lat_dir / lon_dir / f"{stem}.png"
-    path_free_filepath = split_dirpath / "paths" / "free" / lat_dir / lon_dir / f"{stem}.csv"
-    path_obstacles_filepath = split_dirpath / "paths" / "obstacles" / lat_dir / lon_dir / f"{stem}.csv"
 
     metadata = yaml.safe_load(metadata_filepath.read_text())
 
-    # image_bytes = None
-    # if image_filepath.exists():
-    #     with PilImage.open(image_filepath) as im:
-    #         buf = io.BytesIO()
-    #         im.save(buf, format="PNG")
-    #         image_bytes = buf.getvalue()
-
-    # return {
-    #     # "image": image_bytes,  # TODO: replace by .read_bytes()?
-    #     "image": image_filepath.read_bytes(),
-    #     "id": str(stem),
-    #     # "tensor": tensor_filepath.read_bytes(),
-    #     "tensor": load_tensor(tensor_filepath, shape=(resolution, resolution, 3), dtype="float32"),
-    #     "path_free": parse_path_csv(path_free_filepath),
-    #     "path_obstacles": parse_path_csv(path_obstacles_filepath),
-    #     "metadata": metadata,
-    # }
-
     sample_dict = {
         "id": str(stem),
-        # "tensor": load_tensor(tensor_filepath, shape=(resolution, resolution, 3), dtype="float32")
         "tensor": tensor_filepath.read_bytes(),
-        # "metadata": json.dumps(metadata),
         "metadata": metadata,
-        "path_free": parse_path_csv(path_free_filepath),
-        "path_obstacles": parse_path_csv(path_obstacles_filepath),
     }
+
+    # Load paths dynamically for each solver
+    for solver_name in solver_names:
+        path_free_filepath = split_dirpath / "paths" / solver_name / "free" / lat_dir / lon_dir / f"{stem}.csv"
+        path_obstacles_filepath = (
+            split_dirpath / "paths" / solver_name / "obstacles" / lat_dir / lon_dir / f"{stem}.csv"
+        )
+
+        sample_dict[f"path_{solver_name}_free"] = (
+            parse_path_csv(path_free_filepath) if path_free_filepath.exists() else []
+        )
+        sample_dict[f"path_{solver_name}_obstacles"] = (
+            parse_path_csv(path_obstacles_filepath) if path_obstacles_filepath.exists() else []
+        )
+
     if sample:
         sample_dict["image"] = {"bytes": image_filepath.read_bytes()}
     return sample_dict
 
 
-def _features(sample: bool) -> dict:
+def _solver_feature() -> dict:
+    """Return the feature schema for a single solver config."""
+    return {
+        "backend": Value("string"),
+        "name": Value("string"),
+        "diagonal_movement": Value("string"),
+        "weight": Value("float32"),
+        "heuristic": Value("string"),
+        "cost_model": Value("string"),
+        "solver": Value("string"),
+        "max_marker_retries": Value("int32"),
+    }
+
+
+def _path_stats_feature() -> dict:
+    """Return the feature schema for path stats (free or obstacles)."""
+    return {
+        "length": Value("int32"),
+        "crosses_obstacles": Value("bool"),
+        "cost": Value("float32"),
+    }
+
+
+def _path_stats_obstacles_feature() -> dict:
+    """Return the feature schema for path stats with obstacles."""
+    return {
+        "length": Value("int32"),
+        "crosses_obstacles": Value("bool"),
+        "cost": Value("float32"),
+        "cost_diff_percent": Value("float32"),
+    }
+
+
+def _features(sample: bool, solver_names: list[str]) -> Features:
     features_dict = {
         "id": Value("string"),
-        "path_free": Sequence(Sequence(Value("int32"))),
-        "path_obstacles": Sequence(Sequence(Value("int32"))),
-        # "metadata": Value("string"),
-        "metadata": {
-            "index": Value("int32"),
-            "resolution": Value("int32"),
-            "split": Value("string"),
-            "target_elevation": Value("float32"),
-            "calibration": {
-                "min": Value("float32"),
-                "max": Value("float32"),
+    }
+
+    # Add dynamic path columns for each solver
+    for solver_name in solver_names:
+        features_dict[f"path_{solver_name}_free"] = Sequence(Sequence(Value("int32")))
+        features_dict[f"path_{solver_name}_obstacles"] = Sequence(Sequence(Value("int32")))
+
+    # Build solvers feature as a dict with solver names as keys
+    solvers_feature = {name: _solver_feature() for name in solver_names}
+
+    # Build paths feature as a dict with solver names as keys
+    paths_feature = {
+        name: {
+            "free": _path_stats_feature(),
+            "obstacles": _path_stats_obstacles_feature(),
+            "timing": {
+                "path_free_seconds": Value("float32"),
+                "path_obstacles_seconds": Value("float32"),
+                "cost_compute_seconds": Value("float32"),
+                "total_seconds": Value("float32"),
             },
-            "tile": {
-                "source": {
+        }
+        for name in solver_names
+    }
+
+    features_dict["metadata"] = {
+        "index": Value("int32"),
+        "resolution": Value("int32"),
+        "split": Value("string"),
+        "calibration": {
+            "min": Value("float32"),
+            "max": Value("float32"),
+        },
+        "tile": {
+            "source": {
+                "lat": Value("int32"),
+                "lon": Value("int32"),
+                "name": Value("string"),
+            },
+            "stats": {
+                "min_elevation": Value("float32"),
+                "max_elevation": Value("float32"),
+            },
+            "used": List(
+                {
                     "lat": Value("int32"),
                     "lon": Value("int32"),
                     "name": Value("string"),
-                },
-                "stats": {
-                    "min_elevation": Value("float32"),
-                    "max_elevation": Value("float32"),
-                },
-                "used": List(
-                    {
-                        "lat": Value("int32"),
-                        "lon": Value("int32"),
-                        "name": Value("string"),
-                    }
-                ),
-                "overlapping": List(
-                    {
-                        "lat": Value("int32"),
-                        "lon": Value("int32"),
-                        "name": Value("string"),
-                    }
-                ),
-            },
-            "crop": {
-                "min_elevation": Value("float32"),
-                "max_elevation": Value("float32"),
-                "target_elevation": Value("float32"),
-                "center": {
-                    "lat": Value("float32"),
-                    "lon": Value("float32"),
-                },
-                "top_left": {
-                    "lat": Value("float32"),
-                    "lon": Value("float32"),
-                },
-                "bottom_right": {
-                    "lat": Value("float32"),
-                    "lon": Value("float32"),
-                },
-            },
-            "markers": {
-                "start_point": {
-                    "i": Value("int32"),
-                    "j": Value("int32"),
-                    "elevation": Value("float32"),
-                },
-                "end_point": {
-                    "i": Value("int32"),
-                    "j": Value("int32"),
-                    "elevation": Value("float32"),
-                },
-            },
-            "paths": {
-                "without_obstacles": {
-                    "length": Value("float32"),
-                    "pixels": List(
-                        {
-                            "i": Value("int32"),
-                            "j": Value("int32"),
-                            "elevation": Value("float32"),
-                        }
-                    ),
-                    "crosses_obstacles": Value("bool"),
-                    "cost": Value("float32"),
-                },
-                "with_obstacles": {
-                    "length": Value("float32"),
-                    "pixels": List(
-                        {
-                            "i": Value("int32"),
-                            "j": Value("int32"),
-                            "elevation": Value("float32"),
-                        }
-                    ),
-                    "crosses_obstacles": Value("bool"),
-                    "cost": Value("float32"),
-                    "cost_diff_percent": Value("float32"),
-                },
-            },
-            "obstacles": {
-                "enabled": Value("bool"),
-                "ratio_max": Value("float32"),
-                "ratio_target": Value("float32"),
-                "ratio_actual": Value("float32"),
-                "size_min_ratio": Value("float32"),
-                "size_max_ratio": Value("float32"),
-                "penalty": Value("float32"),
-            },
-            "solver": {
-                "backend": Value("string"),
-                "name": Value("string"),
-                "diagonal_movement": Value("string"),
-                "weight": Value("float32"),
-                "heuristic": Value("string"),
-                "cost_model": Value("string"),
-            },
-            "timing": {
-                "tile_loading_seconds": Value("float32"),
-                "marker_search_seconds": Value("float32"),
-                "marker_find_path_without_seconds": Value("float32"),
-                "marker_find_path_with_seconds": Value("float32"),
-                "graph_prebuild_seconds": Value("float32"),
-                "obstacle_generation_seconds": Value("float32"),
-                "cost_compute_seconds": Value("float32"),
-                "tensor_save_seconds": Value("float32"),
-                "metadata_write_seconds": Value("float32"),
-                "image_conversion_seconds": Value("float32"),
-                "image_write_seconds": Value("float32"),
-            },
-            "timestamp": Value("timestamp[us]"),
+                }
+            ),
+            "overlapping": List(
+                {
+                    "lat": Value("int32"),
+                    "lon": Value("int32"),
+                    "name": Value("string"),
+                }
+            ),
         },
+        "crop": {
+            "min_elevation": Value("float32"),
+            "max_elevation": Value("float32"),
+            "target_elevation": Value("float32"),
+            "center": {
+                "lat": Value("float32"),
+                "lon": Value("float32"),
+            },
+            "top_left": {
+                "lat": Value("float32"),
+                "lon": Value("float32"),
+            },
+            "bottom_right": {
+                "lat": Value("float32"),
+                "lon": Value("float32"),
+            },
+        },
+        "markers": {
+            "start_point": {
+                "i": Value("int32"),
+                "j": Value("int32"),
+                "elevation": Value("float32"),
+            },
+            "end_point": {
+                "i": Value("int32"),
+                "j": Value("int32"),
+                "elevation": Value("float32"),
+            },
+        },
+        "obstacles": {
+            "enabled": Value("bool"),
+            "ratio_max": Value("float32"),
+            "ratio_target": Value("float32"),
+            "ratio_actual": Value("float32"),
+            "size_min_ratio": Value("float32"),
+            "size_max_ratio": Value("float32"),
+            "penalty": Value("float32"),
+        },
+        "solvers": solvers_feature,
+        "paths": paths_feature,
+        "timing": {
+            "tile_loading_seconds": Value("float32"),
+            "marker_search_seconds": Value("float32"),
+            "obstacle_generation_seconds": Value("float32"),
+            "tensor_save_seconds": Value("float32"),
+            "metadata_write_seconds": Value("float32"),
+            "image_conversion_seconds": Value("float32"),
+            "image_write_seconds": Value("float32"),
+        },
+        "timestamp": Value("timestamp[us]"),
     }
-    # features_dict["tensor"] = Sequence(Sequence(Sequence(Value("float32"))))
+
     features_dict["tensor"] = Value("binary")
     if sample:
         features_dict["image"] = Image()
-        # features_dict["tensor"] = Sequence(Sequence(Sequence(Value("float32"))))
-    else:
-        # features_dict["tensor"] = Value("binary")
-        pass
     return Features(features_dict)
-
-
-FEATURES = Features(
-    {
-        "id": Value("string"),
-        "image": Image(),
-        "tensor": Value("binary"),
-        # "tensor": Sequence(Sequence(Sequence(Value("float32")))),
-        # "metadata": Value("string"),
-        "metadata": {
-            "index": Value("int32"),
-            "resolution": Value("int32"),
-            "split": Value("string"),
-            "target_elevation": Value("float32"),
-            "calibration": {
-                "min": Value("float32"),
-                "max": Value("float32"),
-            },
-            "tile": {
-                "source": {
-                    "lat": Value("int32"),
-                    "lon": Value("int32"),
-                    "name": Value("string"),
-                },
-                "stats": {
-                    "min_elevation": Value("float32"),
-                    "max_elevation": Value("float32"),
-                },
-                "used": List(
-                    {
-                        "lat": Value("int32"),
-                        "lon": Value("int32"),
-                        "name": Value("string"),
-                    }
-                ),
-                "overlapping": List(
-                    {
-                        "lat": Value("int32"),
-                        "lon": Value("int32"),
-                        "name": Value("string"),
-                    }
-                ),
-            },
-            "crop": {
-                "min_elevation": Value("float32"),
-                "max_elevation": Value("float32"),
-                "target_elevation": Value("float32"),
-                "center": {
-                    "lat": Value("float32"),
-                    "lon": Value("float32"),
-                },
-                "top_left": {
-                    "lat": Value("float32"),
-                    "lon": Value("float32"),
-                },
-                "bottom_right": {
-                    "lat": Value("float32"),
-                    "lon": Value("float32"),
-                },
-            },
-            "markers": {
-                "start_point": {
-                    "i": Value("int32"),
-                    "j": Value("int32"),
-                    "elevation": Value("float32"),
-                },
-                "end_point": {
-                    "i": Value("int32"),
-                    "j": Value("int32"),
-                    "elevation": Value("float32"),
-                },
-            },
-            "paths": {
-                "without_obstacles": {
-                    "length": Value("float32"),
-                    "pixels": List(
-                        {
-                            "i": Value("int32"),
-                            "j": Value("int32"),
-                            "elevation": Value("float32"),
-                        }
-                    ),
-                    "crosses_obstacles": Value("bool"),
-                    "cost": Value("float32"),
-                },
-                "with_obstacles": {
-                    "length": Value("float32"),
-                    "pixels": List(
-                        {
-                            "i": Value("int32"),
-                            "j": Value("int32"),
-                            "elevation": Value("float32"),
-                        }
-                    ),
-                    "crosses_obstacles": Value("bool"),
-                    "cost": Value("float32"),
-                    "cost_diff_percent": Value("float32"),
-                },
-            },
-            "obstacles": {
-                "enabled": Value("bool"),
-                "ratio_max": Value("float32"),
-                "ratio_target": Value("float32"),
-                "ratio_actual": Value("float32"),
-                "size_min_ratio": Value("float32"),
-                "size_max_ratio": Value("float32"),
-                "penalty": Value("float32"),
-            },
-            "solver": {
-                "backend": Value("string"),
-                "name": Value("string"),
-                "diagonal_movement": Value("string"),
-                "weight": Value("float32"),
-                "heuristic": Value("string"),
-                "cost_model": Value("string"),
-            },
-            "timing": {
-                "tile_loading_seconds": Value("float32"),
-                "marker_search_seconds": Value("float32"),
-                "marker_find_path_without_seconds": Value("float32"),
-                "marker_find_path_with_seconds": Value("float32"),
-                "graph_prebuild_seconds": Value("float32"),
-                "obstacle_generation_seconds": Value("float32"),
-                "cost_compute_seconds": Value("float32"),
-                "tensor_save_seconds": Value("float32"),
-                "metadata_write_seconds": Value("float32"),
-                "image_conversion_seconds": Value("float32"),
-                "image_write_seconds": Value("float32"),
-            },
-            "timestamp": Value("timestamp[us]"),
-        },
-        "path_free": Sequence(Sequence(Value("int32"))),
-        "path_obstacles": Sequence(Sequence(Value("int32"))),
-    }
-)
 
 
 def _execute_notebook_with_papermill(
@@ -468,8 +335,51 @@ def _config_name(resolution: int, sample: bool) -> str:
     return f"{resolution}x{resolution}" + ("_sample" if sample else "")
 
 
+def _solver_feature_yaml() -> list[dict]:
+    """Return the YAML feature schema for a single solver config."""
+    return [
+        {"name": "backend", "dtype": "string"},
+        {"name": "name", "dtype": "string"},
+        {"name": "diagonal_movement", "dtype": "string"},
+        {"name": "weight", "dtype": "float32"},
+        {"name": "heuristic", "dtype": "string"},
+        {"name": "cost_model", "dtype": "string"},
+        {"name": "solver", "dtype": "string"},
+        {"name": "max_marker_retries", "dtype": "int32"},
+    ]
+
+
+def _path_stats_yaml() -> list[dict]:
+    """Return the YAML feature schema for path stats."""
+    return [
+        {"name": "length", "dtype": "int32"},
+        {"name": "crosses_obstacles", "dtype": "bool"},
+        {"name": "cost", "dtype": "float32"},
+    ]
+
+
+def _path_stats_obstacles_yaml() -> list[dict]:
+    """Return the YAML feature schema for path stats with obstacles."""
+    return [
+        {"name": "length", "dtype": "int32"},
+        {"name": "crosses_obstacles", "dtype": "bool"},
+        {"name": "cost", "dtype": "float32"},
+        {"name": "cost_diff_percent", "dtype": "float32"},
+    ]
+
+
+def _timing_per_solver_yaml() -> list[dict]:
+    """Return the YAML feature schema for per-solver timing."""
+    return [
+        {"name": "path_free_seconds", "dtype": "float32"},
+        {"name": "path_obstacles_seconds", "dtype": "float32"},
+        {"name": "cost_compute_seconds", "dtype": "float32"},
+        {"name": "total_seconds", "dtype": "float32"},
+    ]
+
+
 def _generate_huggingface_yaml_header(
-    repo_id: str, resolutions: list[int], split_names: list[str], default_config_name: str
+    repo_id: str, resolutions: list[int], split_names: list[str], default_config_name: str, solver_names: list[str]
 ) -> str:
     _ = repo_id  # retained for potential future metadata injection
 
@@ -492,24 +402,41 @@ def _generate_huggingface_yaml_header(
     for res in resolutions:
         for sample in [True, False]:
             config_name = _config_name(res, sample)
+
+            # Build dynamic path features for each solver
+            path_features = []
+            for solver_name in solver_names:
+                path_features.append({"name": f"path_{solver_name}_free", "list": {"list": "int32"}})
+                path_features.append({"name": f"path_{solver_name}_obstacles", "list": {"list": "int32"}})
+
+            # Build solvers struct with each solver as a named field
+            solvers_struct = [{"name": name, "struct": _solver_feature_yaml()} for name in solver_names]
+
+            # Build paths struct with each solver's path stats
+            paths_struct = [
+                {
+                    "name": name,
+                    "struct": [
+                        {"name": "free", "struct": _path_stats_yaml()},
+                        {"name": "obstacles", "struct": _path_stats_obstacles_yaml()},
+                        {"name": "timing", "struct": _timing_per_solver_yaml()},
+                    ],
+                }
+                for name in solver_names
+            ]
+
             dataset_info_config = {
                 "config_name": config_name,
-                # "dataset_size": _dir_size_bytes(Path("outputs") / "export" / config_name, sample),
-                # "download_size": _dir_size_bytes(Path("outputs") / "export" / config_name, sample),
                 "features": [
                     {"name": "id", "dtype": "string"},
-                    # {"name": "tensor", "list": {"list": {"list": "float32"}}},
                     {"name": "tensor", "dtype": "binary"},
-                    {"name": "path_free", "list": {"list": "int32"}},
-                    {"name": "path_obstacles", "list": {"list": "int32"}},
-                    # {"name": "metadata", "dtype": "string"},
+                    *path_features,
                     {
                         "name": "metadata",
                         "struct": [
                             {"name": "index", "dtype": "int32"},
                             {"name": "resolution", "dtype": "int32"},
                             {"name": "split", "dtype": "string"},
-                            {"name": "target_elevation", "dtype": "float32"},
                             {
                                 "name": "calibration",
                                 "struct": [
@@ -608,48 +535,6 @@ def _generate_huggingface_yaml_header(
                                 ],
                             },
                             {
-                                "name": "paths",
-                                "struct": [
-                                    {
-                                        "name": "without_obstacles",
-                                        "struct": [
-                                            {"name": "length", "dtype": "float32"},
-                                            {
-                                                "name": "pixels",
-                                                "list": {
-                                                    "struct": [
-                                                        {"name": "i", "dtype": "int32"},
-                                                        {"name": "j", "dtype": "int32"},
-                                                        {"name": "elevation", "dtype": "float32"},
-                                                    ]
-                                                },
-                                            },
-                                            {"name": "crosses_obstacles", "dtype": "bool"},
-                                            {"name": "cost", "dtype": "float32"},
-                                        ],
-                                    },
-                                    {
-                                        "name": "with_obstacles",
-                                        "struct": [
-                                            {"name": "length", "dtype": "float32"},
-                                            {
-                                                "name": "pixels",
-                                                "list": {
-                                                    "struct": [
-                                                        {"name": "i", "dtype": "int32"},
-                                                        {"name": "j", "dtype": "int32"},
-                                                        {"name": "elevation", "dtype": "float32"},
-                                                    ]
-                                                },
-                                            },
-                                            {"name": "crosses_obstacles", "dtype": "bool"},
-                                            {"name": "cost", "dtype": "float32"},
-                                            {"name": "cost_diff_percent", "dtype": "float32"},
-                                        ],
-                                    },
-                                ],
-                            },
-                            {
                                 "name": "obstacles",
                                 "struct": [
                                     {"name": "enabled", "dtype": "bool"},
@@ -661,27 +546,14 @@ def _generate_huggingface_yaml_header(
                                     {"name": "penalty", "dtype": "float32"},
                                 ],
                             },
-                            {
-                                "name": "solver",
-                                "struct": [
-                                    {"name": "backend", "dtype": "string"},
-                                    {"name": "name", "dtype": "string"},
-                                    {"name": "diagonal_movement", "dtype": "string"},
-                                    {"name": "weight", "dtype": "float32"},
-                                    {"name": "heuristic", "dtype": "string"},
-                                    {"name": "cost_model", "dtype": "string"},
-                                ],
-                            },
+                            {"name": "solvers", "struct": solvers_struct},
+                            {"name": "paths", "struct": paths_struct},
                             {
                                 "name": "timing",
                                 "struct": [
                                     {"name": "tile_loading_seconds", "dtype": "float32"},
                                     {"name": "marker_search_seconds", "dtype": "float32"},
-                                    {"name": "marker_find_path_without_seconds", "dtype": "float32"},
-                                    {"name": "marker_find_path_with_seconds", "dtype": "float32"},
-                                    {"name": "graph_prebuild_seconds", "dtype": "float32"},
                                     {"name": "obstacle_generation_seconds", "dtype": "float32"},
-                                    {"name": "cost_compute_seconds", "dtype": "float32"},
                                     {"name": "tensor_save_seconds", "dtype": "float32"},
                                     {"name": "metadata_write_seconds", "dtype": "float32"},
                                     {"name": "image_conversion_seconds", "dtype": "float32"},
@@ -692,7 +564,6 @@ def _generate_huggingface_yaml_header(
                         ],
                     },
                 ],
-                # "splits": [],
             }
             if sample:
                 dataset_info_config["features"].insert(1, {"name": "image", "dtype": "image"})
@@ -702,24 +573,13 @@ def _generate_huggingface_yaml_header(
             }
             if config_name == default_config_name:
                 configs_config["default"] = True
-            # num_samples = 0
             for split in split_names:
-                # num_samples_split = _dir_num_files(Path("outputs") / "dataset" / config_name / split / "tensors")
-                # dataset_info_config["splits"].append(
-                #     {
-                #         "name": split,
-                #         # "num_bytes": _dir_size_bytes(Path("outputs") / "export" / config_name / split, sample),
-                #         "num_examples": num_samples_split,
-                #     }
-                # )
-                # num_samples += num_samples_split
                 configs_config["data_files"].append(
                     {
                         "split": split,
                         "path": f"{config_name}/{split}/*",
                     }
                 )
-            # dataset_info_config["num_examples"] = num_samples
             dataset_config["dataset_info"].append(dataset_info_config)
             dataset_config["configs"].append(configs_config)
     # configs_yaml: list[str] = []
@@ -844,31 +704,6 @@ def _load_hf_credentials(
         raise ValueError("HF_TOKEN not found in .env.secret file")
 
     return username, repo_name, token
-
-
-def _rows_to_dataset(rows: list[dict]) -> Dataset:
-    hf_rows = []
-    for r in rows:
-        hf_rows.append(
-            {
-                "image": {"bytes": r["image"]} if r.get("image") is not None else None,
-                "id": r["id"],
-                "tensor": r["tensor"],
-                "metadata": json.dumps(r.get("metadata", {})),
-                "path_free": r.get("path_free", []),
-                "path_obstacles": r.get("path_obstacles", []),
-            }
-        )
-    return Dataset.from_list(hf_rows, features=FEATURES)
-
-
-def _load_rows_for_split(split_dir: Path, resolution: int) -> list[dict]:
-    metadata_root = split_dir / "metadata"
-    metadata_filepaths = sorted(p for p in metadata_root.rglob("*.yaml") if p.stem.isdigit())
-    rows: list[dict] = []
-    for p in metadata_filepaths:
-        rows.append(_process_meta_for_prepare(str(p), resolution))
-    return rows
 
 
 def _push_resolution(
@@ -1002,6 +837,12 @@ def export_and_upload(
     cfg = yaml.safe_load(config_file.read_text())
     chunk_sizes = cfg["export"]["chunk_size"]
 
+    # Extract solver names from config
+    solver_names = [solver["name"] for solver in cfg.get("solvers", [])]
+    if not solver_names:
+        logger.error("No solvers defined in config.yaml")
+        return False
+
     if resolutions is None:
         resolutions = [int(d.name) for d in dataset_path.iterdir() if d.is_dir() and d.name.isdigit()]
 
@@ -1022,7 +863,7 @@ def export_and_upload(
     if True:
         assets_readme_path = notebooks_path.parent / "assets" / "README.md"
         readme_text = _load_and_customize_readme(
-            assets_readme_path, repo_id, resolutions, split_names, cfg["export"]["default"]
+            assets_readme_path, repo_id, resolutions, split_names, cfg["export"]["default"], solver_names
         )
         with open(export_dirpath / "README.md", "w", encoding="utf-8") as fh:
             fh.write(readme_text)
@@ -1070,14 +911,16 @@ def export_and_upload(
                             1 if len(metadata_filepaths) % chunk_size != 0 else 0
                         )
                         for row in tqdm(
-                            pool.imap(partial(_process_meta_for_prepare, res, sample), metadata_filepaths),
+                            pool.imap(
+                                partial(_process_meta_for_prepare, res, sample, solver_names), metadata_filepaths
+                            ),
                             total=len(metadata_filepaths),
                             desc=f"Loading metadata for {config_name}/{split}",
                             unit="file",
                         ):
                             rows.append(row)
                             if len(rows) >= chunk_size:
-                                table = Dataset.from_list(rows, features=_features(sample)).data.table
+                                table = Dataset.from_list(rows, features=_features(sample, solver_names)).data.table
                                 parquet_filepath = f"{export_path}/data-{num_chunk:05d}.parquet"
                                 logger.info(
                                     f"Writing chunk {num_chunk + 1}/{num_chunks} for {config_name}/{split} with {len(rows)} rows: {parquet_filepath}"
@@ -1099,7 +942,7 @@ def export_and_upload(
                                 )
                                 break
                         if len(rows) > 0:
-                            table = Dataset.from_list(rows, features=_features(sample)).data.table
+                            table = Dataset.from_list(rows, features=_features(sample, solver_names)).data.table
                             parquet_filepath = f"{export_path}/data-{num_chunk:05d}.parquet"
                             logger.info(
                                 f"Writing final chunk for {config_name}/{split} with {len(rows)} rows: {parquet_filepath}"
@@ -1180,11 +1023,14 @@ def _load_and_customize_readme(
     resolutions: list[int],
     split_names: list[str],
     default_config_name: str,
+    solver_names: list[str],
 ) -> str:
     """Load README from assets and prepend Hugging Face YAML header with customizations."""
 
     # Generate the HF YAML header
-    yaml_header = _generate_huggingface_yaml_header(repo_id, resolutions, split_names, default_config_name)
+    yaml_header = _generate_huggingface_yaml_header(
+        repo_id, resolutions, split_names, default_config_name, solver_names
+    )
 
     # Load the base README from assets
     if assets_readme_path.exists():

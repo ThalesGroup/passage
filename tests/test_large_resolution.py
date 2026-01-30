@@ -34,12 +34,31 @@ def test_generate_sample_large_resolution(monkeypatch, tmp_path):
     # Use resolution > TILE_SIZE_PX to force loading more tiles
     resolution = 32
 
-    solver_config = {"name": "a_star", "diagonal_movement": "always", "weight": 1.0, "max_marker_retries": 10}
+    solvers_configs = [
+        {
+            "name": "test_solver",
+            "backend": "grid",
+            "common": {"diagonal_movement": "always", "max_marker_retries": 10},
+            "grid": {"solver": "astar", "cost_model": "elevation", "weight": 1.0},
+        }
+    ]
     obstacle_settings = gen._resolve_obstacle_config({"obstacles": {"enabled": False}})
 
     # Call generate_sample with DataFrame and global min/max
     idx, success, msg, duration = gen.generate_sample(
-        (0, tiles_dir, outputs_dir, resolution, tile_stats_df, 0.0, 100.0, False, solver_config, obstacle_settings)
+        (
+            0,
+            tiles_dir,
+            outputs_dir,
+            resolution,
+            tile_stats_df,
+            0.0,
+            100.0,
+            False,
+            solvers_configs,
+            obstacle_settings,
+            "train",
+        )
     )
     assert isinstance(duration, float)
 
@@ -60,12 +79,31 @@ def test_generate_sample_skip_images(monkeypatch, tmp_path):
     # Use resolution > TILE_SIZE_PX to force loading more tiles
     resolution = 32
 
-    solver_config = {"name": "a_star", "diagonal_movement": "always", "weight": 1.0, "max_marker_retries": 10}
+    solvers_configs = [
+        {
+            "name": "test_solver",
+            "backend": "grid",
+            "common": {"diagonal_movement": "always", "max_marker_retries": 10},
+            "grid": {"solver": "astar", "cost_model": "elevation", "weight": 1.0},
+        }
+    ]
     obstacle_settings = gen._resolve_obstacle_config({"obstacles": {"enabled": False}})
 
     # Call generate_sample with disable_images=True
     idx, success, msg, duration = gen.generate_sample(
-        (0, tiles_dir, outputs_dir, resolution, tile_stats_df, 0.0, 100.0, True, solver_config, obstacle_settings)
+        (
+            0,
+            tiles_dir,
+            outputs_dir,
+            resolution,
+            tile_stats_df,
+            0.0,
+            100.0,
+            True,
+            solvers_configs,
+            obstacle_settings,
+            "train",
+        )
     )
     assert isinstance(duration, float)
 
