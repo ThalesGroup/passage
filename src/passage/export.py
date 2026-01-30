@@ -715,8 +715,10 @@ def _push_resolution(
     split_datasets: dict[str, Dataset],
     private: bool,
     chunk_size: int,
+    num_cpus: int | None = None,
 ) -> None:
     config_name = f"{resolution}x{resolution}"
+    cpus = num_cpus if num_cpus is not None else os.cpu_count()
 
     max_retries = int(os.getenv("HF_UPLOAD_RETRIES", "3"))
     base_delay = float(os.getenv("HF_UPLOAD_RETRY_DELAY", "5"))
@@ -729,6 +731,10 @@ def _push_resolution(
             try:
                 # TODO: generate parquet compressed and chunked files then upload using api.upload_folder
                 # TODO: rewrite the README.md hugging face header
+                if cpus == 0:
+                    num_proc = 1
+                else:
+                    num_proc = min(max(cpus - 1, 1), len(ds))
                 ds.push_to_hub(
                     repo_id,
                     config_name=config_name,
@@ -739,7 +745,7 @@ def _push_resolution(
                     token=token,
                     set_default=resolution == 1024 and split == "train",
                     data_dir=config_name + "/" + split,
-                    num_proc=min(max(os.cpu_count() - 1, 1), len(ds)),
+                    num_proc=num_proc,
                 )
                 logger.info(f"✓ Pushed {config_name}/{split} (attempt {attempt})")
                 break
@@ -768,13 +774,19 @@ def _create_parquets(
     sample: bool,
     split_datasets: dict[str, Dataset],
     chunk_size: int,
+    num_cpus: int | None = None,
 ) -> None:
     config_name = _config_name(resolution, sample)
     for split, ds in split_datasets.items():
         export_path = export_dirpath / config_name / split
         export_path.mkdir(parents=True, exist_ok=True)
         num_chunks = len(ds) // chunk_size + (1 if len(ds) % chunk_size != 0 else 0)
-        with mp.Pool(processes=min(max(os.cpu_count() - 1, 1), num_chunks)) as pool:
+        cpus_local = num_cpus if num_cpus is not None else os.cpu_count()
+        if cpus_local == 0:
+            pool_size = 1
+        else:
+            pool_size = max(cpus_local - 1, 1)
+        with mp.Pool(processes=min(pool_size, num_chunks)) as pool:
             list(
                 tqdm(
                     pool.imap(
@@ -821,7 +833,13 @@ def export_and_upload(
     private: bool = False,
     create_repo: bool = True,
     skip_upload: bool = False,
+    num_cpus: int | None = None,
 ) -> bool:
+    """Export and upload datasets to Hugging Face.
+
+    num_cpus semantics: None => use all CPUs (default); 0 => disable multiprocessing (sequential); N => use N CPUs.
+    """
+    cpus = num_cpus if num_cpus is not None else os.cpu_count()
     dataset_path = Path(dataset_dirpath).resolve()
     calibrate_path = Path(calibrate_dirpath).resolve()
     notebooks_path = Path(notebooks_dirpath).resolve()
@@ -844,7 +862,7 @@ def export_and_upload(
         return False
 
     if resolutions is None:
-        resolutions = [int(d.name) for d in dataset_path.iterdir() if d.is_dir() and d.name.isdigit()]
+        resolutions = sorted([int(d.name) for d in dataset_path.iterdir() if d.is_dir() and d.name.isdigit()])
 
     split_names = ["train", "calibration", "validation", "test"]
 
@@ -899,21 +917,34 @@ def export_and_upload(
                     export_path.mkdir(parents=True, exist_ok=True)
                     metadata_root = split_dir / "metadata"
                     metadata_filepaths = list(metadata_root.rglob("*.yaml"))
-                    with mp.Pool(processes=max(os.cpu_count() - 1, 1)) as pool:
-                        rows: list[dict] = []
-                        rows_max = cfg["export"]["sample"]["num_samples"] if sample else None
-                        chunk_size = chunk_sizes[res]
-                        logger.info(
-                            f"Processing {len(metadata_filepaths)} files for {config_name}/{split} with chunk size {chunk_size}"
+                    rows: list[dict] = []
+                    rows_max = cfg["export"]["sample"]["num_samples"] if sample else None
+                    chunk_size = chunk_sizes[res]
+                    logger.info(
+                        f"Processing {len(metadata_filepaths)} files for {config_name}/{split} with chunk size {chunk_size}"
+                    )
+                    num_chunk = 0
+                    num_chunks = len(metadata_filepaths) // chunk_size + (
+                        1 if len(metadata_filepaths) % chunk_size != 0 else 0
+                    )
+
+                    # Respect num_cpus semantics: 0 => sequential; N => use N CPUs (reserve 1 for system by subtracting 1 where appropriate)
+                    if cpus == 0:
+                        logger.info(f"Running in sequential mode (no multiprocessing) for {config_name}/{split}")
+                        iterable = map(
+                            partial(_process_meta_for_prepare, res, sample, solver_names), metadata_filepaths
                         )
-                        num_chunk = 0
-                        num_chunks = len(metadata_filepaths) // chunk_size + (
-                            1 if len(metadata_filepaths) % chunk_size != 0 else 0
+                    else:
+                        pool_size = max(cpus - 1, 1)
+                        logger.info(f"Running metadata processing with {pool_size} worker processes")
+                        pool = mp.Pool(processes=min(pool_size, len(metadata_filepaths)))
+                        iterable = pool.imap(
+                            partial(_process_meta_for_prepare, res, sample, solver_names), metadata_filepaths
                         )
+
+                    try:
                         for row in tqdm(
-                            pool.imap(
-                                partial(_process_meta_for_prepare, res, sample, solver_names), metadata_filepaths
-                            ),
+                            iterable,
                             total=len(metadata_filepaths),
                             desc=f"Loading metadata for {config_name}/{split}",
                             unit="file",
@@ -941,23 +972,28 @@ def export_and_upload(
                                     f"Reached maximum sample size of {rows_max} for {config_name}/{split}; stopping load"
                                 )
                                 break
-                        if len(rows) > 0:
-                            table = Dataset.from_list(rows, features=_features(sample, solver_names)).data.table
-                            parquet_filepath = f"{export_path}/data-{num_chunk:05d}.parquet"
-                            logger.info(
-                                f"Writing final chunk for {config_name}/{split} with {len(rows)} rows: {parquet_filepath}"
-                            )
-                            pq.write_table(
-                                table,
-                                parquet_filepath,
-                                compression="zstd",
-                                compression_level=cfg["export"]["compression_level"],
-                            )
-                            logger.info(
-                                f"Writing final chunk for {config_name}/{split} with {len(rows)} rows: {parquet_filepath} - done"
-                            )
-                            rows = []
-                            num_chunk += 1
+                    finally:
+                        if cpus != 0:
+                            pool.close()
+                            pool.join()
+
+                    if len(rows) > 0:
+                        table = Dataset.from_list(rows, features=_features(sample, solver_names)).data.table
+                        parquet_filepath = f"{export_path}/data-{num_chunk:05d}.parquet"
+                        logger.info(
+                            f"Writing final chunk for {config_name}/{split} with {len(rows)} rows: {parquet_filepath}"
+                        )
+                        pq.write_table(
+                            table,
+                            parquet_filepath,
+                            compression="zstd",
+                            compression_level=cfg["export"]["compression_level"],
+                        )
+                        logger.info(
+                            f"Writing final chunk for {config_name}/{split} with {len(rows)} rows: {parquet_filepath} - done"
+                        )
+                        rows = []
+                        num_chunk += 1
 
                 if execute_notebooks and not sample:
                     output_notebook = export_dirpath / config_name / "dataset.ipynb"
@@ -967,7 +1003,7 @@ def export_and_upload(
                         "DATASET_DIRPATH": str(dataset_path),
                         "CONFIG_FILEPATH": str(config_file),
                         "CALIBRATE_FILEPATH": str(calibrate_path / "calibrate.json"),
-                        "MAX_WORKERS": os.cpu_count() or 8,
+                        "MAX_WORKERS": cpus or 8,
                     }
                     retries = None if max_notebook_retries == 0 else max_notebook_retries
                     _execute_notebook_with_retries(
@@ -1005,11 +1041,16 @@ def export_and_upload(
     if create_repo:
         api.create_repo(repo_id=repo_id, repo_type="dataset", private=private, exist_ok=True)
 
+    if cpus == 0:
+        upload_workers = 1
+    else:
+        upload_workers = max(cpus - 1, 1)
+
     api.upload_large_folder(
         repo_id=repo_id,
         repo_type="dataset",
         folder_path=str(export_dirpath.resolve()),
-        num_workers=max(os.cpu_count() - 1, 1),
+        num_workers=upload_workers,
         ignore_patterns=["*.ipynb_checkpoints"],
     )
 

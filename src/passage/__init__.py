@@ -216,6 +216,12 @@ def main() -> None:
         help="Don't create the repository if it doesn't exist",
     )
     export_parser.add_argument(
+        "--num-cpus",
+        type=int,
+        default=None,
+        help="Number of CPUs for multiprocessing (can be specified before or after subcommand)",
+    )
+    export_parser.add_argument(
         "--log-level",
         choices=["debug", "info", "warning", "error", "critical"],
         default="info",
@@ -292,6 +298,7 @@ def main() -> None:
             private=args.private,
             create_repo=not args.no_create_repo,
             skip_upload=args.no_upload,
+            num_cpus=args.num_cpus,
         )
     elif args.command is None:
         logger.info("Hello from passage! Use --help for available commands.")

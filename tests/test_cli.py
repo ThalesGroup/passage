@@ -332,3 +332,16 @@ class TestMainCLI:
                 mock_export.assert_called_once()
                 _, kwargs = mock_export.call_args
                 assert kwargs.get("repo_id") == "alice/repo"
+
+    @pytest.mark.unit
+    def test_export_passes_num_cpus_cli(self):
+        """The export subcommand should accept --num-cpus and pass it to export_and_upload."""
+        from passage import main
+
+        with patch.object(sys, "argv", ["passage", "export", "--num-cpus", "4", "--no-exec-notebooks", "--no-upload"]):
+            with patch("passage.export_and_upload") as mock_export:
+                main()
+
+                mock_export.assert_called_once()
+                _, kwargs = mock_export.call_args
+                assert kwargs.get("num_cpus") == 4
