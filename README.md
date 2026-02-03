@@ -1,4 +1,8 @@
-# 🌍 PASSAGE — Path Solving Dataset & Generator 🔧
+<p align="center">
+  <img src="assets/banner.png" alt="Banner" width="1024"/>
+</p>
+
+# 🌍 PASSAGE — Path Solving Dataset & Generator
 
 **PASSAGE** (PAth S olving Data S et And G enerator) is a toolkit to build reproducible elevation-based datasets from the JAXA ALOS AW3D30 DSM tiles.
 It is targeted at researchers and engineers working on terrain-based pathfinding (A*, RL, GNNs, surrogate models) and provides the full pipeline: download → calibrate → generate → export (push to the Hugging Face Hub).
