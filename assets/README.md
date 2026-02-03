@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/banner.png" alt="Banner" width="1024"/>
+</p>
+
 # 🌍 PASSAGE
 
 > **PASSAGE** stands for **PA**th **S**olving Data**S**et **A**nd **GE**nerator
@@ -16,7 +20,7 @@ It facilitates reproducible dataset creation and benchmarking for machine learni
 ### Representative sample
 
 <p align="center">
-  <img src="assets/sample.png" alt="Representative Sample" />
+  <img src="assets/sample.png" alt="Representative Sample" width="720"/>
 </p>
 
 The image above provides a representative visualization of a generated sample. It typically combines:
@@ -32,13 +36,13 @@ Moreover, on the visualization, two paths are displayed, one without considering
 The dataset generators allow to consider the worldwide elevation as publicly provided by JAXA. The following subsections describes some hints about the tiles.
 
 <p align="center">
-  <img src="assets/download.png" alt="Download Coverage Map" />
+  <img src="assets/download.png" alt="Download Coverage Map" width="720"/>
 </p>
 
 This map shows the 5x5 packed tiles downloaded from the [JAXA ALOS AW3D30 DSM](https://www.eorc.jaxa.jp/ALOS/en/dataset/aw3d30/aw3d30_e.htm) website. Each cell represents a 5x5 grid of 1°×1° tile (3600×3600 pixels at 30m resolution). The dataset leverages this globally distributed elevation data to ensure diverse terrain samples spanning mountains, valleys, plains, and coastal regions. If the cell is black, there is no available tile for this region, thus we consider an equivalent flat tile at sea level during dataset generation.
 
 <p align="center">
-  <img src="calibration/max_elevation_map.png" alt="Maximum Elevation Map" />
+  <img src="calibration/max_elevation_map.png" alt="Maximum Elevation Map" width="720"/>
 </p>
 
 This visualization shows the **normalized maximum elevation** within each downloaded tile. Brighter regions indicate tiles containing higher terrain (mountain peaks, elevated plateaus), while darker regions correspond to low-lying areas (coastal zones, river basins). This map helps understand the global elevation distribution used for sampling.
@@ -55,7 +59,7 @@ This visualization shows the **normalized maximum elevation** within each downlo
 ### Peak-to-Peak elevation map
 
 <p align="center">
-  <img src="calibration/ptp_elevation_map.png" alt="Peak-to-Peak Elevation Map" />
+  <img src="calibration/ptp_elevation_map.png" alt="Peak-to-Peak Elevation Map" width="720"/>
 </p>
 
 The **peak-to-peak (PTP) elevation map** displays the elevation range (max − min) within each tile. High PTP values (bright regions) indicate tiles with significant topographic variation—suitable for challenging pathfinding scenarios. Low PTP values suggest relatively flat terrain. This metric is useful for understanding terrain complexity.
@@ -65,7 +69,7 @@ The **peak-to-peak (PTP) elevation map** displays the elevation range (max − m
 In order to assess generalization of trained models, a region containing South America is put as hold out. This region has been chosen and associated tile hand picked as it represents a wide range of elevation, condensing ranges from all other places in the world map.
 
 <p align="center">
-  <img src="assets/hold_out_mask.png" alt="Maximum Elevation Map" />
+  <img src="assets/hold_out_mask.png" alt="Maximum Elevation Map" width="720"/>
 </p>
 
 ---
