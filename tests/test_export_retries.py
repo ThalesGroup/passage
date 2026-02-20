@@ -21,7 +21,7 @@ def test_push_retries_on_transient_readtimeout(monkeypatch, tmp_path):
     os.environ["HF_UPLOAD_RETRY_DELAY"] = "0"
 
     ds = Dataset.from_list(
-        [{"id": "1", "image": None, "tensor": b"", "metadata": "{}", "path_astar_free": [], "path_astar_obstacles": []}]
+        [{"id": "1", "tensor": b"", "metadata": "{}", "path_astar_free": [], "path_astar_obstacles": []}]
     )
     split_datasets = {"train": ds}
 

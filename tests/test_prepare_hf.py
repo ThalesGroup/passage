@@ -13,7 +13,8 @@ def test_generate_hf_yaml_header_configs_names():
     assert "128x128" in yaml
     assert "train" in yaml
     assert "validation" in yaml
-    # Check that solver path columns are present
+    # Check that solver path and per-solver image columns are present
+    assert "image_astar_elevation" in yaml
     assert "path_astar_elevation_free" in yaml
     assert "path_astar_elevation_obstacles" in yaml
     assert "path_astar_energy_free" in yaml
