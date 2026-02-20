@@ -8,7 +8,7 @@ import pytest
 import yaml
 
 import passage.generate as gen
-from passage.utils import save_tensor, TENSOR_SUFFIX
+from passage.utils import TENSOR_SUFFIX, save_tensor
 
 
 @pytest.fixture
@@ -81,11 +81,12 @@ def valid_sample_files(tmp_path):
     lon_dir = gen.lon_to_str(0)
     tensors_dir = res_dir / "tensors" / lat_dir / lon_dir
     metadata_dir = res_dir / "metadata" / lat_dir / lon_dir
-    images_dir = res_dir / "images" / lat_dir / lon_dir
+    # Create per-solver images (simple 64x64 PNG) under images/<solver_name>/<lat>/<lon>
+    solver_images_dir = res_dir / "images" / "test_solver" / lat_dir / lon_dir
 
     tensors_dir.mkdir(parents=True, exist_ok=True)
     metadata_dir.mkdir(parents=True, exist_ok=True)
-    images_dir.mkdir(parents=True, exist_ok=True)
+    solver_images_dir.mkdir(parents=True, exist_ok=True)
 
     # Create 3 valid samples (indices 0, 1, 2)
     for i in range(3):
@@ -102,11 +103,11 @@ def valid_sample_files(tmp_path):
         with open(metadata_dir / f"{i:010d}.yaml", "w") as f:
             yaml.dump(metadata, f)
 
-        # Create image (simple 64x64 PNG)
+        # Create per-solver image (simple 64x64 PNG)
         import cv2
 
         img = np.zeros((64, 64, 3), dtype=np.uint8)
-        cv2.imwrite(str(images_dir / f"{i:010d}.png"), img)
+        cv2.imwrite(str(solver_images_dir / f"{i:010d}.png"), img)
 
     return res_dir
 
@@ -119,11 +120,12 @@ def partial_sample_files(tmp_path):
     lon_dir = gen.lon_to_str(0)
     tensors_dir = res_dir / "tensors" / lat_dir / lon_dir
     metadata_dir = res_dir / "metadata" / lat_dir / lon_dir
-    images_dir = res_dir / "images" / lat_dir / lon_dir
+    # Create per-solver images (simple 64x64 PNG) under images/<solver_name>/<lat>/<lon>
+    solver_images_dir = res_dir / "images" / "test_solver" / lat_dir / lon_dir
 
     tensors_dir.mkdir(parents=True, exist_ok=True)
     metadata_dir.mkdir(parents=True, exist_ok=True)
-    images_dir.mkdir(parents=True, exist_ok=True)
+    solver_images_dir.mkdir(parents=True, exist_ok=True)
 
     # Create 2 valid samples (indices 0, 1)
     for i in range(2):
@@ -135,7 +137,7 @@ def partial_sample_files(tmp_path):
         import cv2
 
         img = np.zeros((64, 64, 3), dtype=np.uint8)
-        cv2.imwrite(str(images_dir / f"{i:010d}.png"), img)
+        cv2.imwrite(str(solver_images_dir / f"{i:010d}.png"), img)
 
     # Create partial sample at index 2 (tensor only, no metadata or image)
     tensor = np.zeros((64, 64, 3), dtype=np.float32)

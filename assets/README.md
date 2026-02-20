@@ -4,12 +4,14 @@
 
 # 🌍 PASSAGE
 
-> **PASSAGE** stands for **PA**th **S**olving Data**S**et **A**nd **GE**nerator
+> **PASSAGE** stands for **PA**th **S**olver Data**S**et **A**nd **GE**nerator
 
 ---
 
 PASSAGE is a professionally maintained toolkit for generating elevation-based datasets from the [JAXA ALOS AW3D30 DSM (Digital Surface Model)](https://www.eorc.jaxa.jp/ALOS/en/dataset/aw3d30/aw3d30_e.htm).
 It facilitates reproducible dataset creation and benchmarking for machine learning models that address terrain-based pathfinding challenges, such as surrogate models of classical algorithms such as A*, or more advanced methods combining for example Graph Neural Networks or Reinforcement Learning.
+
+> The path thus computed can be used by a rescue helicopter to save a person in distress in a constrained environment.
 
 > The dataset is generated according to the **23993** tiles availables at resolution of 3600x3600 px.
 

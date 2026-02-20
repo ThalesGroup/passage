@@ -13,11 +13,11 @@ def test_features_builds_dynamic_path_columns():
     # Check basic columns exist
     assert "id" in features
     assert "tensor" in features
-    assert "image" in features
     assert "metadata" in features
 
-    # Check dynamic path columns exist for each solver
+    # Check dynamic path columns exist for each solver and per-solver sample images
     for solver in solver_names:
+        assert f"image_{solver}" in features
         assert f"path_{solver}_free" in features
         assert f"path_{solver}_obstacles" in features
 
@@ -32,4 +32,5 @@ def test_features_no_image_when_not_sample():
     assert "id" in features
     assert "tensor" in features
     assert "image" not in features
+    assert f"image_{solver_names[0]}" not in features
     assert "metadata" in features

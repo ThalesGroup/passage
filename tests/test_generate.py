@@ -694,9 +694,9 @@ class TestGenerateSample:
             # Metadata
             metadata_matches = list((base / "metadata").rglob("0000000000.yaml"))
             assert metadata_matches, "Metadata file not saved under split-aware metadata dir"
-            # Images
-            images_matches = list((base / "images").rglob("0000000000.png"))
-            assert images_matches, "Image file not saved under split-aware images dir"
+            # Per-solver images (image_<solver_name>.png)
+            solver_images_matches = list((base / "images" / "test_solver").rglob("0000000000.png"))
+            assert solver_images_matches, "Per-solver image not saved under images/<solver_name> dir"
             # Paths (now under paths/<solver_name>/free and paths/<solver_name>/obstacles)
             free_matches = list((base / "paths").rglob("free/**/0000000000.csv"))
             obs_matches = list((base / "paths").rglob("obstacles/**/0000000000.csv"))

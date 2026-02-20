@@ -58,7 +58,7 @@ def _process_meta_for_prepare(resolution: int, sample: bool, solver_names: list[
     stem = metadata_filepath.stem
 
     tensor_filepath = split_dirpath / "tensors" / lat_dir / lon_dir / f"{stem}.npy.zst"
-    image_filepath = split_dirpath / "images" / lat_dir / lon_dir / f"{stem}.png"
+    # image_filepath = split_dirpath / "images" / lat_dir / lon_dir / f"{stem}.png"
 
     metadata = yaml.safe_load(metadata_filepath.read_text())
 
@@ -68,12 +68,19 @@ def _process_meta_for_prepare(resolution: int, sample: bool, solver_names: list[
         "metadata": metadata,
     }
 
-    # Load paths dynamically for each solver
+    # Load paths dynamically for each solver and per-solver images (if sample)
     for solver_name in solver_names:
         path_free_filepath = split_dirpath / "paths" / solver_name / "free" / lat_dir / lon_dir / f"{stem}.csv"
         path_obstacles_filepath = (
             split_dirpath / "paths" / solver_name / "obstacles" / lat_dir / lon_dir / f"{stem}.csv"
         )
+
+        # Per-solver image file (sample-only)
+        solver_image_filepath = split_dirpath / "images" / solver_name / lat_dir / lon_dir / f"{stem}.png"
+        if sample:
+            sample_dict[f"image_{solver_name}"] = (
+                {"bytes": solver_image_filepath.read_bytes()} if solver_image_filepath.exists() else None
+            )
 
         sample_dict[f"path_{solver_name}_free"] = (
             parse_path_csv(path_free_filepath) if path_free_filepath.exists() else []
@@ -81,9 +88,6 @@ def _process_meta_for_prepare(resolution: int, sample: bool, solver_names: list[
         sample_dict[f"path_{solver_name}_obstacles"] = (
             parse_path_csv(path_obstacles_filepath) if path_obstacles_filepath.exists() else []
         )
-
-    if sample:
-        sample_dict["image"] = {"bytes": image_filepath.read_bytes()}
     return sample_dict
 
 
@@ -125,8 +129,10 @@ def _features(sample: bool, solver_names: list[str]) -> Features:
         "id": Value("string"),
     }
 
-    # Add dynamic path columns for each solver
+    # Add per-solver image columns (sample-only) and dynamic path columns for each solver
     for solver_name in solver_names:
+        if sample:
+            features_dict[f"image_{solver_name}"] = Image()
         features_dict[f"path_{solver_name}_free"] = Sequence(Sequence(Value("int32")))
         features_dict[f"path_{solver_name}_obstacles"] = Sequence(Sequence(Value("int32")))
 
@@ -234,8 +240,6 @@ def _features(sample: bool, solver_names: list[str]) -> Features:
     }
 
     features_dict["tensor"] = Value("binary")
-    if sample:
-        features_dict["image"] = Image()
     return Features(features_dict)
 
 
@@ -406,6 +410,9 @@ def _generate_huggingface_yaml_header(
             # Build dynamic path features for each solver
             path_features = []
             for solver_name in solver_names:
+                # Insert per-solver sample images before path columns when building dataset features
+                if sample:
+                    path_features.append({"name": f"image_{solver_name}", "dtype": "image"})
                 path_features.append({"name": f"path_{solver_name}_free", "list": {"list": "int32"}})
                 path_features.append({"name": f"path_{solver_name}_obstacles", "list": {"list": "int32"}})
 
@@ -565,8 +572,6 @@ def _generate_huggingface_yaml_header(
                     },
                 ],
             }
-            if sample:
-                dataset_info_config["features"].insert(1, {"name": "image", "dtype": "image"})
             configs_config = {
                 "config_name": config_name,
                 "data_files": [],
@@ -917,6 +922,9 @@ def export_and_upload(
                     export_path.mkdir(parents=True, exist_ok=True)
                     metadata_root = split_dir / "metadata"
                     metadata_filepaths = list(metadata_root.rglob("*.yaml"))
+                    if len(metadata_filepaths) == 0:
+                        logger.info(f"No metadata files for {config_name}/{split}; skipping")
+                        continue
                     rows: list[dict] = []
                     rows_max = cfg["export"]["sample"]["num_samples"] if sample else None
                     chunk_size = chunk_sizes[res]
@@ -1006,10 +1014,11 @@ def export_and_upload(
                         "MAX_WORKERS": cpus or 8,
                     }
                     retries = None if max_notebook_retries == 0 else max_notebook_retries
+                    # Pass parameters as positional arg (tests may inspect positional args)
                     _execute_notebook_with_retries(
                         dataset_notebook,
                         output_notebook,
-                        parameters=parameters,
+                        parameters,
                         cwd=notebooks_path,
                         max_retries=retries,
                         retry_delay=notebook_retry_delay,
