@@ -1,9 +1,8 @@
-"""Prepare and push PASSAGE datasets directly to Hugging Face.
+"""Prepare PASSAGE exports and upload them to Hugging Face.
 
-This refactor drops intermediate parquet creation and writes datasets directly
-to the Hub using `datasets.Dataset.push_to_hub`, with zstd-compressed shards
-controlled by the `export.chunk_size.<resolution>` configuration (rows per shard)
-and a `max_shard_size` target of ~10 GB.
+The current export pipeline writes per-resolution parquet shards locally under
+`outputs/export/` and uploads the full folder hierarchy (README, assets,
+calibration artifacts, dataset parquets, notebooks) to the Hub.
 """
 
 import csv
@@ -824,6 +823,14 @@ def _upload_notebook(api: HfApi, repo_id: str, notebook_path: Path, resolution: 
     )
 
 
+def _reset_hf_upload_cache(export_dirpath: Path) -> None:
+    """Remove local Hugging Face upload cache for a clean upload pass."""
+    cache_dir = export_dirpath / ".cache" / "huggingface"
+    logger.info(f"Resetting Hugging Face upload cache at {cache_dir}")
+    if cache_dir.exists():
+        shutil.rmtree(cache_dir)
+
+
 def export_and_upload(
     dataset_dirpath: str | Path = "outputs/dataset",
     calibrate_dirpath: str | Path = "outputs/calibrate",
@@ -1055,6 +1062,7 @@ def export_and_upload(
     else:
         upload_workers = max(cpus - 1, 1)
 
+    _reset_hf_upload_cache(export_dirpath)
     api.upload_large_folder(
         repo_id=repo_id,
         repo_type="dataset",

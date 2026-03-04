@@ -24,6 +24,7 @@ repos:
       # Validates YAML syntax to catch common errors like incorrect indentation,
       # duplicate keys, or invalid characters before they cause runtime issues.
       - id: check-yaml
+        exclude: mkdocs.yml
 
   # ─────────────────────────────────────────────────────────────────────────────
   # uv-pre-commit: Ensures uv.lock stays synchronized with pyproject.toml.

@@ -86,6 +86,7 @@ solvers:
     solver: astar
     # Edge cost model:
     #   elevation          - distance * (1 + weight * normalized_elevation) [DEFAULT]
+    #   absolute_elevation - distance * (1 + weight * normalized_abs_elevation)
     #   distance           - flat distance only (ignore elevation)
     #   slope_uphill       - penalize uphill elevation changes (distance-scaled)
     #   energy             - distance + weight * max(0, elevation_gain)
@@ -118,6 +119,7 @@ solvers:
     solver: astar
     # Edge cost model:
     #   elevation          - distance * (1 + weight * normalized_elevation) [DEFAULT]
+    #   absolute_elevation - distance * (1 + weight * normalized_abs_elevation)
     #   distance           - flat distance only (ignore elevation)
     #   slope_uphill       - penalize uphill elevation changes (distance-scaled)
     #   energy             - distance + weight * max(0, elevation_gain)
@@ -150,6 +152,7 @@ solvers:
     solver: astar
     # Edge cost model:
     #   elevation          - distance * (1 + weight * normalized_elevation) [DEFAULT]
+    #   absolute_elevation - distance * (1 + weight * normalized_abs_elevation)
     #   distance           - flat distance only (ignore elevation)
     #   slope_uphill       - penalize uphill elevation changes (distance-scaled)
     #   energy             - distance + weight * max(0, elevation_gain)

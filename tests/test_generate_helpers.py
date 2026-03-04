@@ -8,18 +8,21 @@ def test_compute_edge_weights_and_cost_matrix():
     rows, cols = 4, 4
     tpl = gen._get_graph_template(rows, cols, "always")
 
-    # Create a simple elevation ramp
-    elev = np.arange(rows * cols, dtype=np.float64).reshape((rows, cols))
+    # Use signed elevations so elevation and absolute_elevation differ.
+    elev = np.linspace(-8.0, 7.0, rows * cols, dtype=np.float64).reshape((rows, cols))
 
     # distance model should return template distances unchanged
     dist = gen._compute_edge_weights(tpl, elev, weight=1.0, cost_model="distance")
     assert np.array_equal(dist, tpl.distance_m)
+
+    elev_w = gen._compute_edge_weights(tpl, elev, weight=2.5, cost_model="elevation")
 
     # absolute_elevation uses abs_norm of destination
     abs_w = gen._compute_edge_weights(tpl, elev, weight=2.5, cost_model="absolute_elevation")
     normalized, abs_norm, elev_range = gen._normalize_elevation_arrays(elev)
     expected = tpl.distance_m * (1.0 + 2.5 * abs_norm[tpl.dst_i, tpl.dst_j])
     assert np.allclose(abs_w, expected)
+    assert not np.allclose(abs_w, elev_w)
 
     # slope_uphill penalizes uphill (max(0, dst - src)/range)
     slope = gen._compute_edge_weights(tpl, elev, weight=10.0, cost_model="slope_uphill")
@@ -35,7 +38,7 @@ def test_compute_edge_weights_and_cost_matrix():
 
 
 def test_build_pathfinding_cost_matrix_variants():
-    elev = np.linspace(0.0, 10.0, 9).reshape((3, 3)).astype(np.float64)
+    elev = np.linspace(-5.0, 5.0, 9).reshape((3, 3)).astype(np.float64)
 
     # slope_uphill and energy should return None
     assert gen._build_pathfinding_cost_matrix(elev, 1.0, "slope_uphill") is None
@@ -53,6 +56,7 @@ def test_build_pathfinding_cost_matrix_variants():
     m_elev = gen._build_pathfinding_cost_matrix(elev, 3.0, "elevation")
     assert m_elev.shape == elev.shape
     assert np.all(m_elev >= 1e-6)
+    assert not np.allclose(m_abs, m_elev)
 
 
 def test_pathfinding_path_to_coords_variants():
