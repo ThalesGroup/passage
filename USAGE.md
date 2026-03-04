@@ -71,21 +71,26 @@ Key flags: `--tiles-dirpath`, `--outputs-dirpath`, `--no-resume`, `--num-cpus`, 
 
 ## export 📦
 
-Push datasets directly to the Hugging Face Hub using `datasets` (zstd shards, no parquet staging). If `--repo-id` is not
+Prepare parquet shards under `outputs/export` and upload the full export folder to the Hugging Face Hub. If `--repo-id` is not
 provided, the CLI reads `HF_USER_NAME`/`HF_REPO_NAME` from `.env` and `HF_TOKEN` from `.env.secret` by default.
 
 ```bash
-# Push with executed notebooks (default)
+# Push export folder with executed per-resolution dataset notebooks (default)
 passage export --repo-id alice/passage-dataset
 
-# Dry run: execute notebooks but skip push
-passage export --no-upload --no-exec-notebooks
+# Dry run: prepare export folder but skip push
+passage export --no-upload
 
 # Export a specific resolution without uploading
 passage export --resolution 128 --no-upload
 ```
 
 Useful flags: `--dataset-dirpath`, `--calibrate-dirpath`, `--resolution`, `--repo-id`, `--no-exec-notebooks`, `--no-upload`, `--private`, `--no-create-repo`, `--log-level`.
+
+Uploaded artifacts include:
+- dataset parquets under `<resolution>x<resolution>` and `<resolution>x<resolution>_sample`
+- generated `<resolution>x<resolution>/dataset.ipynb` notebooks (from `notebooks/_dataset.ipynb`)
+- root `README.md`, `assets/`, `calibration/`, and `notebooks/`
 
 ---
 

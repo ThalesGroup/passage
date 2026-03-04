@@ -33,10 +33,11 @@ except ImportError:
 
 # Edge cost models
 #   elevation         - distance * (1 + weight * normalized_elevation) [DEFAULT]
+#   absolute_elevation- distance * (1 + weight * normalized_abs_elevation)
 #   distance          - distance only (flat)
 #   slope_uphill      - penalize uphill elevation changes (distance-scaled)
 #   energy            - distance + weight * max(0, elevation_gain)
-COST_MODELS = {"elevation", "distance", "slope_uphill", "energy"}
+COST_MODELS = {"elevation", "absolute_elevation", "distance", "slope_uphill", "energy"}
 
 # Diagonal movement options
 # Controls which neighbors are connected in the graph:
