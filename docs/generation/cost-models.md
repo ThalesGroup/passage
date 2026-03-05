@@ -1,6 +1,5 @@
 ---
 title: Cost Models
-icon: material/scale-balance
 ---
 
 # Cost Models

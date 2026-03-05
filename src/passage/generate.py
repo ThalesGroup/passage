@@ -955,9 +955,9 @@ def generate_sample(
     Generate a single dataset sample.
 
     Args:
-          args: Tuple of (index, tiles_dirpath, outputs_dirpath, resolution,
-              tile_stats_df, global_min, global_max, disable_images, solvers_configs,
-              obstacle_settings, split_name).
+        args: Tuple of (index, tiles_dirpath, outputs_dirpath, resolution,
+            tile_stats_df, global_min, global_max, disable_images, solvers_configs,
+            obstacle_settings, split_name).
 
     Returns:
         Tuple of (index, success, message).

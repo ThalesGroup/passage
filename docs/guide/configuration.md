@@ -1,6 +1,5 @@
 ---
 title: Configuration Reference
-icon: material/cog
 ---
 
 # Configuration Reference

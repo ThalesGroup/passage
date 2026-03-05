@@ -83,6 +83,7 @@ theme:
 # Plugins
 # ---------------------------------------------------------------------------
 plugins:
+  - include-markdown
   - search:
       separator: '[\s\-\.]+'
   - mkdocstrings:
@@ -196,28 +197,27 @@ extra:
 # Navigation
 # ---------------------------------------------------------------------------
 nav:
-  - Home: index.md
-  - User Guide:
-      - guide/index.md
-      - Installation: guide/installation.md
-      - "Step 1 — Download Tiles": guide/download.md
-      - "Step 2 — Calibrate Elevations": guide/calibrate.md
-      - "Step 3 — Generate Dataset": guide/generate.md
-      - "Step 4 — Export & Publish": guide/export.md
-      - Configuration Reference: guide/configuration.md
-  - Generation Process:
-      - generation/index.md
-      - Sampling Procedure: generation/sampling.md
-      - Cost Models: generation/cost-models.md
-      - Obstacle Generation: generation/obstacles.md
-      - Solvers & Heuristics: generation/solvers.md
-      - Interactive Notebooks: generation/notebooks.md
-  - Code Architecture:
-      - architecture/index.md
-      - Module Reference: architecture/modules.md
-      - Data Format: architecture/data-format.md
-      - Testing Strategy: architecture/testing.md
-  - API Reference:
-      - api/index.md
-  - Contributing: contributing.md
-  - Changelog: changelog.md
+  - "Home": index.md
+  - "User Guide":
+      - "Overview": guide/index.md
+      - "Installation": guide/installation.md
+      - "Workflow":
+        - "#1 | Download Tiles": guide/download.md
+        - "#2 | Calibrate Elevations": guide/calibrate.md
+        - "#3 | Generate Dataset": guide/generate.md
+        - "#4 | Export & Publish": guide/export.md
+      - "Configuration": guide/configuration.md
+  - "Generation Process":
+      - "Overview": generation/index.md
+      - "Sampling Procedure": generation/sampling.md
+      - "Cost Models": generation/cost-models.md
+      - "Obstacle Generation": generation/obstacles.md
+      - "Solvers & Heuristics": generation/solvers.md
+      - "Interactive Notebooks": generation/notebooks.md
+  - "Code Architecture":
+      - "Overview": architecture/index.md
+      - "Module Reference": architecture/modules.md
+      - "Data Format": architecture/data-format.md
+      - "Testing Strategy": architecture/testing.md
+  - "API": api/index.md
+  - "Policies": project-policies.md

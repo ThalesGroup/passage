@@ -1,6 +1,5 @@
 ---
 title: "Step 2 — Calibrate Elevations"
-icon: material/chart-bell-curve-cumulative
 ---
 
 # Step 2 — Calibrate Elevations

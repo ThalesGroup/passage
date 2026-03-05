@@ -1,6 +1,5 @@
 ---
 title: Sampling Procedure
-icon: material/dice-multiple
 ---
 
 # Sampling Procedure
@@ -139,7 +138,7 @@ The tensor is compressed with **zstandard** (level 12) and stored as `.npy.zst`.
 
 ```mermaid
 flowchart TD
-    E["$e_{target} \\sim \\mathcal{U}(e_{min}, e_{max})$"] --> F[Filter eligible tiles]
+    E["Sample target elevation uniformly in [e_min, e_max]"] --> F[Filter eligible tiles]
     F --> G[Select tile uniformly]
     G --> H[Find nearest pixel]
     H --> I[Extract R×R crop]

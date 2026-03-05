@@ -1,6 +1,5 @@
 ---
 title: Interactive Notebooks
-icon: material/notebook
 ---
 
 # Interactive Notebooks

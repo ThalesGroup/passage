@@ -1,6 +1,5 @@
 ---
 title: "Step 1 — Download Tiles"
-icon: material/cloud-download
 ---
 
 # Step 1 — Download Tiles

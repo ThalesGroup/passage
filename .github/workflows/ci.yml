@@ -123,6 +123,7 @@ jobs:
           uv pip install \
             mkdocs-material \
             mkdocstrings[python] \
+            mkdocs-include-markdown-plugin \
             mkdocs-minify-plugin \
             pymdown-extensions
 

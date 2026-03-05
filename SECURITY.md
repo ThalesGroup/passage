@@ -11,16 +11,19 @@ Security fixes are provided on a best-effort basis for older versions.
 Please report suspected vulnerabilities privately.
 
 Preferred contacts:
+
 - `geoffrey.delhomme@thalesgroup.com`
 - `oss@thalesgroup.com`
 
 Please include:
+
 - A clear description of the issue and potential impact.
 - Affected versions/commit hash.
 - Reproduction steps or proof of concept (minimal and safe).
 - Any suggested remediation.
 
 Important rules:
+
 - Do not publish exploit details in public issues, pull requests, or discussions.
 - If you already opened a public issue by mistake, contact maintainers immediately so details can be redacted.
 
