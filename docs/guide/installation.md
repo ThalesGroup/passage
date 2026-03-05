@@ -1,6 +1,5 @@
 ---
 title: Installation
-icon: material/download-circle
 ---
 
 # Installation

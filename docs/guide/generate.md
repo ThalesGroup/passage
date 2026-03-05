@@ -1,6 +1,5 @@
 ---
 title: "Step 3 — Generate Dataset"
-icon: material/cog-play
 ---
 
 # Step 3 — Generate Dataset

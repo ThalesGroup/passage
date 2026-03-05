@@ -1,6 +1,6 @@
 ---
 title: Generation Process
-icon: material/flask
+icon: material/chart-timeline-variant
 ---
 
 # Generation Process
@@ -20,7 +20,7 @@ flowchart TD
     end
 
     subgraph Sampling
-        S1["1. Draw target elevation<br>$e_{target} \\sim \\mathcal{U}(e_{min}, e_{max})$"]
+        S1["1. Draw target elevation<br>uniformly in [e_min, e_max]"]
         S2[2. Select matching tile]
         S3[3. Extract random crop]
         S4[4. Place start/end markers]

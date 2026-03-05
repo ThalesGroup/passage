@@ -1,6 +1,5 @@
 ---
 title: Obstacle Generation
-icon: material/shape
 ---
 
 # Obstacle Generation

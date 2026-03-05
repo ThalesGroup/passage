@@ -1,6 +1,5 @@
 ---
 title: Data Format
-icon: material/database
 ---
 
 # Data Format

@@ -1,6 +1,5 @@
 ---
 title: "Step 4 — Export & Publish"
-icon: material/upload-network
 ---
 
 # Step 4 — Export & Publish

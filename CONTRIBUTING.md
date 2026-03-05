@@ -9,6 +9,7 @@ This document explains team organization, communication channels, and the contri
 `passage` repository is maintained by the Thales open-source team with a designated project lead.
 
 Project communication channels:
+
 - GitHub Issues for bugs and concrete tasks.
 - GitHub Discussions for ideas and questions.
 - Code of conduct reports via `geoffrey.delhomme@thalesgroup.com` or `oss@thalesgroup.com`.
@@ -21,7 +22,7 @@ Project communication channels:
 
 ## How to become a contributor
 
-1. Read [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
+1. Read [CODE_OF_CONDUCT.md](https://github.com/ThalesGroup/passage/blob/main/CODE_OF_CONDUCT.md).
 2. Fork and clone the repository.
 3. Set up the development environment and hooks:
 
@@ -39,6 +40,7 @@ uv run pre-commit install
 There is currently no separate CLA file in this repository.
 
 By contributing, you confirm that:
+
 - You have the right to submit the contribution.
 - Your contribution can be distributed under this repository's MIT License.
 
@@ -62,11 +64,24 @@ uv run pre-commit run --all-files
 
 `passage` uses the Gitflow branching model.
 
-![Gitflow workflow diagram](https://dam-cdn.atl.orangelogic.com/AssetLink/t8b1bnptx6bn40wc43g83j02u5b61064.svg)
+```mermaid
+flowchart LR
+    M[main] --> H[hotfix/*]
+    H --> M
+    H --> D[develop]
+
+    D --> F[feature/*]
+    F --> D
+
+    D --> R[release/*]
+    R --> M
+    R --> D
+```
 
 Reference: [Atlassian Gitflow workflow](https://www.atlassian.com/git/tutorials/comparing-workflows/gitflow-workflow)
 
 Branch roles:
+
 - `main`: production-ready history and release tags.
 - `develop`: integration branch for the next release.
 - `feature/<name>`: short-lived work branch created from `develop`, merged back into `develop`.
@@ -74,6 +89,7 @@ Branch roles:
 - `hotfix/<name>`: urgent fix branch created from `main`, then merged into both `main` and `develop`.
 
 Contributor rules with Gitflow:
+
 - Standard contributions must be opened as pull requests to `develop`.
 - Use `feature/<name>` for regular contributions.
 - Use `hotfix/<name>` only for urgent production fixes validated by maintainers.

@@ -1,6 +1,5 @@
 ---
 title: Solvers & Heuristics
-icon: material/graph
 ---
 
 # Solvers & Heuristics

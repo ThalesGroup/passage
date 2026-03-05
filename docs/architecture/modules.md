@@ -1,6 +1,5 @@
 ---
 title: Module Reference
-icon: material/package-variant
 ---
 
 # Module Reference

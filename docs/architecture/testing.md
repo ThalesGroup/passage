@@ -1,6 +1,5 @@
 ---
 title: Testing Strategy
-icon: material/test-tube
 ---
 
 # Testing Strategy

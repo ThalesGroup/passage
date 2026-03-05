@@ -21,7 +21,7 @@ hide:
 
 <div class="hero-buttons" markdown>
 
-[:material-rocket-launch: **Get Started**](guide/){ .btn-primary }
+[:material-rocket-launch: **Get Started**](guide/index.md){ .btn-primary }
 [:fontawesome-brands-github: **View on GitHub**](https://github.com/ThalesGroup/passage){ .btn-secondary }
 [:simple-huggingface: **Dataset on HF**](https://huggingface.co/datasets/geoffrey-g-delhomme/passage){ .btn-secondary }
 
