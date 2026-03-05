@@ -158,12 +158,11 @@ pip install -e ".[dev]"
 
 ## 🔁 Pipeline Overview
 
-```
- ┌──────────┐     ┌───────────┐     ┌───────────┐     ┌───────────┐
- │ Download  │────▶│ Calibrate │────▶│ Generate  │────▶│  Export   │
- │ JAXA DSM │     │ min / max │     │ samples   │     │ Parquet + │
- │  tiles   │     │ elevation │     │ + paths   │     │  HF Hub   │
- └──────────┘     └───────────┘     └───────────┘     └───────────┘
+```mermaid
+flowchart LR
+  D["Download<br/>JAXA DSM tiles"] --> C["Calibrate<br/>min / max elevation"]
+  C --> G["Generate<br/>samples + paths"]
+  G --> E["Export<br/>Parquet + HF Hub"]
 ```
 
 | Step | Command | What it does |
