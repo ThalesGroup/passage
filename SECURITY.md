@@ -4,13 +4,7 @@ This document describes how security issues are reported, handled, and communica
 
 ## Supported Versions
 
-Security fixes are provided on a best-effort basis for:
-
-| Version | Support Status |
-|---|---|
-| Latest stable release (`0.1.x`) | Supported |
-| `main` branch | Supported (best effort) |
-| Older releases | Not supported |
+Security fixes are provided on a best-effort basis for older versions.
 
 ## Reporting a Vulnerability
 
