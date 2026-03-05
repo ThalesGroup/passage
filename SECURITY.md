@@ -1,45 +1,84 @@
-Describe here all the security policies in place on this repository to help your contributors to handle security issues efficiently.
-
-## Goods practices to follow
-
-:warning:**You must never store credentials information into source code or config file in a GitHub repository**
-- Block sensitive data being pushed to GitHub by git-secrets or its likes as a git pre-commit hook
-- Audit for slipped secrets with dedicated tools
-- Use environment variables for secrets in CI/CD (e.g. GitHub Secrets) and secret managers in production
-
 # Security Policy
+
+This document describes how security issues are reported, handled, and communicated for PASSAGE.
 
 ## Supported Versions
 
-Use this section to tell people about which versions of your project are currently being supported with security updates.
+Security fixes are provided on a best-effort basis for:
 
-| Version | Supported          |
-| ------- | ------------------ |
-| 5.1.x   | :white_check_mark: |
-| 5.0.x   | :x:                |
-| 4.0.x   | :white_check_mark: |
-| < 4.0   | :x:                |
+| Version | Support Status |
+|---|---|
+| Latest stable release (`0.1.x`) | Supported |
+| `main` branch | Supported (best effort) |
+| Older releases | Not supported |
 
 ## Reporting a Vulnerability
 
-Use this section to tell people how to report a vulnerability.
-Tell them where to go, how often they can expect to get an update on a reported vulnerability, what to expect if the vulnerability is accepted or declined, etc.
+Please report suspected vulnerabilities privately.
 
-You can ask for support by contacting oss@thalesgroup.com
+Preferred contacts:
+- `geoffrey.delhomme@thalesgroup.com`
+- `oss@thalesgroup.com`
 
-## Disclosure policy
+Please include:
+- A clear description of the issue and potential impact.
+- Affected versions/commit hash.
+- Reproduction steps or proof of concept (minimal and safe).
+- Any suggested remediation.
 
-Define the procedure for what a reporter who finds a security issue needs to do in order to fully disclose the problem safely, including who to contact and how.
+Important rules:
+- Do not publish exploit details in public issues, pull requests, or discussions.
+- If you already opened a public issue by mistake, contact maintainers immediately so details can be redacted.
 
-## Security Update policy
+## Disclosure Policy
 
-Define how you intend to update users about new security vulnerabilities as they are found.
+Our coordinated disclosure process is:
 
-## Security related configuration
+1. Acknowledge report receipt (target: within 5 business days).
+2. Triage severity, impact, and affected scope.
+3. Prepare and validate a fix.
+4. Coordinate disclosure timing with the reporter when possible.
+5. Publish a fix and a public security note once users can mitigate.
 
-Settings users should consider that would impact the security posture of deploying this project, such as HTTPS, authorization and many others.
+For actively exploited or critical issues, timelines may be accelerated.
 
-## Known security gaps & future enhancements
+## Security Update Policy
 
-Security improvements you haven’t gotten to yet.
-Inform users those security controls aren’t in place, and perhaps suggest they contribute an implementation
+- Security fixes are released as soon as practical.
+- Release notes will clearly identify security-relevant changes.
+- Users should upgrade to the latest supported version immediately after a security release.
+- Critical fixes may be shipped as dedicated hotfix releases.
+
+## Security-Related Configuration
+
+To reduce security risk when contributing or deploying:
+
+- Use supported Python versions (`>=3.11`) and pinned dependencies (`uv.lock`).
+- Keep dependencies updated (`uv sync --group dev`).
+- Never commit credentials, API keys, or tokens.
+- Keep secrets in environment variables or local secret files (for example `.env.secret`, which is git-ignored).
+- Prefer least-privilege credentials (for example short-lived or scoped tokens).
+- Run project checks before pushing:
+
+```bash
+uv run pre-commit run --all-files
+uv run ruff check src/ tests/
+uv run pytest --cov
+```
+
+If your workflow uses PyTorch or other external ML tooling, follow upstream secure usage guidance and treat all external data/artifacts as untrusted inputs.
+
+## Security Best Practices for Contributors
+
+- Validate external files and datasets before processing.
+- Avoid executing untrusted notebooks or scripts.
+- Review dependency changes carefully in pull requests.
+- Minimize exposed data in logs, issues, and CI output.
+
+## Known Security Gaps and Future Enhancements
+
+Current limitations (contributions welcome):
+
+- No dedicated automated secret-scanning hook is enforced in CI.
+- No dedicated automated dependency vulnerability gate is enforced in CI.
+- No signed release artifacts/attestations are published yet.

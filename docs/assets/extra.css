@@ -1,0 +1,806 @@
+/* ======================================================================
+   PASSAGE — Snowy Mountain Blue Theme
+   Inspired by alpine peaks, frosty ridgelines, crystal sky.
+   Primary: icy steel-blue  •  Accent: warm amber  •  Atmosphere: snow fog
+   ====================================================================== */
+
+/* ===== Keyframe animations ===== */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(24px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeInScale {
+  from { opacity: 0; transform: scale(0.92); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+@keyframes subtlePulse {
+  0%, 100% { opacity: 0.55; }
+  50%      { opacity: 1; }
+}
+@keyframes snowDrift {
+  0%   { transform: translateY(0) translateX(0); opacity: 0.6; }
+  50%  { transform: translateY(-8px) translateX(4px); opacity: 1; }
+  100% { transform: translateY(0) translateX(0); opacity: 0.6; }
+}
+@keyframes heroGlow {
+  0%   { opacity: 0.08; transform: scale(1); }
+  50%  { opacity: 0.18; transform: scale(1.15); }
+  100% { opacity: 0.08; transform: scale(1); }
+}
+
+/* ---- Root color tokens (light mode) ---- */
+:root {
+  /* Primary — Alpine steel blue */
+  --passage-primary:        #3F6D9E;  /* steel mountain blue */
+  --passage-primary-light:  #6B9FCC;  /* sky reflection */
+  --passage-primary-dark:   #1B3A5C;  /* deep alpine shadow */
+  --passage-primary-deep:   #0F2440;  /* midnight ridge */
+
+  /* Accent — Warm amber (sunrise on snow) */
+  --passage-accent:         #F5A623;  /* alpine gold */
+  --passage-accent-light:   #FFC857;  /* morning glow */
+  --passage-accent-dark:    #D48B0A;  /* deep sunset */
+
+  /* Atmosphere */
+  --passage-snow:           #F7F9FC;  /* fresh snow */
+  --passage-ice:            #E8EEF4;  /* ice surface */
+  --passage-fog:            #D5DFE9;  /* mountain fog */
+  --passage-rock:           #5A6B7D;  /* blue-grey rock */
+
+  /* Gradients */
+  --passage-hero-gradient:  linear-gradient(
+    135deg,
+    #0F2440 0%,          /* midnight ridge */
+    #1B3A5C 20%,         /* deep shadow */
+    #3F6D9E 50%,         /* steel blue */
+    #6B9FCC 75%,         /* sky reflection */
+    #A3C4E0 100%         /* snow shimmer */
+  );
+  --passage-hero-gradient-dark: linear-gradient(
+    135deg,
+    #060D18 0%,
+    #0F2440 25%,
+    #1B3A5C 60%,
+    #3F6D9E 100%
+  );
+  --passage-context-gradient: linear-gradient(135deg, rgba(63, 109, 158, 0.05) 0%, rgba(107, 159, 204, 0.04) 50%, rgba(245, 166, 35, 0.02) 100%);
+  --passage-context-gradient-dark: linear-gradient(135deg, rgba(63, 109, 158, 0.12) 0%, rgba(107, 159, 204, 0.06) 100%);
+  --passage-card-gradient: linear-gradient(160deg, rgba(63, 109, 158, 0.025) 0%, rgba(107, 159, 204, 0.015) 100%);
+  --passage-frost-glow: radial-gradient(ellipse at 50% 0%, rgba(163, 196, 224, 0.25) 0%, transparent 70%);
+}
+
+/* ---- Dark mode ---- */
+[data-md-color-scheme="slate"] {
+  --passage-primary:        #6B9FCC;
+  --passage-primary-light:  #A3C4E0;
+  --passage-primary-dark:   #3F6D9E;
+  --passage-primary-deep:   #1B3A5C;
+  --passage-accent:         #FFC857;
+  --passage-accent-light:   #FFD98A;
+  --passage-accent-dark:    #F5A623;
+  --passage-snow:           #111824;
+  --passage-ice:            #1A2332;
+  --passage-fog:            #212D3B;
+  --passage-rock:           #8FA6BC;
+  --passage-context-gradient: var(--passage-context-gradient-dark);
+  --passage-card-gradient: linear-gradient(160deg, rgba(107, 159, 204, 0.06) 0%, rgba(255, 200, 87, 0.02) 100%);
+  --passage-frost-glow: radial-gradient(ellipse at 50% 0%, rgba(107, 159, 204, 0.12) 0%, transparent 70%);
+}
+
+/* ======================================================================
+   Global refinements
+   ====================================================================== */
+.md-typeset {
+  font-size: 0.82rem;
+  line-height: 1.7;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+/* Frosted glass feel on sidebar */
+.md-sidebar {
+  backdrop-filter: blur(2px);
+}
+
+/* ======================================================================
+   Hero Section — Snowy mountain panorama feel
+   ====================================================================== */
+.md-typeset .hero-section {
+  position: relative;
+  padding: 4rem 2rem 3.5rem;
+  margin: -0.8rem -0.8rem 2rem;
+  border-radius: 0 0 2rem 2rem;
+  background: var(--passage-hero-gradient);
+  color: #fff;
+  text-align: center;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+/* Animated aurora/snow glow behind hero */
+.md-typeset .hero-section::before {
+  content: "";
+  position: absolute;
+  top: -40%;
+  left: 20%;
+  width: 60%;
+  height: 120%;
+  border-radius: 50%;
+  background: radial-gradient(ellipse, rgba(163, 196, 224, 0.20) 0%, transparent 70%);
+  animation: heroGlow 8s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Subtle snow particle shimmer */
+.md-typeset .hero-section::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(1px 1px at 20% 30%, rgba(255,255,255,0.5) 0%, transparent 100%),
+    radial-gradient(1px 1px at 60% 20%, rgba(255,255,255,0.4) 0%, transparent 100%),
+    radial-gradient(1.5px 1.5px at 80% 60%, rgba(255,255,255,0.3) 0%, transparent 100%),
+    radial-gradient(1px 1px at 40% 70%, rgba(255,255,255,0.35) 0%, transparent 100%),
+    radial-gradient(1px 1px at 10% 80%, rgba(255,255,255,0.25) 0%, transparent 100%),
+    radial-gradient(1.5px 1.5px at 90% 40%, rgba(255,255,255,0.3) 0%, transparent 100%);
+  animation: snowDrift 6s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 0;
+}
+
+[data-md-color-scheme="slate"] .md-typeset .hero-section {
+  background: var(--passage-hero-gradient-dark);
+}
+
+.md-typeset .hero-section h1 {
+  position: relative;
+  z-index: 1;
+  font-size: 3.2rem;
+  font-weight: 800;
+  margin-bottom: 0.5rem;
+  letter-spacing: -0.03em;
+  text-shadow: 0 2px 24px rgba(0, 0, 0, 0.4), 0 0 60px rgba(107, 159, 204, 0.3);
+  color: #fff;
+  animation: fadeInUp 0.8s ease-out both;
+}
+
+.md-typeset .hero-section .hero-tagline {
+  position: relative;
+  z-index: 1;
+  font-size: 1.3rem;
+  opacity: 0.94;
+  max-width: 720px;
+  margin: 0 auto 2.25rem;
+  line-height: 1.65;
+  animation: fadeInUp 0.8s ease-out 0.15s both;
+}
+
+.md-typeset .hero-section .hero-buttons {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  flex-wrap: wrap;
+  animation: fadeInUp 0.8s ease-out 0.3s both;
+}
+
+.md-typeset .hero-section .hero-buttons a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.75rem;
+  border-radius: 2rem;
+  font-weight: 600;
+  font-size: 0.95rem;
+  text-decoration: none;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  white-space: nowrap;
+}
+
+.md-typeset .hero-section .hero-buttons a.btn-primary {
+  background: #fff;
+  color: var(--passage-primary-dark);
+  box-shadow:
+    0 4px 20px rgba(0, 0, 0, 0.12),
+    0 0 0 0 rgba(255, 200, 87, 0);
+}
+
+.md-typeset .hero-section .hero-buttons a.btn-primary:hover {
+  transform: translateY(-3px) scale(1.03);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.18),
+    0 0 20px rgba(245, 166, 35, 0.25);
+  background: var(--passage-accent-light);
+  color: var(--passage-primary-deep);
+}
+
+.md-typeset .hero-section .hero-buttons a.btn-secondary {
+  background: rgba(255, 255, 255, 0.10);
+  color: #fff;
+  border: 2px solid rgba(255, 255, 255, 0.30);
+  backdrop-filter: blur(8px);
+}
+
+.md-typeset .hero-section .hero-buttons a.btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.20);
+  border-color: rgba(255, 255, 255, 0.55);
+  transform: translateY(-3px);
+  box-shadow: 0 4px 16px rgba(107, 159, 204, 0.20);
+}
+
+/* ======================================================================
+   Context / Story Section — Frosted glass mountain card
+   ====================================================================== */
+.md-typeset .story-section {
+  position: relative;
+  padding: 2.25rem 2.5rem 2.25rem 3rem;
+  margin: 2.5rem 0;
+  border-radius: 1.2rem;
+  background: var(--passage-context-gradient);
+  border-left: 5px solid var(--passage-primary);
+  box-shadow:
+    0 4px 24px rgba(27, 58, 92, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  overflow: hidden;
+  backdrop-filter: blur(2px);
+  animation: fadeInUp 0.6s ease-out both;
+}
+
+/* Frost glow top-right */
+.md-typeset .story-section::before {
+  content: "";
+  position: absolute;
+  top: -40px;
+  right: -40px;
+  width: 140px;
+  height: 140px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(107, 159, 204, 0.10) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+/* Amber glow bottom-left */
+.md-typeset .story-section::after {
+  content: "";
+  position: absolute;
+  bottom: -24px;
+  left: 30px;
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(245, 166, 35, 0.06) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+[data-md-color-scheme="slate"] .md-typeset .story-section {
+  background: var(--passage-context-gradient-dark);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.20);
+  border-left-color: var(--passage-primary-light);
+}
+
+.md-typeset .story-section h2 {
+  color: var(--passage-primary-dark);
+  margin-top: 0;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+[data-md-color-scheme="slate"] .md-typeset .story-section h2 {
+  color: var(--passage-primary-light);
+}
+
+.md-typeset .story-section p {
+  line-height: 1.75;
+}
+
+.md-typeset .story-section strong {
+  color: var(--passage-primary-dark);
+}
+
+[data-md-color-scheme="slate"] .md-typeset .story-section strong {
+  color: var(--passage-accent-light);
+}
+
+.md-typeset .story-section a {
+  color: var(--passage-primary);
+  text-decoration: underline;
+  text-decoration-color: var(--passage-accent);
+  text-underline-offset: 3px;
+  transition: color 0.2s ease;
+}
+
+.md-typeset .story-section a:hover {
+  color: var(--passage-accent-dark);
+}
+
+/* ======================================================================
+   Feature Grid — Frosted glass cards with shimmer
+   ====================================================================== */
+.md-typeset .feature-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1.25rem;
+  margin: 2rem 0;
+}
+
+.md-typeset .feature-card {
+  position: relative;
+  padding: 1.6rem;
+  border-radius: 1rem;
+  background: var(--passage-card-gradient), var(--md-default-bg-color);
+  border: 1px solid rgba(63, 109, 158, 0.12);
+  transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 2px 8px rgba(27, 58, 92, 0.05);
+  overflow: hidden;
+  animation: fadeInScale 0.5s ease-out both;
+}
+
+/* Animated shimmer top-border on hover */
+.md-typeset .feature-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--passage-primary-light) 25%,
+    var(--passage-accent) 50%,
+    var(--passage-primary-light) 75%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  opacity: 0;
+  transition: opacity 0.35s ease;
+}
+
+/* Frost glow on hover */
+.md-typeset .feature-card::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 60%;
+  height: 60%;
+  background: var(--passage-frost-glow);
+  opacity: 0;
+  transition: opacity 0.35s ease;
+  pointer-events: none;
+}
+
+.md-typeset .feature-card:hover {
+  border-color: var(--passage-primary-light);
+  box-shadow:
+    0 8px 32px rgba(63, 109, 158, 0.12),
+    0 0 0 1px rgba(107, 159, 204, 0.10);
+  transform: translateY(-4px);
+}
+
+.md-typeset .feature-card:hover::before {
+  opacity: 1;
+  animation: shimmer 2s linear infinite;
+}
+
+.md-typeset .feature-card:hover::after {
+  opacity: 1;
+}
+
+.md-typeset .feature-card .feature-icon {
+  font-size: 2.2rem;
+  margin-bottom: 0.75rem;
+  display: block;
+  filter: drop-shadow(0 2px 4px rgba(27, 58, 92, 0.15));
+}
+
+.md-typeset .feature-card h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--passage-primary-dark);
+}
+
+[data-md-color-scheme="slate"] .md-typeset .feature-card h3 {
+  color: var(--passage-primary-light);
+}
+
+.md-typeset .feature-card p {
+  margin: 0;
+  font-size: 0.88rem;
+  color: var(--md-default-fg-color--light);
+  line-height: 1.6;
+}
+
+/* Stagger card animations */
+.md-typeset .feature-card:nth-child(1) { animation-delay: 0.05s; }
+.md-typeset .feature-card:nth-child(2) { animation-delay: 0.10s; }
+.md-typeset .feature-card:nth-child(3) { animation-delay: 0.15s; }
+.md-typeset .feature-card:nth-child(4) { animation-delay: 0.20s; }
+.md-typeset .feature-card:nth-child(5) { animation-delay: 0.25s; }
+.md-typeset .feature-card:nth-child(6) { animation-delay: 0.30s; }
+.md-typeset .feature-card:nth-child(7) { animation-delay: 0.35s; }
+.md-typeset .feature-card:nth-child(8) { animation-delay: 0.40s; }
+.md-typeset .feature-card:nth-child(9) { animation-delay: 0.45s; }
+
+/* ======================================================================
+   Stats Bar — Frosted counter strip
+   ====================================================================== */
+.md-typeset .stats-bar {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 2.5rem;
+  margin: 2.5rem 0;
+  padding: 1.75rem 1.5rem;
+  border-radius: 1rem;
+  background: var(--passage-card-gradient), var(--md-default-bg-color);
+  border: 1px solid rgba(63, 109, 158, 0.10);
+  box-shadow:
+    0 2px 12px rgba(27, 58, 92, 0.04),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  animation: fadeInUp 0.6s ease-out 0.2s both;
+}
+
+.md-typeset .stat-item {
+  text-align: center;
+  transition: transform 0.25s ease;
+}
+
+.md-typeset .stat-item:hover {
+  transform: scale(1.08);
+}
+
+.md-typeset .stat-item .stat-value {
+  display: block;
+  font-size: 2.1rem;
+  font-weight: 800;
+  color: var(--passage-primary);
+  line-height: 1.2;
+  text-shadow: 0 1px 4px rgba(63, 109, 158, 0.15);
+}
+
+[data-md-color-scheme="slate"] .md-typeset .stat-item .stat-value {
+  color: var(--passage-primary-light);
+  text-shadow: 0 1px 8px rgba(107, 159, 204, 0.25);
+}
+
+.md-typeset .stat-item .stat-label {
+  font-size: 0.78rem;
+  color: var(--md-default-fg-color--light);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  font-weight: 600;
+}
+
+/* ======================================================================
+   Badges Row
+   ====================================================================== */
+.md-typeset .badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 1rem 0;
+  justify-content: center;
+  animation: fadeInUp 0.5s ease-out 0.1s both;
+}
+
+.md-typeset .badges img {
+  height: 22px;
+  transition: transform 0.2s ease;
+}
+
+.md-typeset .badges img:hover {
+  transform: scale(1.12);
+}
+
+/* ======================================================================
+   Pipeline Step Cards — numbered altitude markers
+   ====================================================================== */
+.md-typeset .pipeline-steps {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1.1rem;
+  margin: 2rem 0;
+}
+
+.md-typeset .pipeline-step {
+  position: relative;
+  padding: 1.5rem 1.25rem;
+  border-radius: 1rem;
+  background: var(--md-default-bg-color);
+  border: 2px solid var(--passage-ice);
+  text-align: center;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  animation: fadeInScale 0.5s ease-out both;
+}
+
+.md-typeset .pipeline-step:nth-child(1) { animation-delay: 0.05s; }
+.md-typeset .pipeline-step:nth-child(2) { animation-delay: 0.12s; }
+.md-typeset .pipeline-step:nth-child(3) { animation-delay: 0.19s; }
+.md-typeset .pipeline-step:nth-child(4) { animation-delay: 0.26s; }
+
+.md-typeset .pipeline-step:hover {
+  border-color: var(--passage-primary-light);
+  box-shadow: 0 6px 24px rgba(63, 109, 158, 0.12);
+  transform: translateY(-3px);
+}
+
+.md-typeset .pipeline-step .step-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.6rem;
+  height: 2.6rem;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--passage-primary) 0%, var(--passage-primary-dark) 100%);
+  color: #fff;
+  font-weight: 800;
+  font-size: 1.1rem;
+  margin-bottom: 0.75rem;
+  box-shadow: 0 3px 12px rgba(63, 109, 158, 0.30);
+  transition: box-shadow 0.25s ease;
+}
+
+.md-typeset .pipeline-step:hover .step-number {
+  box-shadow: 0 4px 18px rgba(63, 109, 158, 0.40);
+}
+
+[data-md-color-scheme="slate"] .md-typeset .pipeline-step {
+  border-color: var(--passage-fog);
+}
+
+[data-md-color-scheme="slate"] .md-typeset .pipeline-step .step-number {
+  background: linear-gradient(135deg, var(--passage-primary-light) 0%, var(--passage-primary) 100%);
+  color: var(--passage-primary-deep);
+}
+
+.md-typeset .pipeline-step h4 {
+  margin: 0 0 0.3rem;
+  font-size: 1rem;
+}
+
+.md-typeset .pipeline-step p {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--md-default-fg-color--light);
+}
+
+/* ======================================================================
+   Notebook Iframe Embed
+   ====================================================================== */
+.md-typeset .notebook-embed {
+  position: relative;
+  width: 100%;
+  margin: 1.5rem 0;
+  border-radius: 0.85rem;
+  overflow: hidden;
+  border: 1px solid var(--passage-fog);
+  box-shadow: 0 4px 20px rgba(27, 58, 92, 0.08);
+}
+
+.md-typeset .notebook-embed iframe {
+  width: 100%;
+  height: 600px;
+  border: none;
+  background: #fff;
+}
+
+.md-typeset .notebook-embed .notebook-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1rem;
+  background: var(--md-code-bg-color);
+  border-bottom: 1px solid var(--passage-fog);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--md-default-fg-color--light);
+}
+
+/* ======================================================================
+   Admonition overrides — mountain blue tones
+   ====================================================================== */
+.md-typeset .admonition.note,
+.md-typeset details.note {
+  border-color: var(--passage-primary);
+}
+
+.md-typeset .note > .admonition-title,
+.md-typeset .note > summary {
+  background-color: rgba(63, 109, 158, 0.10);
+}
+
+.md-typeset .admonition.tip,
+.md-typeset details.tip {
+  border-color: var(--passage-accent);
+}
+
+.md-typeset .tip > .admonition-title,
+.md-typeset .tip > summary {
+  background-color: rgba(245, 166, 35, 0.10);
+}
+
+/* ======================================================================
+   Code blocks
+   ====================================================================== */
+.md-typeset .highlight code {
+  border-radius: 0.5rem;
+}
+
+.md-typeset code {
+  border-radius: 0.25rem;
+}
+
+/* ======================================================================
+   Navigation tabs — Alpine ridge line
+   ====================================================================== */
+.md-tabs {
+  background-color: var(--passage-primary-dark);
+  box-shadow: 0 2px 8px rgba(15, 36, 64, 0.15);
+}
+
+.md-tabs__link {
+  transition: color 0.2s ease, opacity 0.2s ease;
+}
+
+.md-tabs__link--active,
+.md-tabs__link:hover {
+  color: var(--passage-accent-light) !important;
+}
+
+/* ======================================================================
+   Header — Deep mountain sky
+   ====================================================================== */
+.md-header {
+  background-color: var(--passage-primary-dark);
+  box-shadow: 0 2px 12px rgba(15, 36, 64, 0.20);
+}
+
+[data-md-color-scheme="slate"] .md-header {
+  background-color: var(--passage-primary-deep);
+}
+
+/* ======================================================================
+   Announcement bar
+   ====================================================================== */
+.md-banner {
+  background: linear-gradient(90deg, var(--passage-primary-dark) 0%, var(--passage-primary) 100%) !important;
+  color: #fff !important;
+}
+
+.md-banner a {
+  color: var(--passage-accent-light) !important;
+  text-decoration: underline;
+}
+
+/* ======================================================================
+   Footer — Midnight ridge
+   ====================================================================== */
+.md-footer {
+  background-color: var(--passage-primary-deep);
+}
+
+.md-footer-meta {
+  background-color: rgba(0, 0, 0, 0.20);
+}
+
+/* ======================================================================
+   Table styling — Ice blue headers
+   ====================================================================== */
+.md-typeset table:not([class]) {
+  border-radius: 0.5rem;
+  overflow: hidden;
+  box-shadow: 0 1px 6px rgba(27, 58, 92, 0.06);
+}
+
+.md-typeset table:not([class]) th {
+  background-color: var(--passage-primary-dark);
+  color: #fff;
+  font-weight: 600;
+}
+
+.md-typeset table:not([class]) tr:nth-child(even) td {
+  background-color: rgba(63, 109, 158, 0.03);
+}
+
+.md-typeset table:not([class]) tr:hover td {
+  background-color: rgba(63, 109, 158, 0.06);
+}
+
+/* ======================================================================
+   Math / KaTeX overflow
+   ====================================================================== */
+.md-typeset .katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.5rem 0;
+}
+
+/* ======================================================================
+   Selection highlight — Icy blue
+   ====================================================================== */
+::selection {
+  background: rgba(107, 159, 204, 0.30);
+}
+
+/* ======================================================================
+   Custom scrollbar — Glacier
+   ====================================================================== */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, var(--passage-primary-light) 0%, var(--passage-primary) 100%);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--passage-primary);
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ======================================================================
+   Links — Warm accent underline
+   ====================================================================== */
+.md-typeset a:not(.btn-primary):not(.btn-secondary):not(.md-nav__link):not(.headerlink) {
+  text-decoration-color: rgba(245, 166, 35, 0.4);
+  text-underline-offset: 2px;
+  transition: color 0.2s ease, text-decoration-color 0.2s ease;
+}
+
+.md-typeset a:not(.btn-primary):not(.btn-secondary):not(.md-nav__link):not(.headerlink):hover {
+  text-decoration-color: var(--passage-accent);
+}
+
+/* ======================================================================
+   Horizontal rules — frosty separator
+   ====================================================================== */
+.md-typeset hr {
+  border: none;
+  height: 1px;
+  background: linear-gradient(90deg, transparent 0%, var(--passage-fog) 20%, var(--passage-primary-light) 50%, var(--passage-fog) 80%, transparent 100%);
+  margin: 2rem 0;
+  opacity: 0.6;
+}
+
+/* ======================================================================
+   Responsive tweaks
+   ====================================================================== */
+@media (max-width: 768px) {
+  .md-typeset .hero-section {
+    padding: 2.5rem 1rem 2rem;
+  }
+  .md-typeset .hero-section h1 {
+    font-size: 2rem;
+  }
+  .md-typeset .hero-section .hero-tagline {
+    font-size: 1rem;
+  }
+  .md-typeset .feature-grid {
+    grid-template-columns: 1fr;
+  }
+  .md-typeset .stats-bar {
+    gap: 1rem;
+  }
+  .md-typeset .stat-item .stat-value {
+    font-size: 1.5rem;
+  }
+  .md-typeset .story-section {
+    padding: 1.5rem 1.5rem 1.5rem 2rem;
+  }
+}
