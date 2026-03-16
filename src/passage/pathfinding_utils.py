@@ -1013,7 +1013,7 @@ def _grid_astar(
         dest_factor = 1.0 + weight * abs_norm
     else:
         dest_factor = None
-        logger.warning(f"Unknown cost_model '{cost_model}', falling back to default dest_factor")
+        _, _, elev_range = _normalize_elevation_arrays(crop)
 
     neighbors = _grid_solvers_neighbors(diagonal_movement)
 
