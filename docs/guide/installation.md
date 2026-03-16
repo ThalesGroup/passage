@@ -21,7 +21,7 @@ This page covers how to set up PASSAGE on your machine, install dependencies, an
 !!! note "OpenCV dependency"
     On headless Linux servers, you may need:
     ```bash
-    sudo apt install -y libgl1-mesa-glx
+    sudo apt install -y libgl1
     ```
 
 ---

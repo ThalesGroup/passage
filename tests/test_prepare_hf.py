@@ -1,6 +1,9 @@
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import yaml
+from datasets import Features, Value
+
 from passage.export import _generate_huggingface_yaml_header, _reset_hf_upload_cache, export_and_upload
 
 
@@ -47,10 +50,40 @@ solvers:
     return dataset_dir, notebooks_dir, calibrate_dir
 
 
+def _write_dummy_metadata(dataset_dir: Path, resolution: int, split: str = "train") -> None:
+    metadata_dir = dataset_dir / str(resolution) / split / "metadata" / "N000" / "E000"
+    metadata_dir.mkdir(parents=True, exist_ok=True)
+    (metadata_dir / "0000000000.yaml").write_text("index: 0\n")
+
+
+def _mock_prepare_row(*_args, **_kwargs) -> dict:
+    return {"id": "0000000000", "tensor": b"tensor", "metadata": "{}"}
+
+
+def _mock_features(*_args, **_kwargs) -> Features:
+    return Features(
+        {
+            "id": Value("string"),
+            "tensor": Value("binary"),
+            "metadata": Value("string"),
+        }
+    )
+
+
+def _read_readme_front_matter(readme_path: Path) -> dict:
+    readme_text = readme_path.read_text(encoding="utf-8")
+    _, front_matter, _ = readme_text.split("---", 2)
+    return yaml.safe_load(front_matter)
+
+
 def test_generate_hf_yaml_header_configs_names():
     solver_names = ["astar_elevation", "astar_energy"]
     yaml = _generate_huggingface_yaml_header(
-        "user/repo", [64, 128], ["train", "validation"], "1024x1024_sample", solver_names
+        "user/repo",
+        ["64x64_sample", "64x64", "128x128_sample", "128x128"],
+        ["train", "validation"],
+        "1024x1024_sample",
+        solver_names,
     )
     # Check that config names are present (format may vary with yaml.dump)
     assert "64x64" in yaml
@@ -67,21 +100,26 @@ def test_generate_hf_yaml_header_configs_names():
 def test_export_and_upload_uses_chunk_size(tmp_path):
     """Test that export_and_upload loads config properly."""
     dataset_dir, notebooks_dir, calibrate_dir = _setup_minimal_export_tree(tmp_path)
+    _write_dummy_metadata(dataset_dir, 64)
 
     with patch("passage.export._load_hf_credentials", return_value=("me", "repo", "token")):
         with patch("passage.export.login", return_value=None):
             with patch("passage.export.HfApi") as api_mock:
                 api_instance = MagicMock()
+                api_instance.list_repo_files.return_value = []
                 api_mock.return_value = api_instance
-                export_and_upload(
-                    dataset_dirpath=dataset_dir,
-                    calibrate_dirpath=calibrate_dir,
-                    notebooks_dirpath=notebooks_dir,
-                    resolutions=[64],
-                    repo_id=None,
-                    execute_notebooks=False,
-                    skip_upload=True,  # Don't actually upload
-                )
+                with patch("passage.export._process_meta_for_prepare", side_effect=_mock_prepare_row):
+                    with patch("passage.export._features", side_effect=_mock_features):
+                        export_and_upload(
+                            dataset_dirpath=dataset_dir,
+                            calibrate_dirpath=calibrate_dir,
+                            notebooks_dirpath=notebooks_dir,
+                            resolutions=[64],
+                            repo_id=None,
+                            execute_notebooks=False,
+                            skip_upload=True,  # Don't actually upload
+                            num_cpus=0,
+                        )
 
 
 def test_export_and_upload_passes_num_cpus_to_notebook(tmp_path):
@@ -122,19 +160,20 @@ def test_export_and_upload_passes_num_cpus_to_notebook(tmp_path):
 def test_export_and_upload_skips_upload_when_requested(tmp_path):
     dataset_dir, notebooks_dir, calibrate_dir = _setup_minimal_export_tree(tmp_path)
 
-    # skip_upload=True should not call _load_hf_credentials until after config is loaded
-    with patch("passage.export._load_hf_credentials", return_value=("me", "repo", "token")):
+    with patch("passage.export.HfApi") as api_mock:
         with patch("passage.export._reset_hf_upload_cache") as reset_mock:
             ok = export_and_upload(
                 dataset_dirpath=dataset_dir,
                 calibrate_dirpath=calibrate_dir,
                 notebooks_dirpath=notebooks_dir,
                 resolutions=[64],
+                repo_id="alice/repo",
                 execute_notebooks=False,
                 skip_upload=True,
             )
 
     assert ok is True
+    api_mock.assert_not_called()
     reset_mock.assert_not_called()
 
 
@@ -152,22 +191,132 @@ def test_reset_hf_upload_cache_removes_cache_dir(tmp_path):
 def test_export_and_upload_resets_cache_before_upload(tmp_path):
     dataset_dir, notebooks_dir, calibrate_dir = _setup_minimal_export_tree(tmp_path)
     export_dir = calibrate_dir.parent / "export"
+    _write_dummy_metadata(dataset_dir, 64)
 
     with patch("passage.export._load_hf_credentials", return_value=("me", "repo", "token")):
         with patch("passage.export.login", return_value=None):
             with patch("passage.export.HfApi") as api_mock:
                 api_instance = MagicMock()
+                api_instance.list_repo_files.return_value = []
                 api_mock.return_value = api_instance
                 with patch("passage.export._reset_hf_upload_cache") as reset_mock:
-                    ok = export_and_upload(
-                        dataset_dirpath=dataset_dir,
-                        calibrate_dirpath=calibrate_dir,
-                        notebooks_dirpath=notebooks_dir,
-                        resolutions=[64],
-                        execute_notebooks=False,
-                        skip_upload=False,
-                    )
+                    with patch("passage.export._process_meta_for_prepare", side_effect=_mock_prepare_row):
+                        with patch("passage.export._features", side_effect=_mock_features):
+                            ok = export_and_upload(
+                                dataset_dirpath=dataset_dir,
+                                calibrate_dirpath=calibrate_dir,
+                                notebooks_dirpath=notebooks_dir,
+                                resolutions=[64],
+                                execute_notebooks=False,
+                                skip_upload=False,
+                                num_cpus=0,
+                            )
 
     assert ok is True
     reset_mock.assert_called_once_with(export_dir)
     api_instance.upload_large_folder.assert_called_once()
+    upload_kwargs = api_instance.upload_large_folder.call_args.kwargs
+    assert upload_kwargs["allow_patterns"] == [
+        "README.md",
+        "assets/**",
+        "calibration/**",
+        "notebooks/**",
+        "64x64_sample/**",
+        "64x64/**",
+    ]
+
+
+def test_export_and_upload_merges_remote_configs_into_readme(tmp_path):
+    dataset_dir, notebooks_dir, calibrate_dir = _setup_minimal_export_tree(tmp_path)
+    export_dir = calibrate_dir.parent / "export"
+    _write_dummy_metadata(dataset_dir, 64)
+
+    with patch("passage.export._load_hf_credentials", return_value=("me", "repo", "token")):
+        with patch("passage.export.login", return_value=None):
+            with patch("passage.export.HfApi") as api_mock:
+                api_instance = MagicMock()
+                api_instance.list_repo_files.return_value = [
+                    "128x128/train/data-00000.parquet",
+                    "128x128_sample/train/data-00000.parquet",
+                ]
+                api_mock.return_value = api_instance
+                with patch("passage.export._process_meta_for_prepare", side_effect=_mock_prepare_row):
+                    with patch("passage.export._features", side_effect=_mock_features):
+                        ok = export_and_upload(
+                            dataset_dirpath=dataset_dir,
+                            calibrate_dirpath=calibrate_dir,
+                            notebooks_dirpath=notebooks_dir,
+                            resolutions=[64],
+                            execute_notebooks=False,
+                            skip_upload=False,
+                            num_cpus=0,
+                        )
+
+    assert ok is True
+    front_matter = _read_readme_front_matter(export_dir / "README.md")
+    config_entries = {entry["config_name"]: entry for entry in front_matter["configs"]}
+    assert set(config_entries) == {"64x64", "64x64_sample", "128x128", "128x128_sample"}
+    assert config_entries["64x64_sample"]["default"] is True
+    assert "default" not in config_entries["128x128_sample"]
+
+
+def test_export_and_upload_cleans_only_selected_incremental_resolution(tmp_path):
+    dataset_dir, notebooks_dir, calibrate_dir = _setup_minimal_export_tree(tmp_path)
+    export_dir = calibrate_dir.parent / "export"
+    _write_dummy_metadata(dataset_dir, 64)
+
+    stale_full = export_dir / "64x64" / "stale.txt"
+    stale_sample = export_dir / "64x64_sample" / "stale.txt"
+    untouched_other = export_dir / "128x128" / "keep.txt"
+    stale_full.parent.mkdir(parents=True, exist_ok=True)
+    stale_sample.parent.mkdir(parents=True, exist_ok=True)
+    untouched_other.parent.mkdir(parents=True, exist_ok=True)
+    stale_full.write_text("stale-full")
+    stale_sample.write_text("stale-sample")
+    untouched_other.write_text("keep-me")
+
+    with patch("passage.export._process_meta_for_prepare", side_effect=_mock_prepare_row):
+        with patch("passage.export._features", side_effect=_mock_features):
+            ok = export_and_upload(
+                dataset_dirpath=dataset_dir,
+                calibrate_dirpath=calibrate_dir,
+                notebooks_dirpath=notebooks_dir,
+                resolutions=[64],
+                repo_id="alice/repo",
+                execute_notebooks=False,
+                skip_upload=True,
+                num_cpus=0,
+            )
+
+    assert ok is True
+    assert not stale_full.exists()
+    assert not stale_sample.exists()
+    assert (export_dir / "64x64" / "train" / "data-00000.parquet").exists()
+    assert (export_dir / "64x64_sample" / "train" / "data-00000.parquet").exists()
+    assert untouched_other.exists()
+
+
+def test_export_and_upload_full_export_keeps_unrestricted_upload(tmp_path):
+    dataset_dir, notebooks_dir, calibrate_dir = _setup_minimal_export_tree(tmp_path)
+    _write_dummy_metadata(dataset_dir, 64)
+
+    with patch("passage.export._load_hf_credentials", return_value=("me", "repo", "token")):
+        with patch("passage.export.login", return_value=None):
+            with patch("passage.export.HfApi") as api_mock:
+                api_instance = MagicMock()
+                api_instance.list_repo_files.return_value = []
+                api_mock.return_value = api_instance
+                with patch("passage.export._process_meta_for_prepare", side_effect=_mock_prepare_row):
+                    with patch("passage.export._features", side_effect=_mock_features):
+                        ok = export_and_upload(
+                            dataset_dirpath=dataset_dir,
+                            calibrate_dirpath=calibrate_dir,
+                            notebooks_dirpath=notebooks_dir,
+                            resolutions=None,
+                            execute_notebooks=False,
+                            skip_upload=False,
+                            num_cpus=0,
+                        )
+
+    assert ok is True
+    assert api_instance.upload_large_folder.call_args.kwargs["allow_patterns"] is None

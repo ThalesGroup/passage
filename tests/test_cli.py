@@ -345,3 +345,20 @@ class TestMainCLI:
                 mock_export.assert_called_once()
                 _, kwargs = mock_export.call_args
                 assert kwargs.get("num_cpus") == 4
+
+    @pytest.mark.unit
+    def test_export_passes_explicit_resolutions(self):
+        """The export subcommand should pass explicit resolution filters to export_and_upload."""
+        from passage import main
+
+        with patch.object(
+            sys,
+            "argv",
+            ["passage", "export", "--resolution", "64", "128", "--no-exec-notebooks", "--no-upload"],
+        ):
+            with patch("passage.export_and_upload") as mock_export:
+                main()
+
+                mock_export.assert_called_once()
+                _, kwargs = mock_export.call_args
+                assert kwargs.get("resolutions") == [64, 128]
