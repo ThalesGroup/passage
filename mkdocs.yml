@@ -220,4 +220,4 @@ nav:
       - "Data Format": architecture/data-format.md
       - "Testing Strategy": architecture/testing.md
   - "API": api/index.md
-  - "Policies": project-policies.md
+  - "Policies": policies/index.md
