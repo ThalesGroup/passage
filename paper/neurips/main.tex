@@ -1,0 +1,77 @@
+\documentclass{article}
+
+\usepackage[dandb]{neurips_2026}
+
+\usepackage{iftex}
+\ifPDFTeX
+  \usepackage[utf8]{inputenc}
+  \usepackage[T1]{fontenc}
+  \usepackage{lmodern}
+\else
+  \usepackage{fontspec}
+  \defaultfontfeatures{Ligatures=TeX}
+  \setmainfont{Latin Modern Roman}
+  \setsansfont{Latin Modern Sans}
+  \setmonofont{Latin Modern Mono}
+\fi
+\usepackage{hyperref}
+\usepackage{url}
+\usepackage{booktabs}
+\usepackage{amsfonts}
+\usepackage{nicefrac}
+\usepackage[expansion=false]{microtype}
+\usepackage{xcolor}
+
+\ifPDFTeX
+  % Local pdfTeX installs in this workspace are missing the PSNFSS Times map
+  % files expected by the official NeurIPS style. Fall back to Latin Modern so
+  % the scaffold remains buildable here; remove this override in a submission-
+  % ready environment that provides the default Times setup.
+  \renewcommand{\rmdefault}{lmr}
+  \renewcommand{\sfdefault}{lmss}
+  \renewcommand{\ttdefault}{lmtt}
+\fi
+
+\title{PASSAGE: A Benchmark for Terrain-Aware Grid Pathfinding}
+
+\author{Anonymous Authors}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+This file is a clean anonymous NeurIPS 2026 Evaluations \& Datasets Track scaffold for PASSAGE. Replace this paragraph with the final one-paragraph abstract after the benchmark claims, experiments, artifact links, and checklist answers are ready for submission.
+\end{abstract}
+
+\section{Introduction}
+Replace this section with the final introduction. The current drafting plan lives in \texttt{paper/neurips/skeleton.md}.
+
+\section{Related Work}
+Summarize prior pathfinding benchmarks, terrain-routing datasets, and benchmark-design papers here.
+
+\section{Benchmark Design}
+Describe the task definition, source data, resolutions, splits, obstacle model, and intended use cases here.
+
+\section{Generation Pipeline and Data Schema}
+Document the download, calibration, generation, export, metadata, and release formats here.
+
+\section{Evaluation Protocol}
+Define the benchmark tasks, metrics, baselines, geographic hold-out policy, and reproducibility protocol here.
+
+\section{Results and Analysis}
+Report solver scaling, baseline performance, generalization analyses, and benchmark diagnostics here.
+
+\section{Limitations, Risks, and Release}
+Discuss scope limits, safety and misuse considerations, licensing, maintenance, and release safeguards here.
+
+\section{Conclusion}
+Summarize the benchmark contribution, intended impact, and next steps here.
+
+\bibliographystyle{plainnat}
+\bibliography{references}
+
+\clearpage
+\input{checklist.tex}
+
+\end{document}
