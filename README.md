@@ -364,7 +364,7 @@ Before opening an issue, please search existing issues and discussions to avoid 
 | Name | Affiliation | Contact |
 |------|------------|--------|
 | **Geoffrey Delhomme** | [Thales Group](https://www.thalesgroup.com/) | [geoffrey.delhomme@thalesgroup.com](mailto:geoffrey.delhomme@thalesgroup.com) |
-| **François Trap** | [Thales Group](https://www.thalesgroup.com/) | — |
+| **François Trap** | [Thales Group](https://www.thalesgroup.com/) | [francois.trap@fr.thalesgroup.com](mailto:francois.trap@fr.thalesgroup.com) |
 
 ---
 
