@@ -21,4 +21,8 @@ outputs/tests/
 htmlcov/
 .pytest_cache/
 
+# Secrets
 .env.secret
+
+# Documentation
+site

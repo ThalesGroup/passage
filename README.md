@@ -386,7 +386,7 @@ If you discover a vulnerability, please use private reporting channels described
 
 ## License
 
-This project is licensed under the **MIT License** — see the [LICENSE](LICENSE) file for details.
+This project is licensed under the **MIT License** — see the [LICENSE](LICENSE) file for details. Please note that each dependency is subject to its own respective license.
 
 The license is defined in an explicit root-level `LICENSE` file.
 

@@ -1,3 +1,25 @@
+# MIT License
+#
+# Copyright (c) 2026 THALES
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+
 """
 Generate module for PASSAGE.
 
@@ -30,7 +52,6 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-import cv2
 import networkx as nx
 import numpy as np
 import pandas as pd
@@ -38,6 +59,7 @@ import rasterio
 import yaml
 from loguru import logger
 from PIL import Image
+from rasterio.enums import Resampling
 from rasterio.windows import Window
 from tqdm import tqdm
 
@@ -68,7 +90,6 @@ from passage.pathfinding_utils import (
     _pathfinding_path_to_coords as _pathfinding_path_to_coords,
 )
 from passage.utils import TENSOR_SUFFIX, _log_timing, save_tensor
-from passage.visualization import tensor_to_image
 
 # Standard ALOS AW3D30 tile size in pixels (1° x 1° at 30m resolution)
 TILE_SIZE_PX = 3600
@@ -119,6 +140,19 @@ DEFAULT_HOLD_OUT_MASK_PATH = "config/hold_out_mask.png"
 # Global cache for hold-out mask (loaded once at startup)
 _HOLD_OUT_MASK: np.ndarray | None = None
 _HOLD_OUT_MASK_PATH: str | None = None
+
+
+def tensor_to_image(*args, **kwargs) -> np.ndarray:
+    """Lazily import visualization helpers so `--no-images` can run without OpenCV."""
+    from passage.visualization import tensor_to_image as _tensor_to_image
+
+    return _tensor_to_image(*args, **kwargs)
+
+
+def _save_png(image_path: Path, image_bgr: np.ndarray) -> None:
+    """Write an OpenCV-style BGR image as a PNG without requiring OpenCV."""
+    rgb_image = np.ascontiguousarray(image_bgr[:, :, ::-1])
+    Image.fromarray(rgb_image).save(image_path, format="PNG", compress_level=0)
 
 
 def load_hold_out_mask(mask_path: str | Path | None = None) -> np.ndarray | None:
@@ -614,13 +648,14 @@ def load_tile(tiles_dirpath: Path, lat: int, lon: int) -> np.ndarray:
         logger.debug(f"Using tile file: {tile_file}")
         try:
             with rasterio.open(tile_file) as src:
-                data = src.read(1).astype(np.float32)
-            if data.shape != (TILE_SIZE_PX, TILE_SIZE_PX):
-                try:
-                    data = cv2.resize(data, (TILE_SIZE_PX, TILE_SIZE_PX), interpolation=cv2.INTER_NEAREST)
-                except Exception:  # pragma: no cover
-                    logger.warning(f"Unexpected tile shape {data.shape} for {tile_file}, using zero tile")
-                    data = np.zeros((TILE_SIZE_PX, TILE_SIZE_PX), dtype=np.float32)
+                if src.height != TILE_SIZE_PX or src.width != TILE_SIZE_PX:
+                    data = src.read(
+                        1,
+                        out_shape=(TILE_SIZE_PX, TILE_SIZE_PX),
+                        resampling=Resampling.nearest,
+                    ).astype(np.float32)
+                else:
+                    data = src.read(1).astype(np.float32)
             return data
         except Exception as e:  # pragma: no cover
             logger.debug(f"Error reading tile file {tile_file}: {e}")
@@ -1510,7 +1545,7 @@ def generate_sample(
                             )
                         solver_image_path = solver_images_dir / f"{index:010d}.png"
                         try:
-                            cv2.imwrite(str(solver_image_path), solver_thumb, [cv2.IMWRITE_PNG_COMPRESSION, 0])
+                            _save_png(solver_image_path, solver_thumb)
                         except Exception as e:  # pragma: no cover
                             logger.warning(f"Failed saving solver image {solver_image_path}: {e}")
                 except Exception as e:  # pragma: no cover
