@@ -408,6 +408,44 @@ class TestCountValidSamples:
         partial_tensor = res_dir / "train" / "tensors" / lat_dir / lon_dir / f"{2:010d}{TENSOR_SUFFIX}"
         assert not partial_tensor.exists()
 
+    @pytest.mark.unit
+    @pytest.mark.generate
+    def test_count_valid_samples_allows_missing_images_outside_preview_subset(self, tmp_path):
+        """Rows outside the deterministic preview subset should not require images."""
+        res_dir = tmp_path / "256"
+        lat_dir = gen.lat_to_str(0)
+        lon_dir = gen.lon_to_str(0)
+        split_assignments = {0: "train", 1: "train", 2: "train"}
+        preview_image_indices_by_split = {"train": {0}}
+        solver_names = ["astar_elevation", "astar_energy"]
+
+        import cv2
+        import yaml
+
+        tensors_dir = res_dir / "train" / "tensors" / lat_dir / lon_dir
+        metadata_dir = res_dir / "train" / "metadata" / lat_dir / lon_dir
+        tensors_dir.mkdir(parents=True)
+        metadata_dir.mkdir(parents=True)
+
+        for index in range(3):
+            save_tensor(np.zeros((256, 256, 3), dtype=np.float32), tensors_dir / f"{index:010d}{TENSOR_SUFFIX}")
+            with open(metadata_dir / f"{index:010d}.yaml", "w") as f:
+                yaml.dump({"index": index}, f)
+
+        for solver_name in solver_names:
+            solver_dir = res_dir / "train" / "images" / solver_name / lat_dir / lon_dir
+            solver_dir.mkdir(parents=True)
+            cv2.imwrite(str(solver_dir / "0000000000.png"), np.zeros((16, 16, 3), dtype=np.uint8))
+
+        count = gen.count_valid_samples(
+            res_dir,
+            disable_images=False,
+            split_assignments=split_assignments,
+            preview_image_indices_by_split=preview_image_indices_by_split,
+            solver_names=solver_names,
+        )
+        assert count == 3
+
 
 # =============================================================================
 # Tests for load_tile_grid
@@ -477,6 +515,92 @@ class TestLoadTileGrid:
 
 class TestGenerateSample:
     """Tests for generate_sample function."""
+
+    @pytest.mark.unit
+    @pytest.mark.generate
+    def test_generate_sample_is_seed_reproducible(self, monkeypatch, tmp_path, mock_tile_stats_df):
+        """The same generation seed should yield the same tensor and deterministic metadata fields."""
+        monkeypatch.setattr(gen, "TILE_SIZE_PX", 16)
+
+        fixed_tile = np.arange(16 * 16, dtype=np.float32).reshape(16, 16)
+
+        def fake_load_tile(*_args, **_kwargs):
+            return fixed_tile.copy()
+
+        def fake_assemble_crop_from_tiles(*_args, **_kwargs):
+            crop = fixed_tile[:8, :8].copy()
+            loaded_tiles = [(0, 0, 1, 1)]
+            if _kwargs.get("return_loaded_tiles"):
+                return crop, loaded_tiles
+            return crop
+
+        def fake_find_path(_crop, start, end, _solver_config, prebuilt_graph=None, blocked_mask=None):
+            _ = prebuilt_graph
+            _ = blocked_mask
+            return [tuple(map(int, start)), tuple(map(int, end))]
+
+        monkeypatch.setattr(gen, "load_tile", fake_load_tile)
+        monkeypatch.setattr(gen, "_assemble_crop_from_tiles", fake_assemble_crop_from_tiles)
+        monkeypatch.setattr(gen, "find_path", fake_find_path)
+
+        tiles_dir = tmp_path / "tiles"
+        tiles_dir.mkdir()
+
+        outputs_a = tmp_path / "outputs_a"
+        outputs_b = tmp_path / "outputs_b"
+        outputs_a.mkdir()
+        outputs_b.mkdir()
+
+        solvers_configs = [
+            {
+                "name": "test_solver",
+                "backend": "grid",
+                "common": {"diagonal_movement": "always", "max_marker_retries": 10},
+                "grid": {"solver": "astar", "cost_model": "elevation", "weight": 1.0},
+            }
+        ]
+        obstacle_settings = gen._resolve_obstacle_config({"obstacles": {"enabled": False}})
+
+        common_args = (
+            0,
+            tiles_dir,
+            None,
+            8,
+            mock_tile_stats_df,
+            0.0,
+            2000.0,
+            True,
+            solvers_configs,
+            obstacle_settings,
+            "train",
+            1234,
+        )
+
+        idx1, success1, msg1, duration1 = gen.generate_sample(
+            (common_args[0], common_args[1], outputs_a, *common_args[3:])
+        )
+        idx2, success2, msg2, duration2 = gen.generate_sample(
+            (common_args[0], common_args[1], outputs_b, *common_args[3:])
+        )
+
+        assert idx1 == idx2 == 0
+        assert success1 and success2, (msg1, msg2)
+        assert isinstance(duration1, float)
+        assert isinstance(duration2, float)
+
+        tensor_a = next((outputs_a / "8" / "train" / "tensors").rglob(f"0000000000{TENSOR_SUFFIX}"))
+        tensor_b = next((outputs_b / "8" / "train" / "tensors").rglob(f"0000000000{TENSOR_SUFFIX}"))
+        assert tensor_a.read_bytes() == tensor_b.read_bytes()
+
+        metadata_a = yaml.safe_load(next((outputs_a / "8" / "train" / "metadata").rglob("0000000000.yaml")).read_text())
+        metadata_b = yaml.safe_load(next((outputs_b / "8" / "train" / "metadata").rglob("0000000000.yaml")).read_text())
+
+        expected_seed = gen._derive_sample_seed(1234, 8, 0, "train")
+        assert metadata_a["provenance"] == {"generation_seed": 1234, "sample_seed": expected_seed}
+        assert metadata_a["provenance"] == metadata_b["provenance"]
+        assert metadata_a["tile"] == metadata_b["tile"]
+        assert metadata_a["crop"] == metadata_b["crop"]
+        assert metadata_a["markers"] == metadata_b["markers"]
 
     @pytest.mark.unit
     @pytest.mark.generate
@@ -592,6 +716,8 @@ class TestGenerateSample:
             assert "paths" in metadata
             assert "solvers" in metadata
             assert "obstacles" in metadata
+            assert metadata["provenance"]["generation_seed"] == 0
+            assert isinstance(metadata["provenance"]["sample_seed"], int)
 
             # Timing diagnostics should be present
             assert "timing" in metadata
@@ -768,6 +894,51 @@ class TestGenerateSample:
             images_dir = outputs_dir / "8" / "images"
             if images_dir.exists():
                 assert len(list(images_dir.rglob("*.png"))) == 0
+
+    @pytest.mark.unit
+    @pytest.mark.generate
+    def test_generate_sample_skips_preview_images_when_not_selected(self, monkeypatch, tmp_path, mock_tile_stats_df):
+        """A non-preview row should skip image generation even when global images are enabled."""
+        monkeypatch.setattr(gen, "TILE_SIZE_PX", 16)
+
+        tiles_dir = tmp_path / "tiles"
+        tiles_dir.mkdir()
+
+        outputs_dir = tmp_path / "outputs"
+        outputs_dir.mkdir()
+
+        solvers_configs = [
+            {
+                "name": "test_solver",
+                "backend": "grid",
+                "common": {"diagonal_movement": "always", "max_marker_retries": 10},
+                "grid": {"solver": "astar", "cost_model": "elevation", "weight": 1.0},
+            }
+        ]
+        obstacle_settings = gen._resolve_obstacle_config({"obstacles": {"enabled": False}})
+
+        idx, success, msg, duration = gen.generate_sample(
+            (
+                0,
+                tiles_dir,
+                outputs_dir,
+                8,
+                mock_tile_stats_df,
+                0.0,
+                2000.0,
+                False,
+                solvers_configs,
+                obstacle_settings,
+                "train",
+                1234,
+                False,
+            )
+        )
+        assert isinstance(duration, float)
+
+        if success:
+            images_dir = outputs_dir / "8" / "train" / "images"
+            assert not images_dir.exists() or len(list(images_dir.rglob("*.png"))) == 0
 
 
 # =============================================================================
@@ -1127,6 +1298,7 @@ class TestTilesNeeded:
         cfg = {
             "resolutions": [160],
             "num_samples": 1,
+            "generation": {"seed": 314159},
             "solvers": [
                 {
                     "name": "test_solver",
@@ -1155,6 +1327,7 @@ class TestTilesNeeded:
         with open(summary_path) as f:
             summary = json.load(f)
         assert 160 in summary.get("resolutions", []) or 160 in [int(r) for r in summary.get("resolutions", [])]
+        assert summary["generation"]["seed"] == 314159
 
         # Check that sample metadata and tensor were written
         # Prefer split-aware locations (res/160/train/...) then fall back to legacy res/160/...
@@ -1175,6 +1348,10 @@ class TestTilesNeeded:
             md = yaml.safe_load(f)
         # New format: paths is keyed by solver name
         assert "paths" in md and "solvers" in md
+        assert md["provenance"]["generation_seed"] == 314159
+        first_solver_paths = next(iter(md["paths"].values()))
+        assert "considered_area" in first_solver_paths["free"]
+        assert "considered_area" in first_solver_paths["obstacles"]
 
         from passage.utils import load_tensor
 

@@ -22,6 +22,7 @@
 
 """Pathfinding utilities and helpers for PASSAGE."""
 
+from dataclasses import dataclass
 import heapq
 import math
 import time
@@ -77,6 +78,12 @@ HEURISTIC_MAP = {
     "manhattan": lambda u, v: PIXEL_SIZE_M * (abs(u[0] - v[0]) + abs(u[1] - v[1])),
     "chebyshev": lambda u, v: PIXEL_SIZE_M * max(abs(u[0] - v[0]), abs(u[1] - v[1])),
 }
+
+
+@dataclass(frozen=True, slots=True)
+class _GridAStarDetails:
+    path: list[tuple[int, int]]
+    considered_area: int
 
 
 class _GraphTemplate:
@@ -276,6 +283,7 @@ def _find_path_pathfinding(
     weight: float,
     heuristic_name: str,
     cost_model: str,
+    blocked_mask: np.ndarray | None = None,
 ) -> tuple[list[tuple[int, int]], float, float]:
     """Pathfinding backend using the pathfinding package.
 
@@ -300,6 +308,15 @@ def _find_path_pathfinding(
     cost_matrix = _build_pathfinding_cost_matrix(crop, weight, cost_model)
     if cost_matrix is None:
         return [], 0.0, 0.0
+
+    if blocked_mask is not None:
+        blocked = np.asarray(blocked_mask, dtype=np.bool_)
+        if blocked.shape != crop.shape:
+            raise ValueError(f"blocked_mask shape {blocked.shape} does not match crop shape {crop.shape}")
+        if blocked[int(start[0]), int(start[1])] or blocked[int(end[0]), int(end[1])]:
+            return [], 0.0, 0.0
+        cost_matrix = np.asarray(cost_matrix, dtype=np.float64).copy()
+        cost_matrix[blocked] = -1.0
 
     diag_mode = DiagonalMovement.always if diagonal_movement == "always" else DiagonalMovement.never
     grid = Grid(matrix=cost_matrix.tolist())
@@ -328,6 +345,7 @@ def build_graph_from_elevation(
     weight: float = 1.0,
     diagonal_movement: str = "always",
     cost_model: str = "elevation",
+    blocked_mask: np.ndarray | None = None,
 ) -> nx.DiGraph:
     """
     Build a directed graph from a 2D elevation array for pathfinding.
@@ -373,8 +391,35 @@ def build_graph_from_elevation(
     weights = _compute_edge_weights(template, elevation, weight, cost_model)
     logger.debug(f"build_graph_from_elevation: weights compute took {time.time() - t_weights:.4f}s")
 
+    if blocked_mask is not None:
+        blocked = np.asarray(blocked_mask, dtype=np.bool_)
+        if blocked.shape != elevation.shape:
+            raise ValueError(f"blocked_mask shape {blocked.shape} does not match elevation shape {elevation.shape}")
+    else:
+        blocked = None
+
     if template.distance_m.size == 0:
-        return template.graph
+        if blocked is None or not bool(blocked[0, 0]):
+            return template.graph
+        graph = nx.DiGraph()
+        return graph
+
+    if blocked is not None:
+        graph = nx.DiGraph()
+        graph.add_nodes_from((int(i), int(j)) for i, j in np.argwhere(~blocked))
+        valid = (~blocked[template.src_i, template.src_j]) & (~blocked[template.dst_i, template.dst_j])
+        graph.add_weighted_edges_from(
+            (
+                (int(template.src_i[k]), int(template.src_j[k])),
+                (int(template.dst_i[k]), int(template.dst_j[k])),
+                float(weights[k]),
+            )
+            for k in np.nonzero(valid)[0]
+        )
+        logger.debug(
+            f"build_graph_from_elevation: blocked nodes applied, nodes={graph.number_of_nodes()}, edges={graph.number_of_edges()}"
+        )
+        return graph
 
     t_update = time.time()
     template.graph.add_weighted_edges_from(
@@ -561,6 +606,7 @@ def _numba_heap_pop(heap_data: np.ndarray, heap_size: int) -> tuple:
 def _numba_astar_core(
     crop: np.ndarray,
     dest_factor: np.ndarray,
+    blocked_mask: np.ndarray,
     si: int,
     sj: int,
     ei: int,
@@ -632,6 +678,8 @@ def _numba_astar_core(
 
             if ni < 0 or ni >= rows or nj < 0 or nj >= cols:
                 continue
+            if blocked_mask[ni, nj]:
+                continue
             if closed[ni, nj]:
                 continue
 
@@ -664,9 +712,105 @@ def _numba_astar_core(
 
 
 @njit(cache=True)
+def _numba_astar_core_with_considered(
+    crop: np.ndarray,
+    dest_factor: np.ndarray,
+    blocked_mask: np.ndarray,
+    si: int,
+    sj: int,
+    ei: int,
+    ej: int,
+    weight: float,
+    elev_range: float,
+    cost_model: int,
+    neighbors: np.ndarray,
+    heuristic_type: int,
+    pixel_size: float,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Numba A* core that also tracks the considered region."""
+    rows, cols = crop.shape
+    INF = 1e18
+
+    g_score = np.full((rows, cols), INF, dtype=np.float64)
+    g_score[si, sj] = 0.0
+    parents = np.full((rows, cols, 2), -1, dtype=np.int32)
+    closed = np.zeros((rows, cols), dtype=np.uint8)
+    considered = np.zeros((rows, cols), dtype=np.uint8)
+    considered[si, sj] = 1
+
+    max_heap_size = rows * cols * 4
+    heap_data = np.empty((max_heap_size, 4), dtype=np.float64)
+    heap_size = 0
+
+    if heuristic_type == 0:
+        h0 = _numba_heuristic_euclidean(si, sj, ei, ej, pixel_size)
+    elif heuristic_type == 1:
+        h0 = _numba_heuristic_manhattan(si, sj, ei, ej, pixel_size)
+    else:
+        h0 = _numba_heuristic_chebyshev(si, sj, ei, ej, pixel_size)
+
+    heap_size = _numba_heap_push(heap_data, heap_size, h0, 0.0, si, sj)
+    n_neighbors = neighbors.shape[0]
+
+    while heap_size > 0:
+        _, g, i, j, heap_size = _numba_heap_pop(heap_data, heap_size)
+
+        if closed[i, j]:
+            continue
+
+        if i == ei and j == ej:
+            return parents, considered
+
+        closed[i, j] = 1
+        src_elev = crop[i, j]
+
+        for n in range(n_neighbors):
+            di = int(neighbors[n, 0])
+            dj = int(neighbors[n, 1])
+            dist_m = neighbors[n, 2]
+
+            ni = i + di
+            nj = j + dj
+
+            if ni < 0 or ni >= rows or nj < 0 or nj >= cols:
+                continue
+            if blocked_mask[ni, nj]:
+                continue
+            if closed[ni, nj]:
+                continue
+
+            considered[ni, nj] = 1
+
+            dst_elev = crop[ni, nj]
+            dest_factor_val = dest_factor[ni, nj]
+            step_cost = _numba_compute_step_cost(
+                cost_model, dist_m, weight, elev_range, dest_factor_val, src_elev, dst_elev
+            )
+            tentative_g = g + step_cost
+
+            if tentative_g < g_score[ni, nj]:
+                g_score[ni, nj] = tentative_g
+                parents[ni, nj, 0] = i
+                parents[ni, nj, 1] = j
+
+                if heuristic_type == 0:
+                    h = _numba_heuristic_euclidean(ni, nj, ei, ej, pixel_size)
+                elif heuristic_type == 1:
+                    h = _numba_heuristic_manhattan(ni, nj, ei, ej, pixel_size)
+                else:
+                    h = _numba_heuristic_chebyshev(ni, nj, ei, ej, pixel_size)
+
+                f_score = tentative_g + h
+                heap_size = _numba_heap_push(heap_data, heap_size, f_score, tentative_g, ni, nj)
+
+    return parents, considered
+
+
+@njit(cache=True)
 def _numba_dijkstra_core(
     crop: np.ndarray,
     dest_factor: np.ndarray,
+    blocked_mask: np.ndarray,
     si: int,
     sj: int,
     ei: int,
@@ -749,6 +893,8 @@ def _numba_dijkstra_core(
             nj = j + dj
 
             if ni < 0 or ni >= rows or nj < 0 or nj >= cols:
+                continue
+            if blocked_mask[ni, nj]:
                 continue
             if closed[ni, nj]:
                 continue
@@ -861,11 +1007,21 @@ def _grid_astar_numba(
     diagonal_movement: str,
     heuristic_name: str,
     cost_model: str,
+    blocked_mask: np.ndarray | None = None,
 ) -> list[tuple[int, int]]:
     """Numba-accelerated A* pathfinding on grid."""
     rows, cols = crop.shape
     si, sj = int(start[0]), int(start[1])
     ei, ej = int(end[0]), int(end[1])
+
+    if blocked_mask is None:
+        blocked = np.zeros((rows, cols), dtype=np.bool_)
+    else:
+        blocked = np.asarray(blocked_mask, dtype=np.bool_)
+        if blocked.shape != crop.shape:
+            raise ValueError(f"blocked_mask shape {blocked.shape} does not match crop shape {crop.shape}")
+        if blocked[si, sj] or blocked[ei, ej]:
+            return []
 
     if si == ei and sj == ej:
         return [(si, sj)]
@@ -891,6 +1047,7 @@ def _grid_astar_numba(
     parents = _numba_astar_core(
         crop_f64,
         dest_factor,
+        blocked,
         si,
         sj,
         ei,
@@ -916,6 +1073,73 @@ def _grid_astar_numba(
     return [(int(path_arr[i, 0]), int(path_arr[i, 1])) for i in range(path_arr.shape[0])]
 
 
+def _grid_astar_numba_with_details(
+    crop: np.ndarray,
+    start: tuple[int, int],
+    end: tuple[int, int],
+    weight: float,
+    diagonal_movement: str,
+    heuristic_name: str,
+    cost_model: str,
+    blocked_mask: np.ndarray | None = None,
+) -> _GridAStarDetails:
+    """Numba-accelerated A* pathfinding with considered-area tracking."""
+    rows, cols = crop.shape
+    si, sj = int(start[0]), int(start[1])
+    ei, ej = int(end[0]), int(end[1])
+
+    if blocked_mask is None:
+        blocked = np.zeros((rows, cols), dtype=np.bool_)
+    else:
+        blocked = np.asarray(blocked_mask, dtype=np.bool_)
+        if blocked.shape != crop.shape:
+            raise ValueError(f"blocked_mask shape {blocked.shape} does not match crop shape {crop.shape}")
+        if blocked[si, sj] or blocked[ei, ej]:
+            return _GridAStarDetails(path=[], considered_area=0)
+
+    if si == ei and sj == ej:
+        return _GridAStarDetails(path=[(si, sj)], considered_area=1)
+
+    cost_model_id = _COST_MODEL_MAP.get(cost_model, _COST_ELEVATION)
+    normalized, abs_norm, elev_range = _normalize_elevation_arrays(crop)
+    if cost_model_id == _COST_ELEVATION:
+        dest_factor = (1.0 + weight * normalized).astype(np.float64)
+    elif cost_model_id == _COST_ABSOLUTE_ELEVATION:
+        dest_factor = (1.0 + weight * abs_norm).astype(np.float64)
+    else:
+        dest_factor = np.ones((rows, cols), dtype=np.float64)
+
+    crop_f64 = crop.astype(np.float64)
+    neighbors = _get_neighbors_array(diagonal_movement)
+    heuristic_type = _HEURISTIC_MAP_NUMBA.get(heuristic_name, 0)
+
+    parents, considered = _numba_astar_core_with_considered(
+        crop_f64,
+        dest_factor,
+        blocked,
+        si,
+        sj,
+        ei,
+        ej,
+        weight,
+        elev_range,
+        cost_model_id,
+        neighbors,
+        heuristic_type,
+        PIXEL_SIZE_M,
+    )
+
+    if parents[ei, ej, 0] == -1 and parents[ei, ej, 1] == -1 and (ei != si or ej != sj):
+        path: list[tuple[int, int]] = []
+    else:
+        path_arr = _numba_reconstruct_path(parents, si, sj, ei, ej)
+        path = (
+            [] if path_arr.size == 0 else [(int(path_arr[i, 0]), int(path_arr[i, 1])) for i in range(path_arr.shape[0])]
+        )
+
+    return _GridAStarDetails(path=path, considered_area=int(np.count_nonzero(considered)))
+
+
 def _grid_dijkstra_numba(
     crop: np.ndarray,
     start: tuple[int, int],
@@ -923,11 +1147,21 @@ def _grid_dijkstra_numba(
     weight: float,
     diagonal_movement: str,
     cost_model: str,
+    blocked_mask: np.ndarray | None = None,
 ) -> list[tuple[int, int]]:
     """Numba-accelerated Dijkstra pathfinding on grid."""
     rows, cols = crop.shape
     si, sj = int(start[0]), int(start[1])
     ei, ej = int(end[0]), int(end[1])
+
+    if blocked_mask is None:
+        blocked = np.zeros((rows, cols), dtype=np.bool_)
+    else:
+        blocked = np.asarray(blocked_mask, dtype=np.bool_)
+        if blocked.shape != crop.shape:
+            raise ValueError(f"blocked_mask shape {blocked.shape} does not match crop shape {crop.shape}")
+        if blocked[si, sj] or blocked[ei, ej]:
+            return []
 
     if si == ei and sj == ej:
         return [(si, sj)]
@@ -948,6 +1182,7 @@ def _grid_dijkstra_numba(
     parents = _numba_dijkstra_core(
         crop_f64,
         dest_factor,
+        blocked,
         si,
         sj,
         ei,
@@ -1006,6 +1241,7 @@ def _grid_astar(
     diagonal_movement: str,
     heuristic_name: str,
     cost_model: str,
+    blocked_mask: np.ndarray | None = None,
 ) -> list[tuple[int, int]]:
     """A* over grid using arrays; returns path as list of (i,j).
 
@@ -1014,12 +1250,20 @@ def _grid_astar(
     """
     # Use Numba-accelerated version when available
     if NUMBA_AVAILABLE:
-        return _grid_astar_numba(crop, start, end, weight, diagonal_movement, heuristic_name, cost_model)
+        return _grid_astar_numba(crop, start, end, weight, diagonal_movement, heuristic_name, cost_model, blocked_mask)
 
     # Fallback to pure Python implementation
     rows, cols = crop.shape
     si, sj = int(start[0]), int(start[1])
     ei, ej = int(end[0]), int(end[1])
+    if blocked_mask is None:
+        blocked = np.zeros((rows, cols), dtype=np.bool_)
+    else:
+        blocked = np.asarray(blocked_mask, dtype=np.bool_)
+        if blocked.shape != crop.shape:
+            raise ValueError(f"blocked_mask shape {blocked.shape} does not match crop shape {crop.shape}")
+        if blocked[si, sj] or blocked[ei, ej]:
+            return []
     if si == ei and sj == ej:
         return [(si, sj)]
 
@@ -1065,6 +1309,8 @@ def _grid_astar(
             ni, nj = i + di, j + dj
             if not (0 <= ni < rows and 0 <= nj < cols):
                 continue
+            if blocked[ni, nj]:
+                continue
             if closed[ni, nj]:
                 continue
             if cost_model == "distance":
@@ -1096,6 +1342,116 @@ def _grid_astar(
     return []
 
 
+def _grid_astar_with_details(
+    crop: np.ndarray,
+    start: tuple[int, int],
+    end: tuple[int, int],
+    weight: float,
+    diagonal_movement: str,
+    heuristic_name: str,
+    cost_model: str,
+    blocked_mask: np.ndarray | None = None,
+) -> _GridAStarDetails:
+    """A* over grid returning both the path and the considered-area size."""
+    if NUMBA_AVAILABLE:
+        return _grid_astar_numba_with_details(
+            crop,
+            start,
+            end,
+            weight,
+            diagonal_movement,
+            heuristic_name,
+            cost_model,
+            blocked_mask,
+        )
+
+    rows, cols = crop.shape
+    si, sj = int(start[0]), int(start[1])
+    ei, ej = int(end[0]), int(end[1])
+    if blocked_mask is None:
+        blocked = np.zeros((rows, cols), dtype=np.bool_)
+    else:
+        blocked = np.asarray(blocked_mask, dtype=np.bool_)
+        if blocked.shape != crop.shape:
+            raise ValueError(f"blocked_mask shape {blocked.shape} does not match crop shape {crop.shape}")
+        if blocked[si, sj] or blocked[ei, ej]:
+            return _GridAStarDetails(path=[], considered_area=0)
+    if si == ei and sj == ej:
+        return _GridAStarDetails(path=[(si, sj)], considered_area=1)
+
+    if cost_model not in COST_MODELS:
+        logger.warning(f"Unknown cost_model '{cost_model}', falling back to 'elevation'")
+        cost_model = "elevation"
+
+    if cost_model == "elevation":
+        normalized, abs_norm, elev_range = _normalize_elevation_arrays(crop)
+        dest_factor = 1.0 + weight * normalized
+    elif cost_model == "absolute_elevation":
+        normalized, abs_norm, elev_range = _normalize_elevation_arrays(crop)
+        dest_factor = 1.0 + weight * abs_norm
+    else:
+        dest_factor = None
+        _, _, elev_range = _normalize_elevation_arrays(crop)
+
+    neighbors = _grid_solvers_neighbors(diagonal_movement)
+    g_score = np.full((rows, cols), np.inf, dtype=np.float64)
+    g_score[si, sj] = 0.0
+    parents = np.full((rows, cols, 2), -1, dtype=np.int32)
+    heuristic = HEURISTIC_MAP.get(heuristic_name, HEURISTIC_MAP["euclidean"])
+
+    open_heap = []
+    heapq.heappush(open_heap, (heuristic((si, sj), (ei, ej)), 0.0, si, sj))
+    closed = np.zeros((rows, cols), dtype=np.bool_)
+    considered = np.zeros((rows, cols), dtype=np.bool_)
+    considered[si, sj] = True
+
+    while open_heap:
+        _, g, i, j = heapq.heappop(open_heap)
+        if closed[i, j]:
+            continue
+        if i == ei and j == ej:
+            path = _reconstruct_path(parents, ei, ej)
+            return _GridAStarDetails(path=path, considered_area=int(np.count_nonzero(considered)))
+        closed[i, j] = True
+
+        for di, dj, dist_m in neighbors:
+            ni, nj = i + di, j + dj
+            if not (0 <= ni < rows and 0 <= nj < cols):
+                continue
+            if blocked[ni, nj]:
+                continue
+            if closed[ni, nj]:
+                continue
+
+            considered[ni, nj] = True
+
+            if cost_model == "distance":
+                step_cost = dist_m
+            elif cost_model == "absolute_elevation":
+                step_cost = dist_m * float(dest_factor[ni, nj])
+            elif cost_model == "slope_uphill":
+                if elev_range > 0:
+                    delta = float(crop[ni, nj] - crop[i, j])
+                    slope_norm = max(0.0, delta) / elev_range
+                else:
+                    slope_norm = 0.0
+                step_cost = dist_m * (1.0 + weight * slope_norm)
+            elif cost_model == "energy":
+                delta = float(crop[ni, nj] - crop[i, j])
+                step_cost = dist_m + weight * max(0.0, delta)
+            else:
+                step_cost = dist_m * float(dest_factor[ni, nj])
+
+            tentative_g = g + step_cost
+            if tentative_g < g_score[ni, nj]:
+                g_score[ni, nj] = tentative_g
+                parents[ni, nj, 0] = i
+                parents[ni, nj, 1] = j
+                heapq.heappush(open_heap, (tentative_g + heuristic((ni, nj), (ei, ej)), tentative_g, ni, nj))
+
+    return _GridAStarDetails(path=[], considered_area=int(np.count_nonzero(considered)))
+
+
 def _grid_dijkstra(
     crop: np.ndarray,
     start: tuple[int, int],
@@ -1103,6 +1459,7 @@ def _grid_dijkstra(
     weight: float,
     diagonal_movement: str,
     cost_model: str,
+    blocked_mask: np.ndarray | None = None,
 ) -> list[tuple[int, int]]:
     """Dijkstra over grid using arrays; equivalent to A* with zero heuristic.
 
@@ -1111,12 +1468,20 @@ def _grid_dijkstra(
     """
     # Use Numba-accelerated version when available
     if NUMBA_AVAILABLE:
-        return _grid_dijkstra_numba(crop, start, end, weight, diagonal_movement, cost_model)
+        return _grid_dijkstra_numba(crop, start, end, weight, diagonal_movement, cost_model, blocked_mask)
 
     # Fallback to pure Python implementation
     rows, cols = crop.shape
     si, sj = int(start[0]), int(start[1])
     ei, ej = int(end[0]), int(end[1])
+    if blocked_mask is None:
+        blocked = np.zeros((rows, cols), dtype=np.bool_)
+    else:
+        blocked = np.asarray(blocked_mask, dtype=np.bool_)
+        if blocked.shape != crop.shape:
+            raise ValueError(f"blocked_mask shape {blocked.shape} does not match crop shape {crop.shape}")
+        if blocked[si, sj] or blocked[ei, ej]:
+            return []
     if si == ei and sj == ej:
         return [(si, sj)]
 
@@ -1154,6 +1519,8 @@ def _grid_dijkstra(
             ni, nj = i + di, j + dj
             if not (0 <= ni < rows and 0 <= nj < cols):
                 continue
+            if blocked[ni, nj]:
+                continue
             if closed[ni, nj]:
                 continue
             if cost_model == "distance":
@@ -1181,6 +1548,82 @@ def _grid_dijkstra(
                 heapq.heappush(open_heap, (tentative_g, ni, nj))
 
     return []
+
+
+def hausdorff_distance(path1: list[tuple[int, int]], path2: list[tuple[int, int]]) -> float:
+    """Compute symmetric Hausdorff distance between two paths.
+
+    Args:
+        path1: First path as list of (row, col) tuples.
+        path2: Second path as list of (row, col) tuples.
+
+    Returns:
+        Hausdorff distance in pixels, or 0.0 if either path is empty.
+    """
+    if not path1 or not path2:
+        return 0.0
+    from scipy.spatial.distance import directed_hausdorff
+
+    arr1 = np.asarray(path1, dtype=np.float64)
+    arr2 = np.asarray(path2, dtype=np.float64)
+    d1 = directed_hausdorff(arr1, arr2)[0]
+    d2 = directed_hausdorff(arr2, arr1)[0]
+    return float(max(d1, d2))
+
+
+def boundary_fraction(path: list[tuple[int, int]], grid_size: int, margin: int = 2) -> float:
+    """Fraction of path points within *margin* pixels of any image edge.
+
+    Args:
+        path: Path as list of (row, col) tuples.
+        grid_size: Side length of the square grid (pixels).
+        margin: Number of pixels from each edge considered "boundary".
+
+    Returns:
+        Fraction in [0, 1], or 0.0 if the path is empty.
+    """
+    if not path:
+        return 0.0
+    pa = np.asarray(path)
+    at_edge = (
+        (pa[:, 0] < margin) | (pa[:, 0] >= grid_size - margin) | (pa[:, 1] < margin) | (pa[:, 1] >= grid_size - margin)
+    )
+    return float(at_edge.sum()) / len(path)
+
+
+def max_contiguous_boundary_fraction(path: list[tuple[int, int]], grid_size: int, margin: int = 2) -> float:
+    """Longest contiguous run of boundary points as a fraction of path length.
+
+    A "boundary point" is any path point within *margin* pixels of any image
+    edge.  This function finds the longest consecutive sequence of such points
+    and returns its length divided by the total path length.
+
+    Args:
+        path: Path as list of (row, col) tuples.
+        grid_size: Side length of the square grid (pixels).
+        margin: Number of pixels from each edge considered "boundary".
+
+    Returns:
+        Fraction in [0, 1], or 0.0 if the path is empty or has no boundary
+        contact.
+    """
+    if not path:
+        return 0.0
+    pa = np.asarray(path)
+    at_edge = (
+        (pa[:, 0] < margin) | (pa[:, 0] >= grid_size - margin) | (pa[:, 1] < margin) | (pa[:, 1] >= grid_size - margin)
+    )
+    # Find longest contiguous True run
+    max_run = 0
+    current_run = 0
+    for on_edge in at_edge:
+        if on_edge:
+            current_run += 1
+            if current_run > max_run:
+                max_run = current_run
+        else:
+            current_run = 0
+    return float(max_run) / len(path)
 
 
 def check_path_collision(path: list[tuple[int, int]], obstacles_mask: np.ndarray) -> bool:

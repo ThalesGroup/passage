@@ -42,6 +42,8 @@ def test_features_builds_dynamic_path_columns():
         assert f"image_{solver}" in features
         assert f"path_{solver}_free" in features
         assert f"path_{solver}_obstacles" in features
+        assert "considered_area" in str(features["metadata"]["paths"][solver]["free"])
+        assert "considered_area" in str(features["metadata"]["paths"][solver]["obstacles"])
 
 
 @pytest.mark.unit

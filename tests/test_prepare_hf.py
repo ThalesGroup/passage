@@ -23,10 +23,18 @@
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import numpy as np
+import pytest
 import yaml
 from datasets import Features, Value
 
-from passage.export import _generate_huggingface_yaml_header, _reset_hf_upload_cache, export_and_upload
+from passage.export import (
+    _generate_huggingface_yaml_header,
+    _process_meta_for_prepare,
+    _reset_hf_upload_cache,
+    export_and_upload,
+)
+from passage.utils import save_tensor
 
 
 def _setup_minimal_export_tree(tmp_path: Path) -> tuple[Path, Path, Path]:
@@ -48,7 +56,7 @@ export:
     64: 123
   sample:
     num_samples: 5
-  default: 1024x1024_sample
+  default: 1024x1024_samples
   compression_level: 4
 solvers:
   - name: astar_elevation
@@ -78,6 +86,13 @@ def _write_dummy_metadata(dataset_dir: Path, resolution: int, split: str = "trai
     (metadata_dir / "0000000000.yaml").write_text("index: 0\n")
 
 
+def _write_many_dummy_metadata(dataset_dir: Path, resolution: int, count: int, split: str = "train") -> None:
+    metadata_dir = dataset_dir / str(resolution) / split / "metadata" / "N000" / "E000"
+    metadata_dir.mkdir(parents=True, exist_ok=True)
+    for idx in range(count):
+        (metadata_dir / f"{idx:010d}.yaml").write_text(f"index: {idx}\n")
+
+
 def _mock_prepare_row(*_args, **_kwargs) -> dict:
     return {"id": "0000000000", "tensor": b"tensor", "metadata": "{}"}
 
@@ -102,9 +117,9 @@ def test_generate_hf_yaml_header_configs_names():
     solver_names = ["astar_elevation", "astar_energy"]
     yaml = _generate_huggingface_yaml_header(
         "user/repo",
-        ["64x64_sample", "64x64", "128x128_sample", "128x128"],
+        ["64x64_samples", "64x64", "128x128_samples", "128x128"],
         ["train", "validation"],
-        "1024x1024_sample",
+        "1024x1024_samples",
         solver_names,
     )
     # Check that config names are present (format may vary with yaml.dump)
@@ -117,6 +132,7 @@ def test_generate_hf_yaml_header_configs_names():
     assert "path_astar_elevation_free" in yaml
     assert "path_astar_elevation_obstacles" in yaml
     assert "path_astar_energy_free" in yaml
+    assert "considered_area" in yaml
 
 
 def test_export_and_upload_uses_chunk_size(tmp_path):
@@ -142,6 +158,37 @@ def test_export_and_upload_uses_chunk_size(tmp_path):
                             skip_upload=True,  # Don't actually upload
                             num_cpus=0,
                         )
+
+
+def test_export_and_upload_limits_sample_metadata_scan_to_sample_size(tmp_path):
+    dataset_dir, notebooks_dir, calibrate_dir = _setup_minimal_export_tree(tmp_path)
+    _write_many_dummy_metadata(dataset_dir, 64, count=10)
+
+    processed_ids: list[str] = []
+
+    def counting_prepare(*args, **kwargs):
+        metadata_filepath = Path(args[-1] if args else kwargs["metadata_filepath"])
+        processed_ids.append(metadata_filepath.stem)
+        return _mock_prepare_row()
+
+    with patch("passage.export._load_hf_credentials", return_value=("me", "repo", "token")):
+        with patch("passage.export._process_meta_for_prepare", side_effect=counting_prepare):
+            with patch("passage.export._features", side_effect=_mock_features):
+                ok = export_and_upload(
+                    dataset_dirpath=dataset_dir,
+                    calibrate_dirpath=calibrate_dir,
+                    notebooks_dirpath=notebooks_dir,
+                    resolutions=[64],
+                    repo_id="alice/repo",
+                    execute_notebooks=False,
+                    skip_upload=True,
+                    num_cpus=0,
+                )
+
+    assert ok is True
+    # The sample export should process only the configured 5 rows, then the full export
+    # should process all 10 rows, for 15 total metadata conversions instead of 20.
+    assert len(processed_ids) == 15
 
 
 def test_export_and_upload_passes_num_cpus_to_notebook(tmp_path):
@@ -177,6 +224,43 @@ def test_export_and_upload_passes_num_cpus_to_notebook(tmp_path):
     assert parameters_dict is not None and parameters_dict.get("MAX_WORKERS") == 4
 
     assert ok is True
+
+
+def test_process_meta_for_prepare_generates_missing_preview_images(tmp_path):
+    split_dir = tmp_path / "train"
+    metadata_dir = split_dir / "metadata" / "N000" / "E000"
+    tensor_dir = split_dir / "tensors" / "N000" / "E000"
+    path_free_dir = split_dir / "paths" / "astar_elevation" / "free" / "N000" / "E000"
+    path_obstacles_dir = split_dir / "paths" / "astar_elevation" / "obstacles" / "N000" / "E000"
+    image_dir = split_dir / "images" / "astar_elevation" / "N000" / "E000"
+    metadata_dir.mkdir(parents=True)
+    tensor_dir.mkdir(parents=True)
+    path_free_dir.mkdir(parents=True)
+    path_obstacles_dir.mkdir(parents=True)
+
+    metadata_path = metadata_dir / "0000000000.yaml"
+    metadata_path.write_text("index: 0\nobstacles:\n  enabled: true\n")
+    save_tensor(np.zeros((64, 64, 3), dtype=np.float32), tensor_dir / "0000000000.npy.zst")
+    (path_free_dir / "0000000000.csv").write_text("0,0\n1,1\n")
+    (path_obstacles_dir / "0000000000.csv").write_text("0,1\n1,2\n")
+
+    row = _process_meta_for_prepare(64, True, ["astar_elevation"], str(metadata_path))
+
+    assert "image_astar_elevation" in row
+    assert row["image_astar_elevation"]["bytes"]
+    assert (image_dir / "0000000000.png").exists()
+
+
+def test_process_meta_for_prepare_missing_tensor_still_fails(tmp_path):
+    split_dir = tmp_path / "train"
+    metadata_dir = split_dir / "metadata" / "N000" / "E000"
+    metadata_dir.mkdir(parents=True)
+
+    metadata_path = metadata_dir / "0000000000.yaml"
+    metadata_path.write_text("index: 0\n")
+
+    with pytest.raises(FileNotFoundError, match="Missing required tensor for export"):
+        _process_meta_for_prepare(64, True, ["astar_elevation"], str(metadata_path))
 
 
 def test_export_and_upload_skips_upload_when_requested(tmp_path):
@@ -243,7 +327,7 @@ def test_export_and_upload_resets_cache_before_upload(tmp_path):
         "assets/**",
         "calibration/**",
         "notebooks/**",
-        "64x64_sample/**",
+        "64x64_samples/**",
         "64x64/**",
     ]
 
@@ -259,7 +343,7 @@ def test_export_and_upload_merges_remote_configs_into_readme(tmp_path):
                 api_instance = MagicMock()
                 api_instance.list_repo_files.return_value = [
                     "128x128/train/data-00000.parquet",
-                    "128x128_sample/train/data-00000.parquet",
+                    "128x128_samples/train/data-00000.parquet",
                 ]
                 api_mock.return_value = api_instance
                 with patch("passage.export._process_meta_for_prepare", side_effect=_mock_prepare_row):
@@ -277,9 +361,9 @@ def test_export_and_upload_merges_remote_configs_into_readme(tmp_path):
     assert ok is True
     front_matter = _read_readme_front_matter(export_dir / "README.md")
     config_entries = {entry["config_name"]: entry for entry in front_matter["configs"]}
-    assert set(config_entries) == {"64x64", "64x64_sample", "128x128", "128x128_sample"}
-    assert config_entries["64x64_sample"]["default"] is True
-    assert "default" not in config_entries["128x128_sample"]
+    assert set(config_entries) == {"64x64", "64x64_samples", "128x128", "128x128_samples"}
+    assert config_entries["64x64_samples"]["default"] is True
+    assert "default" not in config_entries["128x128_samples"]
 
 
 def test_export_and_upload_cleans_only_selected_incremental_resolution(tmp_path):
@@ -288,7 +372,7 @@ def test_export_and_upload_cleans_only_selected_incremental_resolution(tmp_path)
     _write_dummy_metadata(dataset_dir, 64)
 
     stale_full = export_dir / "64x64" / "stale.txt"
-    stale_sample = export_dir / "64x64_sample" / "stale.txt"
+    stale_sample = export_dir / "64x64_samples" / "stale.txt"
     untouched_other = export_dir / "128x128" / "keep.txt"
     stale_full.parent.mkdir(parents=True, exist_ok=True)
     stale_sample.parent.mkdir(parents=True, exist_ok=True)
@@ -314,7 +398,7 @@ def test_export_and_upload_cleans_only_selected_incremental_resolution(tmp_path)
     assert not stale_full.exists()
     assert not stale_sample.exists()
     assert (export_dir / "64x64" / "train" / "data-00000.parquet").exists()
-    assert (export_dir / "64x64_sample" / "train" / "data-00000.parquet").exists()
+    assert (export_dir / "64x64_samples" / "train" / "data-00000.parquet").exists()
     assert untouched_other.exists()
 
 

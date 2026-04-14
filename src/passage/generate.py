@@ -41,6 +41,7 @@ Geographic hold-out regions:
 """
 
 import csv
+import hashlib
 import json
 import math
 import multiprocessing
@@ -70,6 +71,7 @@ from passage.pathfinding_utils import (
     PIXEL_SIZE_M,
     _find_path_pathfinding,
     _grid_astar,
+    _grid_astar_with_details,
     _grid_dijkstra,
     build_graph_from_elevation,
     check_path_collision,
@@ -310,6 +312,68 @@ def _split_sort_key(name: str) -> tuple[int, str]:
         return (len(SPLIT_ORDER), name)
 
 
+def _order_tile_candidates(tile_stats_df: pd.DataFrame) -> pd.DataFrame:
+    """Return a stable tile ordering for deterministic sampling."""
+    if tile_stats_df.empty:
+        return tile_stats_df
+
+    sort_columns = [column for column in ("lat", "lon", "filename") if column in tile_stats_df.columns]
+    if not sort_columns:
+        return tile_stats_df.reset_index(drop=True)
+
+    return tile_stats_df.sort_values(sort_columns, kind="stable").reset_index(drop=True)
+
+
+def _derive_sample_seed(generation_seed: int, resolution: int, index: int, split_name: str) -> int:
+    """Derive a stable per-sample seed from run-level provenance."""
+    payload = f"{int(generation_seed)}:{int(resolution)}:{int(index)}:{split_name}".encode("ascii", "strict")
+    return int.from_bytes(hashlib.blake2b(payload, digest_size=8).digest(), "big") & ((1 << 63) - 1)
+
+
+def _resolve_preview_images_config(config: dict | None, active_resolutions: list[int]) -> dict:
+    """Resolve deterministic preview-image generation settings."""
+    config = config or {}
+    export_cfg = config.get("export", {}) if isinstance(config, dict) else {}
+    generation_cfg = config.get("generation", {}) if isinstance(config, dict) else {}
+    preview_cfg = generation_cfg.get("preview_images", {}) if isinstance(generation_cfg, dict) else {}
+
+    enabled = bool(preview_cfg.get("enabled", True))
+
+    configured_resolutions = preview_cfg.get("resolutions")
+    if configured_resolutions in (None, "", []):
+        preview_resolutions = {int(resolution) for resolution in active_resolutions}
+    elif isinstance(configured_resolutions, (list, tuple, set)):
+        preview_resolutions = {int(resolution) for resolution in configured_resolutions}
+    else:
+        preview_resolutions = {int(configured_resolutions)}
+
+    num_samples_per_split = preview_cfg.get("num_samples_per_split")
+    if num_samples_per_split in (None, ""):
+        num_samples_per_split = export_cfg.get("sample", {}).get("num_samples", 0)
+    num_samples_per_split = max(int(num_samples_per_split), 0)
+
+    return {
+        "enabled": enabled and num_samples_per_split > 0,
+        "resolutions": preview_resolutions,
+        "num_samples_per_split": num_samples_per_split,
+    }
+
+
+def _select_preview_image_indices(
+    split_assignments: dict[int, str],
+    num_samples_per_split: int,
+) -> dict[str, set[int]]:
+    """Select the deterministic preview subset: first N sample indices for each split."""
+    if num_samples_per_split <= 0:
+        return {}
+
+    split_indices: dict[str, list[int]] = {}
+    for index, split_name in split_assignments.items():
+        split_indices.setdefault(split_name, []).append(int(index))
+
+    return {split_name: set(sorted(indices)[:num_samples_per_split]) for split_name, indices in split_indices.items()}
+
+
 def _parse_solver_backend_and_name(solver_config: dict) -> tuple[str, str]:
     """Parse backend and solver algorithm name from config.
 
@@ -378,6 +442,7 @@ def find_path(
     end: tuple[int, int],
     solver_config: dict,
     prebuilt_graph: nx.DiGraph | None = None,
+    blocked_mask: np.ndarray | None = None,
 ) -> list[tuple[int, int]]:
     """
     Find a path between two points on the crop using configured solver backend.
@@ -395,6 +460,7 @@ def find_path(
             - cost_model: 'elevation' (default), 'distance', 'slope_uphill', 'energy', 'absolute_elevation'
         prebuilt_graph: Optional prebuilt NetworkX DiGraph. If provided and the selected backend is
             'networkx', the prebuilt graph will be used and graph construction will be skipped.
+        blocked_mask: Optional boolean mask where True marks impassable cells.
 
     Returns:
         List of (i, j) tuples representing the path, or empty list if no path found.
@@ -408,6 +474,15 @@ def find_path(
     if not (0 <= si < rows and 0 <= sj < cols and 0 <= ei < rows and 0 <= ej < cols):
         logger.debug(f"find_path: start/end out of bounds for grid_size={grid_size}, start={start}, end={end}")
         return []
+    if blocked_mask is not None:
+        blocked = np.asarray(blocked_mask, dtype=np.bool_)
+        if blocked.shape != crop.shape:
+            raise ValueError(f"blocked_mask shape {blocked.shape} does not match crop shape {crop.shape}")
+        if blocked[si, sj] or blocked[ei, ej]:
+            logger.debug(f"find_path: start/end blocked for grid_size={grid_size}, start={start}, end={end}")
+            return []
+    else:
+        blocked = None
 
     # Extract solver configuration
     solver_config = _resolve_solver_config(solver_config)
@@ -432,9 +507,9 @@ def find_path(
             grid_solver = "grid_dijkstra"
         t0 = time.time()
         if grid_solver == "grid_astar":
-            path = _grid_astar(crop, (si, sj), (ei, ej), weight, diagonal_name, heuristic_name, cost_model)
+            path = _grid_astar(crop, (si, sj), (ei, ej), weight, diagonal_name, heuristic_name, cost_model, blocked)
         else:
-            path = _grid_dijkstra(crop, (si, sj), (ei, ej), weight, diagonal_name, cost_model)
+            path = _grid_dijkstra(crop, (si, sj), (ei, ej), weight, diagonal_name, cost_model, blocked)
         solve_time = time.time() - t0
         logger.debug(
             f"Grid solver finished: path_len={len(path)}, solve_time={solve_time:.4f}s, total={solve_time:.4f}s"
@@ -459,6 +534,7 @@ def find_path(
                 weight,
                 heuristic_name,
                 cost_model,
+                blocked,
             )
             total_time = prep_time + solve_time
             logger.debug(
@@ -472,7 +548,7 @@ def find_path(
         logger.warning(f"Unknown networkx solver '{solver_name}', falling back to astar")
         solver_name = "astar"
 
-    if prebuilt_graph is not None:
+    if prebuilt_graph is not None and blocked is None:
         G = prebuilt_graph
         graph_time = 0.0
         # Ensure t0 exists so timing calculations later don't raise UnboundLocalError
@@ -485,6 +561,7 @@ def find_path(
             weight=weight,
             diagonal_movement=diagonal_name,
             cost_model=cost_model,
+            blocked_mask=blocked,
         )
         graph_time = time.time() - t0
     logger.debug(
@@ -845,6 +922,7 @@ def _resolve_obstacle_config(config: dict | None) -> dict:
       - size_min_ratio
       - size_max_ratio
       - generation_cfg
+            - impassable
       - obstacle_penalty
       - config (raw obstacles config)
     """
@@ -867,6 +945,7 @@ def _resolve_obstacle_config(config: dict | None) -> dict:
     size_max_ratio = float(size_cfg.get("max_ratio", 0.50))
 
     generation_cfg = obstacles_cfg.get("generation", {}) or {}
+    impassable = bool(obstacles_cfg.get("impassable", True))
     obstacle_penalty = float(obstacles_cfg.get("obstacle_penalty", 1e8))
 
     return {
@@ -875,6 +954,7 @@ def _resolve_obstacle_config(config: dict | None) -> dict:
         "size_min_ratio": size_min_ratio,
         "size_max_ratio": size_max_ratio,
         "generation_cfg": generation_cfg,
+        "impassable": impassable,
         "obstacle_penalty": obstacle_penalty,
         "config": obstacles_cfg,
     }
@@ -984,39 +1064,82 @@ def tiles_needed_for_resolution(resolution: int) -> tuple[int, int, int]:
 
 @_log_timing
 def generate_sample(
-    args: tuple[int, Path, Path, int, pd.DataFrame, float, float, bool, list, dict, str],
-) -> tuple[int, bool, str]:
+    args: tuple[int, Path, Path, int, pd.DataFrame, float, float, bool, list, dict, str]
+    | tuple[int, Path, Path, int, pd.DataFrame, float, float, bool, list, dict, str, int]
+    | tuple[int, Path, Path, int, pd.DataFrame, float, float, bool, list, dict, str, int, bool],
+) -> tuple[int, bool, str, float]:
     """
     Generate a single dataset sample.
 
     Args:
         args: Tuple of (index, tiles_dirpath, outputs_dirpath, resolution,
             tile_stats_df, global_min, global_max, disable_images, solvers_configs,
-            obstacle_settings, split_name).
+            obstacle_settings, split_name[, generation_seed[, save_preview_images]]).
 
     Returns:
-        Tuple of (index, success, message).
+        Tuple of (index, success, message, duration_seconds).
     """
     # Unpack args tuple
-    if len(args) != 11:
-        raise ValueError("generate_sample expects an 11-element args tuple")
-    (
-        index,
-        tiles_dirpath,
-        outputs_dirpath,
-        resolution,
-        tile_stats_df,
-        global_min,
-        global_max,
-        disable_images,
-        solvers_configs,
-        obstacle_settings,
-        split_name,
-    ) = args
+    if len(args) not in {11, 12, 13}:
+        raise ValueError("generate_sample expects an 11-, 12-, or 13-element args tuple")
+    if len(args) == 11:
+        (
+            index,
+            tiles_dirpath,
+            outputs_dirpath,
+            resolution,
+            tile_stats_df,
+            global_min,
+            global_max,
+            disable_images,
+            solvers_configs,
+            obstacle_settings,
+            split_name,
+        ) = args
+        generation_seed = 0
+        save_preview_images = not disable_images
+    elif len(args) == 12:
+        (
+            index,
+            tiles_dirpath,
+            outputs_dirpath,
+            resolution,
+            tile_stats_df,
+            global_min,
+            global_max,
+            disable_images,
+            solvers_configs,
+            obstacle_settings,
+            split_name,
+            generation_seed,
+        ) = args
+        save_preview_images = not disable_images
+    else:
+        (
+            index,
+            tiles_dirpath,
+            outputs_dirpath,
+            resolution,
+            tile_stats_df,
+            global_min,
+            global_max,
+            disable_images,
+            solvers_configs,
+            obstacle_settings,
+            split_name,
+            generation_seed,
+            save_preview_images,
+        ) = args
 
     # Validate solvers_configs is a non-empty list
     if not solvers_configs or not isinstance(solvers_configs, list):
         raise ValueError("solvers_configs must be a non-empty list of solver configurations")
+
+    generation_seed = int(generation_seed)
+    save_preview_images = bool(save_preview_images)
+    sample_seed = _derive_sample_seed(generation_seed, resolution, index, split_name)
+    py_rng = random.Random(sample_seed)
+    np_rng = np.random.default_rng(sample_seed)
 
     obstacle_settings = obstacle_settings or {}
     # Use max_marker_retries from the first solver's common config (they should all be the same)
@@ -1053,15 +1176,17 @@ def generate_sample(
                 )
                 continue
 
-            target_elev = random.uniform(float(global_min), float(global_max))
+            target_elev = py_rng.uniform(float(global_min), float(global_max))
 
             candidates = candidates[(candidates["min"] <= target_elev) & (candidates["max"] >= target_elev)]
 
             if candidates.empty:
                 continue  # No valid tiles for this resolution
 
+            candidates = _order_tile_candidates(candidates)
+
             # Select a random tile and draw a target elevation from its local range
-            selected = candidates.sample(n=1).iloc[0]
+            selected = candidates.iloc[py_rng.randrange(len(candidates))]
             center_lat = int(selected["lat"])
             center_lon = int(selected["lon"])
 
@@ -1094,8 +1219,8 @@ def generate_sample(
                 continue  # Try another elevation
 
             # Randomly select crop position
-            y1 = random.randint(crop_y1_min, crop_y1_max)
-            x1 = random.randint(crop_x1_min, crop_x1_max)
+            y1 = py_rng.randint(crop_y1_min, crop_y1_max)
+            x1 = py_rng.randint(crop_x1_min, crop_x1_max)
             y2 = y1 + resolution
             x2 = x1 + resolution
 
@@ -1133,6 +1258,7 @@ def generate_sample(
             size_min_ratio = float(obstacle_settings.get("size_min_ratio", 0.20))
             size_max_ratio = float(obstacle_settings.get("size_max_ratio", 0.50))
             generation_cfg = obstacle_settings.get("generation_cfg", {})
+            obstacles_impassable = bool(obstacle_settings.get("impassable", True))
             obstacle_penalty = float(obstacle_settings.get("obstacle_penalty", 1e8))
 
             # Use first solver for marker validation
@@ -1149,7 +1275,7 @@ def generate_sample(
             for marker_attempt in range(max_marker_retries):
                 marker_attempts_used += 1
                 # Generate marker 2 randomly, distinct from marker 1
-                idx2 = random.randint(0, total_pixels - 2)
+                idx2 = py_rng.randrange(total_pixels - 1)
                 if idx2 >= marker1_flat_idx:
                     idx2 += 1
                 i2, j2 = divmod(idx2, w)
@@ -1171,6 +1297,7 @@ def generate_sample(
                         size_max_ratio,
                         obstacles_cfg,
                         marker_positions=marker_positions,
+                        rng=np_rng,
                         generation_cfg=generation_cfg,
                     )
                     obstacle_gen_time = time.time() - t_obs
@@ -1182,11 +1309,20 @@ def generate_sample(
                 obstacle_ratio = float(np.mean(obstacles_mask))
 
                 # Validate that a path with obstacles exists using first solver
+                blocked_obstacles = (
+                    obstacles_mask.astype(np.bool_) if obstacles_enabled and obstacles_impassable else None
+                )
                 masked_elevation = crop.copy()
-                if obstacles_enabled and obstacle_penalty > 0:
+                if obstacles_enabled and blocked_obstacles is None and obstacle_penalty > 0:
                     masked_elevation[obstacles_mask == 1] = masked_elevation.max() + obstacle_penalty
 
-                test_path_with = find_path(masked_elevation, (i1, j1), (i2, j2), first_solver_config)
+                test_path_with = find_path(
+                    crop if blocked_obstacles is not None else masked_elevation,
+                    (i1, j1),
+                    (i2, j2),
+                    first_solver_config,
+                    blocked_mask=blocked_obstacles,
+                )
 
                 # Check if path_with crosses obstacles (should not happen if penalty is high enough)
                 if obstacles_enabled and check_path_collision(test_path_with, obstacles_mask):
@@ -1211,17 +1347,54 @@ def generate_sample(
                 solver_cfg_resolved = _resolve_solver_config(solver_cfg)
                 solver_name = solver_cfg.get("name", "unknown")
                 backend, parsed_solver_name = _parse_solver_backend_and_name(solver_cfg_resolved)
+                supports_considered_area = backend == "grid" and parsed_solver_name in {"astar", "grid_astar"}
 
                 t_solver_start = time.time()
 
                 # Compute path without obstacles (free)
                 t_path_free = time.time()
-                path_free = find_path(crop, (i1, j1), (i2, j2), solver_cfg_resolved)
+                if supports_considered_area:
+                    path_free_result = _grid_astar_with_details(
+                        crop,
+                        (i1, j1),
+                        (i2, j2),
+                        float(solver_cfg_resolved.get("weight", 1.0)),
+                        str(solver_cfg_resolved.get("diagonal_movement", "always")),
+                        str(solver_cfg_resolved.get("heuristic", "euclidean")),
+                        str(solver_cfg_resolved.get("cost_model", "elevation")),
+                    )
+                    path_free = path_free_result.path
+                    considered_area_free = int(path_free_result.considered_area)
+                else:
+                    path_free = find_path(crop, (i1, j1), (i2, j2), solver_cfg_resolved)
+                    considered_area_free = -1
                 t_path_free = time.time() - t_path_free
 
                 # Compute path with obstacles
                 t_path_obstacles = time.time()
-                path_obstacles = find_path(masked_elevation, (i1, j1), (i2, j2), solver_cfg_resolved)
+                obstacle_surface = crop if blocked_obstacles is not None else masked_elevation
+                if supports_considered_area:
+                    path_obstacles_result = _grid_astar_with_details(
+                        obstacle_surface,
+                        (i1, j1),
+                        (i2, j2),
+                        float(solver_cfg_resolved.get("weight", 1.0)),
+                        str(solver_cfg_resolved.get("diagonal_movement", "always")),
+                        str(solver_cfg_resolved.get("heuristic", "euclidean")),
+                        str(solver_cfg_resolved.get("cost_model", "elevation")),
+                        blocked_obstacles,
+                    )
+                    path_obstacles = path_obstacles_result.path
+                    considered_area_obstacles = int(path_obstacles_result.considered_area)
+                else:
+                    path_obstacles = find_path(
+                        obstacle_surface,
+                        (i1, j1),
+                        (i2, j2),
+                        solver_cfg_resolved,
+                        blocked_mask=blocked_obstacles,
+                    )
+                    considered_area_obstacles = -1
                 t_path_obstacles = time.time() - t_path_obstacles
 
                 # Check if free path crosses obstacles
@@ -1277,7 +1450,8 @@ def generate_sample(
 
                 t_cost = time.time()
                 cost_free = _sum_costs_for_solver(crop, path_free, solver_cfg_resolved)
-                cost_obstacles = _sum_costs_for_solver(masked_elevation, path_obstacles, solver_cfg_resolved)
+                obstacle_cost_surface = crop if blocked_obstacles is not None else masked_elevation
+                cost_obstacles = _sum_costs_for_solver(obstacle_cost_surface, path_obstacles, solver_cfg_resolved)
                 t_cost = time.time() - t_cost
 
                 # Compute cost difference percentage
@@ -1300,6 +1474,8 @@ def generate_sample(
                     "path_free": path_free,
                     "path_obstacles": path_obstacles,
                     "path_free_crosses_obstacles": path_free_crosses_obstacles,
+                    "considered_area_free": considered_area_free,
+                    "considered_area_obstacles": considered_area_obstacles,
                     "cost_free": cost_free,
                     "cost_obstacles": cost_obstacles,
                     "cost_diff_percent": cost_diff_percent,
@@ -1407,11 +1583,13 @@ def generate_sample(
                     "free": {
                         "length": len(result["path_free"]),
                         "crosses_obstacles": bool(result["path_free_crosses_obstacles"]),
+                        "considered_area": int(result.get("considered_area_free", -1)),
                         "cost": float(result["cost_free"]),
                     },
                     "obstacles": {
                         "length": len(result["path_obstacles"]),
                         "crosses_obstacles": False,
+                        "considered_area": int(result.get("considered_area_obstacles", -1)),
                         "cost": float(result["cost_obstacles"]),
                         "cost_diff_percent": float(result["cost_diff_percent"]),
                     },
@@ -1463,6 +1641,10 @@ def generate_sample(
                     "size_min_ratio": size_min_ratio,
                     "size_max_ratio": size_max_ratio,
                     "penalty": obstacle_penalty,
+                },
+                "provenance": {
+                    "generation_seed": generation_seed,
+                    "sample_seed": sample_seed,
                 },
                 "solvers": solvers_metadata,
                 "paths": paths_metadata,
@@ -1516,7 +1698,7 @@ def generate_sample(
             path_without = first_result["path_free"]
             path_with = first_result["path_obstacles"]
 
-            if not disable_images:
+            if not disable_images and save_preview_images:
                 # No generic sample image is written any more; only per-solver images are produced for export.
                 base_res_dir = outputs_dirpath / str(resolution)
                 split_root = base_res_dir / split_name
@@ -1609,6 +1791,8 @@ def count_valid_samples(
     res_dir: Path,
     disable_images: bool = False,
     split_assignments: dict[int, str] | None = None,
+    preview_image_indices_by_split: dict[str, set[int]] | None = None,
+    solver_names: list[str] | None = None,
 ) -> int:
     """
     Count consecutive valid samples starting from index 0.
@@ -1616,7 +1800,8 @@ def count_valid_samples(
     A sample is valid if it has all required files under the expected split/lat/lon subdirectories:
     - {split}/tensors/{lat}/{lon}/{index:010d}.npy.zst
     - {split}/metadata/{lat}/{lon}/{index:010d}.yaml
-    - {split}/images/{lat}/{lon}/{index:010d}.png (if disable_images is False)
+    - {split}/images/{solver}/{lat}/{lon}/{index:010d}.png for preview-subset rows
+      when images are enabled
 
     Stops counting at the first incomplete sample and deletes any partial files.
 
@@ -1624,6 +1809,9 @@ def count_valid_samples(
         res_dir: Resolution directory containing split subdirs.
         disable_images: If True, don't check for images.
         split_assignments: Mapping from sample index -> split name. If None, assumes legacy layout without splits.
+        preview_image_indices_by_split: Optional mapping from split name to the set of
+            sample indices that are expected to have preview images.
+        solver_names: Optional solver names expected under images/<solver>/...
 
     Returns:
         Number of consecutive valid samples from index 0.
@@ -1701,13 +1889,21 @@ def count_valid_samples(
     split_names = sorted(set(split_assignments.values()))
     tensors_map_by_split: dict[str, dict[int, Path]] = {}
     metadata_map_by_split: dict[str, dict[int, Path]] = {}
-    images_map_by_split: dict[str, dict[int, Path]] = {}
+    image_maps_by_split: dict[str, dict[str, dict[int, Path]] | dict[int, Path]] = {}
+
+    solver_names = list(solver_names or [])
 
     for split in split_names:
         tensors_map_by_split[split] = _build_index_map(res_dir / split / "tensors", TENSOR_SUFFIX)
         metadata_map_by_split[split] = _build_index_map(res_dir / split / "metadata", ".yaml")
         if not disable_images:
-            images_map_by_split[split] = _build_index_map(res_dir / split / "images", ".png")
+            if solver_names:
+                image_maps_by_split[split] = {
+                    solver_name: _build_index_map(res_dir / split / "images" / solver_name, ".png")
+                    for solver_name in solver_names
+                }
+            else:
+                image_maps_by_split[split] = _build_index_map(res_dir / split / "images", ".png")
 
     index = 0
     max_index = max(split_assignments.keys()) + 1 if split_assignments else 0
@@ -1715,11 +1911,31 @@ def count_valid_samples(
         split = split_assignments.get(index, "train")
         tensor_file = tensors_map_by_split.get(split, {}).get(index)
         metadata_file = metadata_map_by_split.get(split, {}).get(index)
-        image_file = images_map_by_split.get(split, {}).get(index) if not disable_images else None
+
+        requires_images = False
+        if not disable_images:
+            if preview_image_indices_by_split is None:
+                requires_images = True
+            else:
+                requires_images = index in preview_image_indices_by_split.get(split, set())
 
         tensor_exists = tensor_file is not None
         metadata_exists = metadata_file is not None
-        image_exists = image_file is not None if not disable_images else True
+        image_exists = True
+        existing_image_files: list[Path] = []
+        if not disable_images:
+            if solver_names:
+                solver_image_maps = image_maps_by_split.get(split, {})
+                for solver_name in solver_names:
+                    image_file = solver_image_maps.get(solver_name, {}).get(index)
+                    if image_file is not None:
+                        existing_image_files.append(image_file)
+                image_exists = (not requires_images) or len(existing_image_files) == len(solver_names)
+            else:
+                image_file = image_maps_by_split.get(split, {}).get(index)
+                if image_file is not None:
+                    existing_image_files.append(image_file)
+                image_exists = (not requires_images) or image_file is not None
 
         if tensor_exists and metadata_exists and image_exists:
             index += 1
@@ -1729,8 +1945,7 @@ def count_valid_samples(
                 partial_files.append(tensor_file)
             if metadata_exists and metadata_file is not None:
                 partial_files.append(metadata_file)
-            if not disable_images and image_exists and image_file is not None:
-                partial_files.append(image_file)
+            partial_files.extend(existing_image_files)
 
             if partial_files:
                 logger.warning(
@@ -1863,6 +2078,9 @@ def run_generate(
     splits_enabled = bool(splits_cfg.get("enabled", True))
     split_ratios = splits_cfg.get("ratios", {}) if splits_enabled else {"train": 1.0}
     split_seed = int(splits_cfg.get("seed", 42) if splits_enabled else 42)
+    generation_cfg = config.get("generation", {}) if isinstance(config, dict) else {}
+    generation_seed = int(generation_cfg.get("seed", split_seed))
+    preview_images_cfg = _resolve_preview_images_config(config, resolutions)
     # Note: split assignments will be computed per-resolution below using the per-resolution sample count
     split_assignments = None  # placeholder (computed per-resolution)
 
@@ -1963,7 +2181,10 @@ def run_generate(
     cpus = num_cpus if num_cpus is not None else os.cpu_count()
     logger.info(
         f"Starting generate: outputs={outputs_path}, tiles={tiles_path}, resolution_override={resolution}, "
-        f"num_samples={cfg_num_samples}, cpus={cpus}, disable_images={disable_images}"
+        f"num_samples={cfg_num_samples}, cpus={cpus}, disable_images={disable_images}, "
+        f"split_seed={split_seed}, generation_seed={generation_seed}, "
+        f"preview_images_enabled={preview_images_cfg['enabled']}, "
+        f"preview_images_per_split={preview_images_cfg['num_samples_per_split']}"
     )
 
     # Generate samples for each resolution
@@ -1999,6 +2220,11 @@ def run_generate(
             else {i: "train" for i in range(samples_for_res)}
         )
         split_names = sorted(set(split_assignments.values()), key=_split_sort_key)
+        preview_image_indices_by_split = (
+            _select_preview_image_indices(split_assignments, preview_images_cfg["num_samples_per_split"])
+            if preview_images_cfg["enabled"] and res in preview_images_cfg["resolutions"]
+            else {}
+        )
 
         # Determine start index based on force flag and existing samples
         start_index = 0
@@ -2011,7 +2237,13 @@ def run_generate(
                     logger.warning(f"Failed to remove existing directory {res_dir}: {e}")
             else:
                 # Count valid samples and resume from there
-                start_index = count_valid_samples(res_dir, disable_images, split_assignments)
+                start_index = count_valid_samples(
+                    res_dir,
+                    disable_images,
+                    split_assignments,
+                    preview_image_indices_by_split=preview_image_indices_by_split,
+                    solver_names=[solver_cfg.get("name", "unknown") for solver_cfg in solvers_configs],
+                )
                 if start_index >= samples_for_res:
                     logger.info(
                         f"Resolution {res} already complete ({start_index}/{samples_for_res} samples), skipping"
@@ -2043,7 +2275,7 @@ def run_generate(
             split_root = res_dir / split
             (split_root / "tensors").mkdir(parents=True, exist_ok=True)
             (split_root / "metadata").mkdir(parents=True, exist_ok=True)
-            if not disable_images:
+            if not disable_images and preview_image_indices_by_split.get(split):
                 (split_root / "images").mkdir(parents=True, exist_ok=True)
 
         # Prepare arguments for each sample (starting from start_index)
@@ -2053,6 +2285,9 @@ def run_generate(
         for i in range(start_index, samples_for_res):
             split = split_assignments.get(i, "train")
             split_requested[split] = split_requested.get(split, 0) + 1
+            save_preview_images = bool(
+                preview_image_indices_by_split.get(split) and i in preview_image_indices_by_split[split]
+            )
             args_list.append(
                 (
                     i,
@@ -2066,6 +2301,8 @@ def run_generate(
                     solvers_configs,
                     obstacle_settings,
                     split,
+                    generation_seed,
+                    save_preview_images,
                 )
             )
 
@@ -2125,6 +2362,11 @@ def run_generate(
                 for split in split_names
             },
             "split_seed": split_seed,
+            "generation": {
+                "seed": generation_seed,
+                "sample_seeding": "blake2b(seed,resolution,index,split)",
+                "timestamps_are_runtime_dependent": True,
+            },
             "timestamp": datetime.now().isoformat(),
         }
         res_summary_path = res_dir / "summary.json"
@@ -2156,6 +2398,11 @@ def run_generate(
             "enabled": splits_enabled,
             "ratios": split_ratios,
             "seed": split_seed,
+        },
+        "generation": {
+            "seed": generation_seed,
+            "sample_seeding": "blake2b(seed,resolution,index,split)",
+            "timestamps_are_runtime_dependent": True,
         },
         "mean_time_per_sample_seconds": mean_time_overall,
         "timestamp": datetime.now().isoformat(),

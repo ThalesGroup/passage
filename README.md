@@ -7,7 +7,7 @@
 <h1 align="center">🌍 PASSAGE — Path Solving Dataset & Generator</h1>
 
 <p align="center">
-  <strong>Real-world elevation-based pathfinding benchmarks to advance research — and save lives.</strong>
+  <strong>Real-world elevation-based pathfinding benchmarks for reproducible terrain-routing research.</strong>
 </p>
 
 <!-- Badges -->
@@ -41,6 +41,7 @@
 - [🗺️ Visual Summary](#️-visual-summary)
 - [🚀 Quick Start](#-quick-start)
 - [🔁 Pipeline Overview](#-pipeline-overview)
+- [🧭 Reproducibility](#-reproducibility)
 - [📦 Loading the Dataset](#-loading-the-dataset)
 - [⚙️ Configuration](#️-configuration)
 - [📓 Notebooks](#-notebooks)
@@ -85,7 +86,7 @@ Please also set the repository **About** metadata:
 
 **PASSAGE** was created to change that. Built from **real-world satellite elevation data** (JAXA ALOS AW3D30 at 30 m/pixel), it provides the research community with large-scale, multi-resolution pathfinding benchmarks that capture the true complexity of terrain navigation.
 
-We open-source this toolkit because **better benchmarks lead to better algorithms, and better algorithms save lives**.
+We open-source this toolkit because better benchmarks make routing methods easier to compare, reproduce, and audit.
 
 ---
 
@@ -108,7 +109,7 @@ We open-source this toolkit because **better benchmarks lead to better algorithm
 
 <table>
 <tr>
-  <td align="center"><strong>141,300</strong><br><small>Default Samples</small></td>
+  <td align="center"><strong>14,130</strong><br><small>Default Samples</small></td>
   <td align="center"><strong>7</strong><br><small>Resolution Levels</small></td>
   <td align="center"><strong>5</strong><br><small>Cost Models</small></td>
   <td align="center"><strong>3</strong><br><small>Solver Backends</small></td>
@@ -138,11 +139,15 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 git clone https://github.com/ThalesGroup/passage.git
 cd passage && uv sync
 
-# Run the full pipeline
+# One-command local rebuild (download -> calibrate -> generate -> export -> manifest)
+make rebuild RESOLUTION=256
+
+# Or run each stage manually
 passage download                       # 1️⃣  Fetch JAXA elevation tiles
 passage calibrate                      # 2️⃣  Compute global elevation stats
 passage generate --resolution 256      # 3️⃣  Generate pathfinding samples
 passage export --no-upload             # 4️⃣  Package as Parquet shards
+make manifest                          # 5️⃣  Write outputs/export/manifest.sha256
 ```
 
 <details>
@@ -173,6 +178,18 @@ flowchart LR
 | 4 | `passage export` | Write Parquet shards, execute notebooks, push to HF Hub |
 
 > 📖 **Full walkthrough:** see the [User Guide](https://thalesgroup.github.io/passage/guide/) or the local [USAGE.md](USAGE.md) reference.
+
+---
+
+## 🧭 Reproducibility
+
+- `splits.seed` controls deterministic split assignment.
+- `generation.seed` controls deterministic per-sample tile selection, crop placement, marker placement, and obstacle synthesis.
+- Each sample metadata file records `provenance.generation_seed` and `provenance.sample_seed`.
+- Runtime timestamps remain informational metadata and are not part of the deterministic sampling contract.
+- `make manifest` writes `outputs/export/manifest.sha256` so a released export tree can be checked for completeness.
+
+Repository-root release metadata is tracked in [`CITATION.cff`](CITATION.cff), [`DATASHEET.md`](DATASHEET.md), [`CHANGELOG.md`](CHANGELOG.md), and [`croissant.json`](croissant.json).
 
 ---
 
@@ -210,15 +227,24 @@ num_samples:
   128: 2500
   256: 1000
   # ...
+splits:
+  ratios: {train: 0.90, calibration: 0.02, validation: 0.04, test: 0.04}
+  seed: 42
+generation:
+  seed: 42
+  preview_images:
+    enabled: true
+    resolutions: [64, 128, 256, 512, 1024, 2048, 4096]
+    num_samples_per_split: 64
 obstacles:
   enabled: true
   ratio_max: 0.30
   shape:
     n: { distribution: log_uniform, min: 1.0, max: 80.0 }
 solvers:
-  astar_elevation:
+  - name: astar_elevation
     backend: grid
-    algorithm: astar
+    solver: astar
     cost_model: elevation
     weight: 5878.0
 ```
@@ -259,7 +285,7 @@ HF_TOKEN=hf_XXXXXXXXXXXXXXXXXXXXXXXX
 | **Classical AI** | A\*, Dijkstra benchmarking across cost models |
 | **Reinforcement Learning** | Grid-based terrain navigation agents |
 | **Graph Neural Networks** | Learned heuristics on elevation graphs |
-| **Surrogate Models** | Fast path prediction (141K+ input/output pairs) |
+| **Surrogate Models** | Fast path prediction from 14K+ multi-resolution terrain-routing examples |
 | **Computer Vision** | Path segmentation from elevation images |
 | **Certified ML** | ARP 6983 / ED-324 — bounded ODD, deterministic data |
 
@@ -271,18 +297,18 @@ HF_TOKEN=hf_XXXXXXXXXXXXXXXXXXXXXXXX
 outputs/
 ├── download/           # Tile archives + download.csv + extracted GeoTIFFs
 ├── calibrate/          # calibrate.json + elevation maps
-└── dataset/            # Per-resolution samples
-    └── 256/
-        ├── train/
-        │   └── 000000/
-        │       ├── tensor.npy.zst          # (H,W,3) zstd-compressed
-        │       ├── metadata.yaml           # Full provenance
-        │       ├── sample.png              # Visualization
-        │       ├── path_astar_elevation_free.csv
-        │       └── path_astar_elevation_obstacles.csv
-        ├── validation/
-        ├── test/
-        └── calibration/
+├── dataset/            # Per-resolution samples
+│   └── 256/
+│       └── train/
+│           ├── tensors/N045/E010/0000000000.npy.zst
+│           ├── metadata/N045/E010/0000000000.yaml
+│           ├── images/astar_energy/N045/E010/0000000000.png
+│           └── paths/astar_energy/free/N045/E010/0000000000.csv
+└── export/             # Hugging Face-ready parquet shards + release checksums
+  ├── 256x256/train/data-00000.parquet
+  ├── 256x256_samples/train/data-00000.parquet
+  ├── README.md
+  └── manifest.sha256
 ```
 
 ---
@@ -309,7 +335,7 @@ uv run pre-commit run --all-files
 
 ## 📝 Citation
 
-If you use PASSAGE in your research, please cite:
+Citation metadata is available in [`CITATION.cff`](CITATION.cff). If you prefer BibTeX, use:
 
 ```bibtex
 @article{delhomme2025passage,

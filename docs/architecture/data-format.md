@@ -198,14 +198,14 @@ Each resolution has two HF configs:
 | Config | Content |
 |--------|---------|
 | `{R}x{R}` | Full dataset at resolution $R$ |
-| `{R}x{R}_sample` | Subset of 64 samples for quick exploration |
+| `{R}x{R}_samples` | Subset of 64 samples per split for quick exploration |
 
-Default config: `1024x1024_sample`
+Default config: `1024x1024_samples`
 
 ```python
 # Load full dataset at 256×256
 ds = load_dataset("geoffrey-g-delhomme/passage", name="256x256")
 
 # Load quick sample
-ds = load_dataset("geoffrey-g-delhomme/passage", name="256x256_sample")
+ds = load_dataset("geoffrey-g-delhomme/passage", name="256x256_samples")
 ```

@@ -30,18 +30,18 @@ resolutions:
   - 4096
 
 export:
-  default: 1024x1024_sample
+  default: 1024x1024_samples
   sample:
     num_samples: 64
   compression_level: 12
   chunk_size:
-    64: 107820
-    128: 39079
-    256: 12133
-    512: 4425
-    1024: 909
-    2048: 280
-    4096: 83
+    64: 20000 # 107820
+    128: 10000 # 39079
+    256: 2500 # 12133
+    512: 1500 # 4425
+    1024: 750 # 909
+    2048: 200 # 280
+    4096: 20 # 83
 
 # Number of samples to generate. Can be either a single integer (applies to all resolutions) or a mapping per-resolution.
 # Examples:
@@ -56,13 +56,13 @@ export:
 #   1024: 10000
 #   2048: 2000
 #   4096: 1000
-num_samples:
-  64: 10000
-  128: 2500
-  256: 1000
-  512: 500
-  1024: 100
-  2048: 20
+num_samples: # debug
+  64: 1000000
+  128: 1000000
+  256: 1000000
+  512: 1000000
+  1024: 250000
+  2048:
   4096: 10
 
 # Dataset split configuration
@@ -74,6 +74,17 @@ splits:
     validation: 0.04
     test: 0.04
   seed: 42
+
+# Generation reproducibility configuration
+# - `seed` controls deterministic per-sample sampling for tile selection,
+#   crop placement, marker placement, and obstacle synthesis.
+# - Split assignment remains controlled independently by `splits.seed`.
+generation:
+  seed: 42
+  preview_images:
+    enabled: true
+    resolutions:
+    num_samples_per_split:
 
 # Geographic hold-out region configuration
 # The hold-out mask defines geographic regions reserved exclusively for testing.
@@ -116,7 +127,7 @@ solvers:
     # Weight multiplier for elevation cost (higher = prefer flat paths)
     # Set very high to strongly penalize high-elevation cells so the path follows valleys more aggressively.
     # Note: this multiplies the normalized elevation term, so large values (100+) heavily favor low-elevation routes.
-    weight: 5878.0
+    weight: 62.4
     # Heuristic function for A* search (used by astar/astar_bi):
     #   euclidean  - Euclidean distance in meters (best for 8-connectivity) [DEFAULT]
     #   manhattan  - Manhattan distance in meters (best for 4-connectivity)
@@ -149,7 +160,7 @@ solvers:
     # Weight multiplier for elevation cost (higher = prefer flat paths)
     # Set very high to strongly penalize high-elevation cells so the path follows valleys more aggressively.
     # Note: this multiplies the normalized elevation term, so large values (100+) heavily favor low-elevation routes.
-    weight: 3888.0
+    weight: 1125.3
     # Heuristic function for A* search (used by astar/astar_bi):
     #   euclidean  - Euclidean distance in meters (best for 8-connectivity) [DEFAULT]
     #   manhattan  - Manhattan distance in meters (best for 4-connectivity)
@@ -182,7 +193,7 @@ solvers:
     # Weight multiplier for elevation cost (higher = prefer flat paths)
     # Set very high to strongly penalize high-elevation cells so the path follows valleys more aggressively.
     # Note: this multiplies the normalized elevation term, so large values (100+) heavily favor low-elevation routes.
-    weight: 70170.0
+    weight: 8886.2
     # Heuristic function for A* search (used by astar/astar_bi):
     #   euclidean  - Euclidean distance in meters (best for 8-connectivity) [DEFAULT]
     #   manhattan  - Manhattan distance in meters (best for 4-connectivity)
@@ -233,5 +244,9 @@ obstacles:
     # Number of candidate superellipses to try when building a mask
     candidates_per_mask: 200
 
-  # Penalty added to elevation of obstacle cells during pathfinding (large -> avoided)
+  # When true, obstacle cells are treated as non-walkable during pathfinding.
+  # Set to false to recover the legacy "very expensive but still crossable" behavior.
+  impassable: true
+
+  # Penalty added to elevation of obstacle cells during pathfinding when impassable=false.
   obstacle_penalty: 1e8

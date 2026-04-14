@@ -1,0 +1,33 @@
+cff-version: 1.2.0
+title: PASSAGE
+message: If you use PASSAGE, please cite the software repository and accompanying dataset metadata in this file.
+type: software
+authors:
+  - family-names: Delhomme
+    given-names: Geoffrey
+    email: geoffrey.delhomme@thalesgroup.com
+    affiliation: Thales Group
+  - family-names: Trap
+    given-names: Francois
+    affiliation: Thales Group
+version: 0.1.0
+date-released: 2026-03-30
+license: MIT
+repository-code: https://github.com/ThalesGroup/passage
+url: https://github.com/ThalesGroup/passage
+keywords:
+  - pathfinding
+  - terrain-routing
+  - benchmark
+  - digital-elevation-model
+  - dataset
+preferred-citation:
+  type: article
+  title: PASSAGE: A Multi-Resolution Pathfinding Dataset Mixing Complex Obstacles and Elevation-Based Tiles Towards Certified Machine Learning Systems
+  authors:
+    - family-names: Delhomme
+      given-names: Geoffrey
+    - family-names: Trap
+      given-names: Francois
+  year: 2026
+  url: https://github.com/ThalesGroup/passage

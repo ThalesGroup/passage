@@ -23,6 +23,8 @@
 """Shared pytest fixtures for PASSAGE tests."""
 
 import json
+import shutil
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -31,6 +33,20 @@ import yaml
 
 import passage.generate as gen
 from passage.utils import TENSOR_SUFFIX, save_tensor
+
+
+@pytest.fixture(scope="session", autouse=True)
+def restore_repo_calibration_after_tests():
+    """Restore the repository calibration file from `.bak` after the test session."""
+    yield
+
+    calibrate_dir = Path("outputs") / "calibrate"
+    backup_path = calibrate_dir / "calibrate.json.bak"
+    calibrate_path = calibrate_dir / "calibrate.json"
+
+    if backup_path.exists():
+        calibrate_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(backup_path, calibrate_path)
 
 
 @pytest.fixture

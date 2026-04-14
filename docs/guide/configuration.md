@@ -157,7 +157,7 @@ See [Obstacle Generation](../generation/obstacles.md) for the superellipse math.
 
 ```yaml
 export:
-  default: 1024x1024_sample
+  default: 1024x1024_samples
   sample:
     num_samples: 64
   compression_level: 12
@@ -174,9 +174,22 @@ export:
 | Key | Description |
 |-----|-------------|
 | `default` | Default HF dataset config name |
-| `sample.num_samples` | Number of samples in `_sample` configs |
+| `sample.num_samples` | Number of samples in `_samples` configs |
 | `compression_level` | Zstandard compression level (1–22) |
 | `chunk_sizes` | Rows per Parquet file, per resolution |
+
+Preview images are generated deterministically during `generate`, not during `export`. By default, PASSAGE writes
+preview images for the first `sample.num_samples` rows of each split so the matching `{R}x{R}_samples` export can be
+built reproducibly from the same dataset tree.
+
+```yaml
+generation:
+  seed: 42
+  preview_images:
+    enabled: true
+    resolutions: [64, 128, 256, 512, 1024, 2048, 4096]
+    num_samples_per_split: 64  # defaults to export.sample.num_samples when omitted
+```
 
 ---
 
@@ -246,7 +259,7 @@ export:
       obstacle_penalty: 1.0e+08
 
     export:
-      default: 1024x1024_sample
+      default: 1024x1024_samples
       sample:
         num_samples: 64
       compression_level: 12

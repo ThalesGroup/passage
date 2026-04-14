@@ -169,6 +169,11 @@ def main() -> None:
         help="Push prepared datasets directly to Hugging Face (zstd shards, no parquet)",
     )
     export_parser.add_argument(
+        "--config",
+        default="config/config.yaml",
+        help="Path to config.yaml file (default: config/config.yaml)",
+    )
+    export_parser.add_argument(
         "--dataset-dirpath",
         default="outputs/dataset",
         help="Directory containing generated datasets (default: outputs/dataset)",
@@ -307,6 +312,7 @@ def main() -> None:
 
             globals()["export_and_upload"] = _ea
         export_and_upload(
+            config_filepath=args.config,
             dataset_dirpath=args.dataset_dirpath,
             calibrate_dirpath=args.calibrate_dirpath,
             notebooks_dirpath=args.notebooks_dirpath,

@@ -69,3 +69,33 @@ def test_grid_solvers_with_cost_models():
         crop, (0, 0), (7, 7), weight=5.0, diagonal_movement="always", cost_model="absolute_elevation"
     )
     assert len(path_dijkstra) > 0
+
+
+@pytest.mark.unit
+@pytest.mark.generate
+def test_find_path_can_treat_obstacles_as_impassable():
+    crop = np.zeros((5, 5), dtype=np.float32)
+    blocked = np.zeros((5, 5), dtype=np.bool_)
+    blocked[2, 2] = True
+
+    grid_path = gen.find_path(
+        crop,
+        (2, 0),
+        (2, 4),
+        {"name": "grid:astar", "diagonal_movement": "never", "weight": 1.0, "cost_model": "distance"},
+        blocked_mask=blocked,
+    )
+    pathfinding_path = gen.find_path(
+        crop,
+        (2, 0),
+        (2, 4),
+        {"name": "pathfinding:astar", "diagonal_movement": "never", "weight": 1.0, "cost_model": "distance"},
+        blocked_mask=blocked,
+    )
+
+    assert (2, 2) not in grid_path
+    assert (2, 2) not in pathfinding_path
+    assert grid_path[0] == (2, 0)
+    assert grid_path[-1] == (2, 4)
+    assert pathfinding_path[0] == (2, 0)
+    assert pathfinding_path[-1] == (2, 4)

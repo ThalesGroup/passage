@@ -3,6 +3,9 @@
 PASSAGE provides a small CLI with four main subcommands: `download`, `generate`, `calibrate`, and `export`.
 Run `passage --help` or `passage <subcommand> --help` to see all available options for a subcommand.
 
+For a local end-to-end rebuild, the repository also ships a `Makefile` with `make rebuild RESOLUTION=256` and
+`make manifest` targets.
+
 ---
 
 ## download ✅
@@ -51,6 +54,10 @@ Important flags: `--config` (path to `config.yaml`), `--tiles-dirpath`, `--resol
 
 Note: If `--resolution` is not provided, resolutions are taken from `config/config.yaml` (the `resolutions` key). Obstacle generation is controlled by the `obstacles` section in `config/config.yaml` — when enabled, generated samples include an obstacle channel and metadata contains paths with and without obstacles.
 
+Determinism note: `splits.seed` controls split assignment, while `generation.seed` controls per-sample sampling,
+crop placement, marker placement, and obstacle synthesis. Sample metadata records both the run seed and the derived
+per-sample seed under `metadata.provenance`.
+
 ---
 
 ## calibrate 📏
@@ -85,10 +92,13 @@ passage export --no-upload
 passage export --resolution 128 --no-upload
 ```
 
-Useful flags: `--dataset-dirpath`, `--calibrate-dirpath`, `--resolution`, `--repo-id`, `--no-exec-notebooks`, `--no-upload`, `--private`, `--no-create-repo`, `--log-level`.
+Useful flags: `--config`, `--dataset-dirpath`, `--calibrate-dirpath`, `--resolution`, `--repo-id`, `--no-exec-notebooks`, `--no-upload`, `--private`, `--no-create-repo`, `--log-level`.
+
+After preparing an export, run `make manifest` to write `outputs/export/manifest.sha256`. Repository-level release
+metadata also lives in `croissant.json`, `DATASHEET.md`, `CITATION.cff`, and `CHANGELOG.md`.
 
 Uploaded artifacts include:
-- dataset parquets under `<resolution>x<resolution>` and `<resolution>x<resolution>_sample`
+- dataset parquets under `<resolution>x<resolution>` and `<resolution>x<resolution>_samples`
 - generated `<resolution>x<resolution>/dataset.ipynb` notebooks (from `notebooks/_dataset.ipynb`)
 - root `README.md`, `assets/`, `calibration/`, and `notebooks/`
 
@@ -99,6 +109,8 @@ Uploaded artifacts include:
 - Default output directories: `outputs/download`, `outputs/dataset`, `outputs/calibrate`.
 - See `config/config.yaml` for dataset settings (resolutions, obstacle generation, and other options).
 - Use `passage <subcommand> --help` for the full list of options for any subcommand.
+- Use `make rebuild RESOLUTION=<n>` when you want a single entrypoint for local download, calibration, generation,
+  parquet export, and checksum manifest refresh.
 
 ---
 

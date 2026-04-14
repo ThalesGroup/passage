@@ -39,13 +39,18 @@ from pathlib import Path
 
 import httpcore
 import httpx
+import numpy as np
 import pyarrow.parquet as pq
 import yaml
 from datasets import Dataset, Features, Image, List, Sequence, Value
 from dotenv import load_dotenv
 from huggingface_hub import HfApi, login
 from loguru import logger
+from PIL import Image as PILImage
 from tqdm import tqdm
+
+from passage.utils import load_tensor
+from passage.visualization import tensor_to_image
 
 try:  # Optional papermill fallback
     import papermill as pm
@@ -55,7 +60,7 @@ except Exception:  # pragma: no cover - papermill optional
     PAPERMILL_AVAILABLE = False
 
 
-CONFIG_NAME_PATTERN = re.compile(r"^(?P<resolution>\d+)x(?P=resolution)(?P<sample>_sample)?$")
+CONFIG_NAME_PATTERN = re.compile(r"^(?P<resolution>\d+)x(?P=resolution)(?P<sample>_samples)?$")
 
 
 def parse_path_csv(csv_path: Path) -> list[list[int]]:
@@ -73,6 +78,44 @@ def parse_path_csv(csv_path: Path) -> list[list[int]]:
     return out
 
 
+def _save_png(image_path: Path, image_bgr) -> None:
+    """Write an OpenCV-style BGR image as a PNG without requiring OpenCV."""
+    rgb_image = np.ascontiguousarray(image_bgr[:, :, ::-1])
+    PILImage.fromarray(rgb_image).save(image_path, format="PNG", compress_level=0)
+
+
+def _ensure_preview_image_for_prepare(
+    resolution: int,
+    metadata: dict,
+    tensor_filepath: Path,
+    solver_name: str,
+    path_free: list[list[int]],
+    path_obstacles: list[list[int]],
+    solver_image_filepath: Path,
+    tensor=None,
+):
+    """Generate a missing solver preview image from saved dataset artifacts."""
+    if solver_image_filepath.exists():
+        return tensor
+
+    if not tensor_filepath.exists():
+        raise FileNotFoundError(
+            f"Cannot generate missing preview image because tensor file is missing: {tensor_filepath}"
+        )
+
+    if tensor is None:
+        tensor = load_tensor(tensor_filepath, (resolution, resolution, 3))
+
+    obstacles_enabled = bool((metadata or {}).get("obstacles", {}).get("enabled", False))
+    alt_path = path_obstacles if obstacles_enabled and path_obstacles != path_free else None
+    preview_image = tensor_to_image(tensor, path_pixels=path_free, alt_path_pixels=alt_path)
+
+    solver_image_filepath.parent.mkdir(parents=True, exist_ok=True)
+    _save_png(solver_image_filepath, preview_image)
+    logger.info(f"Generated missing preview image for export ({solver_name}): {solver_image_filepath}")
+    return tensor
+
+
 def _process_meta_for_prepare(resolution: int, sample: bool, solver_names: list[str], metadata_filepath: str) -> dict:
     """Process a single metadata file into a serializable dict for HF dataset rows."""
 
@@ -83,9 +126,11 @@ def _process_meta_for_prepare(resolution: int, sample: bool, solver_names: list[
     stem = metadata_filepath.stem
 
     tensor_filepath = split_dirpath / "tensors" / lat_dir / lon_dir / f"{stem}.npy.zst"
-    # image_filepath = split_dirpath / "images" / lat_dir / lon_dir / f"{stem}.png"
+    if not tensor_filepath.exists():
+        raise FileNotFoundError(f"Missing required tensor for export: {tensor_filepath}")
 
-    metadata = yaml.safe_load(metadata_filepath.read_text())
+    metadata = yaml.safe_load(metadata_filepath.read_text()) or {}
+    tensor = None
 
     sample_dict = {
         "id": str(stem),
@@ -99,20 +144,27 @@ def _process_meta_for_prepare(resolution: int, sample: bool, solver_names: list[
         path_obstacles_filepath = (
             split_dirpath / "paths" / solver_name / "obstacles" / lat_dir / lon_dir / f"{stem}.csv"
         )
+        path_free = parse_path_csv(path_free_filepath) if path_free_filepath.exists() else []
+        path_obstacles = parse_path_csv(path_obstacles_filepath) if path_obstacles_filepath.exists() else []
 
         # Per-solver image file (sample-only)
         solver_image_filepath = split_dirpath / "images" / solver_name / lat_dir / lon_dir / f"{stem}.png"
         if sample:
-            sample_dict[f"image_{solver_name}"] = (
-                {"bytes": solver_image_filepath.read_bytes()} if solver_image_filepath.exists() else None
-            )
+            if not solver_image_filepath.exists():
+                tensor = _ensure_preview_image_for_prepare(
+                    resolution=resolution,
+                    metadata=metadata,
+                    tensor_filepath=tensor_filepath,
+                    solver_name=solver_name,
+                    path_free=path_free,
+                    path_obstacles=path_obstacles,
+                    solver_image_filepath=solver_image_filepath,
+                    tensor=tensor,
+                )
+            sample_dict[f"image_{solver_name}"] = {"bytes": solver_image_filepath.read_bytes()}
 
-        sample_dict[f"path_{solver_name}_free"] = (
-            parse_path_csv(path_free_filepath) if path_free_filepath.exists() else []
-        )
-        sample_dict[f"path_{solver_name}_obstacles"] = (
-            parse_path_csv(path_obstacles_filepath) if path_obstacles_filepath.exists() else []
-        )
+        sample_dict[f"path_{solver_name}_free"] = path_free
+        sample_dict[f"path_{solver_name}_obstacles"] = path_obstacles
     return sample_dict
 
 
@@ -135,6 +187,7 @@ def _path_stats_feature() -> dict:
     return {
         "length": Value("int32"),
         "crosses_obstacles": Value("bool"),
+        "considered_area": Value("int32"),
         "cost": Value("float32"),
     }
 
@@ -144,6 +197,7 @@ def _path_stats_obstacles_feature() -> dict:
     return {
         "length": Value("int32"),
         "crosses_obstacles": Value("bool"),
+        "considered_area": Value("int32"),
         "cost": Value("float32"),
         "cost_diff_percent": Value("float32"),
     }
@@ -249,6 +303,10 @@ def _features(sample: bool, solver_names: list[str]) -> Features:
             "size_min_ratio": Value("float32"),
             "size_max_ratio": Value("float32"),
             "penalty": Value("float32"),
+        },
+        "provenance": {
+            "generation_seed": Value("int64"),
+            "sample_seed": Value("int64"),
         },
         "solvers": solvers_feature,
         "paths": paths_feature,
@@ -361,7 +419,7 @@ def _dir_num_files(path: Path) -> int:
 
 
 def _config_name(resolution: int, sample: bool) -> str:
-    return f"{resolution}x{resolution}" + ("_sample" if sample else "")
+    return f"{resolution}x{resolution}" + ("_samples" if sample else "")
 
 
 def _parse_config_name(config_name: str) -> tuple[int, bool] | None:
@@ -398,11 +456,11 @@ def _select_default_config(config_names: set[str] | list[str], configured_defaul
     if configured_default and configured_default in config_name_set:
         return configured_default
 
-    sample_configs = [config_name for config_name in sorted_config_names if config_name.endswith("_sample")]
+    sample_configs = [config_name for config_name in sorted_config_names if config_name.endswith("_samples")]
     if sample_configs:
         return sample_configs[0]
 
-    full_configs = [config_name for config_name in sorted_config_names if not config_name.endswith("_sample")]
+    full_configs = [config_name for config_name in sorted_config_names if not config_name.endswith("_samples")]
     if full_configs:
         return full_configs[0]
 
@@ -448,6 +506,7 @@ def _path_stats_yaml() -> list[dict]:
     return [
         {"name": "length", "dtype": "int32"},
         {"name": "crosses_obstacles", "dtype": "bool"},
+        {"name": "considered_area", "dtype": "int32"},
         {"name": "cost", "dtype": "float32"},
     ]
 
@@ -457,6 +516,7 @@ def _path_stats_obstacles_yaml() -> list[dict]:
     return [
         {"name": "length", "dtype": "int32"},
         {"name": "crosses_obstacles", "dtype": "bool"},
+        {"name": "considered_area", "dtype": "int32"},
         {"name": "cost", "dtype": "float32"},
         {"name": "cost_diff_percent", "dtype": "float32"},
     ]
@@ -637,6 +697,13 @@ def _generate_huggingface_yaml_header(
                                 {"name": "size_min_ratio", "dtype": "float32"},
                                 {"name": "size_max_ratio", "dtype": "float32"},
                                 {"name": "penalty", "dtype": "float32"},
+                            ],
+                        },
+                        {
+                            "name": "provenance",
+                            "struct": [
+                                {"name": "generation_seed", "dtype": "int64"},
+                                {"name": "sample_seed", "dtype": "int64"},
                             ],
                         },
                         {"name": "solvers", "struct": solvers_struct},
@@ -859,6 +926,22 @@ def write_shard(info):
     shard.to_parquet(f"{export_dirpath}/data-{i:05d}-of-{num:05d}.parquet", compression="zstd")
 
 
+def _metadata_sort_key(metadata_filepath: Path) -> tuple[int, str, str, str]:
+    stem = metadata_filepath.stem
+    if stem.isdigit():
+        return (int(stem), metadata_filepath.parent.parent.name, metadata_filepath.parent.name, metadata_filepath.name)
+    return (2**31 - 1, metadata_filepath.parent.parent.name, metadata_filepath.parent.name, metadata_filepath.name)
+
+
+def _iter_metadata_filepaths(metadata_root: Path, limit: int | None = None) -> tuple[list[Path], int]:
+    """Return metadata file paths in deterministic sample-index order."""
+
+    filepaths = sorted(metadata_root.glob("*/*/*.yaml"), key=_metadata_sort_key)
+    if limit is not None:
+        filepaths = filepaths[:limit]
+    return filepaths, len(filepaths)
+
+
 def _create_parquets(
     export_dirpath: Path,
     resolution: int,
@@ -922,6 +1005,7 @@ def export_and_upload(
     dataset_dirpath: str | Path = "outputs/dataset",
     calibrate_dirpath: str | Path = "outputs/calibrate",
     notebooks_dirpath: str | Path = "notebooks",
+    config_filepath: str | Path = "config/config.yaml",
     resolutions: list[int] | None = None,
     repo_id: str | None = None,
     execute_notebooks: bool = True,
@@ -950,7 +1034,19 @@ def export_and_upload(
         logger.error(f"Dataset directory not found: {dataset_path}")
         return False
 
-    config_file = notebooks_path.parent / "config" / "config.yaml"
+    config_file = Path(config_filepath)
+    if not config_file.is_absolute():
+        cwd_candidate = config_file.resolve()
+        repo_relative_candidate = (notebooks_path.parent / config_file).resolve()
+        if repo_relative_candidate.exists():
+            config_file = repo_relative_candidate
+        else:
+            config_file = cwd_candidate
+    else:
+        config_file = config_file.resolve()
+    if not config_file.exists():
+        logger.error(f"Config file not found: {config_file}")
+        return False
     cfg = yaml.safe_load(config_file.read_text())
     chunk_sizes = cfg["export"]["chunk_size"]
     configured_default = cfg["export"].get("default")
@@ -1015,20 +1111,19 @@ def export_and_upload(
                 export_path = export_dirpath / config_name / split
                 export_path.mkdir(parents=True, exist_ok=True)
                 metadata_root = split_dir / "metadata"
-                metadata_filepaths = list(metadata_root.rglob("*.yaml"))
-                if len(metadata_filepaths) == 0:
+                rows_max = cfg["export"]["sample"]["num_samples"] if sample else None
+                logger.info(
+                    f"Scanning metadata for {config_name}/{split}"
+                    + (f" (limit={rows_max})" if rows_max is not None else "")
+                )
+                metadata_filepaths, metadata_count = _iter_metadata_filepaths(metadata_root, limit=rows_max)
+                if metadata_count == 0:
                     logger.info(f"No metadata files for {config_name}/{split}; skipping")
                     continue
                 rows: list[dict] = []
-                rows_max = cfg["export"]["sample"]["num_samples"] if sample else None
                 chunk_size = chunk_sizes[res]
-                logger.info(
-                    f"Processing {len(metadata_filepaths)} files for {config_name}/{split} with chunk size {chunk_size}"
-                )
+                logger.info(f"Processing {metadata_count} files for {config_name}/{split} with chunk size {chunk_size}")
                 num_chunk = 0
-                num_chunks = len(metadata_filepaths) // chunk_size + (
-                    1 if len(metadata_filepaths) % chunk_size != 0 else 0
-                )
 
                 if cpus == 0:
                     logger.info(f"Running in sequential mode (no multiprocessing) for {config_name}/{split}")
@@ -1036,7 +1131,8 @@ def export_and_upload(
                 else:
                     pool_size = max(cpus - 1, 1)
                     logger.info(f"Running metadata processing with {pool_size} worker processes")
-                    pool = mp.Pool(processes=min(pool_size, len(metadata_filepaths)))
+                    worker_count = min(pool_size, metadata_count)
+                    pool = mp.Pool(processes=worker_count)
                     iterable = pool.imap(
                         partial(_process_meta_for_prepare, res, sample, solver_names), metadata_filepaths
                     )
@@ -1044,7 +1140,7 @@ def export_and_upload(
                 try:
                     for row in tqdm(
                         iterable,
-                        total=len(metadata_filepaths),
+                        total=metadata_count,
                         desc=f"Loading metadata for {config_name}/{split}",
                         unit="file",
                     ):
@@ -1052,9 +1148,7 @@ def export_and_upload(
                         if len(rows) >= chunk_size:
                             table = Dataset.from_list(rows, features=_features(sample, solver_names)).data.table
                             parquet_filepath = f"{export_path}/data-{num_chunk:05d}.parquet"
-                            logger.info(
-                                f"Writing chunk {num_chunk + 1}/{num_chunks} for {config_name}/{split} with {len(rows)} rows: {parquet_filepath}"
-                            )
+                            logger.info(f"Writing chunk {num_chunk + 1} for {config_name}/{split}: {parquet_filepath}")
                             pq.write_table(
                                 table,
                                 parquet_filepath,
@@ -1062,15 +1156,10 @@ def export_and_upload(
                                 compression_level=cfg["export"]["compression_level"],
                             )
                             logger.info(
-                                f"Writing chunk {num_chunk + 1}/{num_chunks} for {config_name}/{split} with {len(rows)} rows: {parquet_filepath} - done"
+                                f"Writing chunk {num_chunk + 1} for {config_name}/{split}: {parquet_filepath} - done"
                             )
                             rows = []
                             num_chunk += 1
-                        if rows_max is not None and len(rows) >= rows_max:
-                            logger.info(
-                                f"Reached maximum sample size of {rows_max} for {config_name}/{split}; stopping load"
-                            )
-                            break
                 finally:
                     if cpus != 0:
                         pool.close()

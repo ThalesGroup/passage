@@ -132,6 +132,56 @@ def test_path_cost_and_collision_fallbacks():
 
 
 @pytest.mark.unit
+def test_blocked_mask_removes_impassable_cells_from_all_solver_backends():
+    crop = np.zeros((3, 3), dtype=np.float64)
+    blocked = np.zeros((3, 3), dtype=np.bool_)
+    blocked[1, 1] = True
+
+    graph = pf.build_graph_from_elevation(crop, weight=1.0, cost_model="distance", blocked_mask=blocked)
+    assert (1, 1) not in graph.nodes
+
+    grid_path = pf._grid_astar(crop, (1, 0), (1, 2), 1.0, "never", "euclidean", "distance", blocked)
+    assert grid_path[0] == (1, 0)
+    assert grid_path[-1] == (1, 2)
+    assert (1, 1) not in grid_path
+
+    pathfinding_path, prep_time, solve_time = pf._find_path_pathfinding(
+        crop,
+        (1, 0),
+        (1, 2),
+        "astar",
+        "never",
+        1.0,
+        "euclidean",
+        "distance",
+        blocked,
+    )
+    assert pathfinding_path[0] == (1, 0)
+    assert pathfinding_path[-1] == (1, 2)
+    assert (1, 1) not in pathfinding_path
+    assert prep_time >= 0.0
+    assert solve_time >= 0.0
+
+
+@pytest.mark.unit
+def test_grid_astar_with_details_tracks_considered_area():
+    crop = np.zeros((3, 3), dtype=np.float64)
+
+    result = pf._grid_astar_with_details(
+        crop,
+        start=(0, 0),
+        end=(0, 2),
+        weight=1.0,
+        diagonal_movement="never",
+        heuristic_name="euclidean",
+        cost_model="distance",
+    )
+
+    assert result.path == [(0, 0), (0, 1), (0, 2)]
+    assert result.considered_area == 5
+
+
+@pytest.mark.unit
 def test_numba_helper_pyfuncs_cover_heuristics_and_heap_operations():
     heuristic_euclidean = _py_func(pf._numba_heuristic_euclidean)
     heuristic_manhattan = _py_func(pf._numba_heuristic_manhattan)
@@ -169,18 +219,21 @@ def test_numba_core_pyfuncs_and_reconstruct_path_cover_solver_internals():
 
     crop = np.array([[0.0, 1.0], [1.0, 2.0]], dtype=np.float64)
     dest_factor = np.ones_like(crop, dtype=np.float64)
+    blocked_mask = np.zeros_like(crop, dtype=np.bool_)
     neighbors = pf._get_neighbors_array("always")
 
     parents_euclidean = astar_core(
-        crop, dest_factor, 0, 0, 1, 1, 1.0, 2.0, pf._COST_DISTANCE, neighbors, 0, pf.PIXEL_SIZE_M
+        crop, dest_factor, blocked_mask, 0, 0, 1, 1, 1.0, 2.0, pf._COST_DISTANCE, neighbors, 0, pf.PIXEL_SIZE_M
     )
     parents_manhattan = astar_core(
-        crop, dest_factor, 0, 0, 1, 1, 1.0, 2.0, pf._COST_DISTANCE, neighbors, 1, pf.PIXEL_SIZE_M
+        crop, dest_factor, blocked_mask, 0, 0, 1, 1, 1.0, 2.0, pf._COST_DISTANCE, neighbors, 1, pf.PIXEL_SIZE_M
     )
     parents_chebyshev = astar_core(
-        crop, dest_factor, 0, 0, 1, 1, 1.0, 2.0, pf._COST_DISTANCE, neighbors, 2, pf.PIXEL_SIZE_M
+        crop, dest_factor, blocked_mask, 0, 0, 1, 1, 1.0, 2.0, pf._COST_DISTANCE, neighbors, 2, pf.PIXEL_SIZE_M
     )
-    parents_dijkstra = dijkstra_core(crop, dest_factor, 0, 0, 1, 1, 1.0, 2.0, pf._COST_DISTANCE, neighbors)
+    parents_dijkstra = dijkstra_core(
+        crop, dest_factor, blocked_mask, 0, 0, 1, 1, 1.0, 2.0, pf._COST_DISTANCE, neighbors
+    )
 
     for parents in [parents_euclidean, parents_manhattan, parents_chebyshev, parents_dijkstra]:
         assert tuple(parents[1, 1]) != (-1, -1)
