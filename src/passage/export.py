@@ -1004,6 +1004,7 @@ def _reset_hf_upload_cache(export_dirpath: Path) -> None:
 def export_and_upload(
     dataset_dirpath: str | Path = "outputs/dataset",
     calibrate_dirpath: str | Path = "outputs/calibrate",
+    calibration_filepath: str | Path | None = None,
     notebooks_dirpath: str | Path = "notebooks",
     config_filepath: str | Path = "config/config.yaml",
     resolutions: list[int] | None = None,
@@ -1024,7 +1025,12 @@ def export_and_upload(
     """
     cpus = num_cpus if num_cpus is not None else os.cpu_count()
     dataset_path = Path(dataset_dirpath).resolve()
-    calibrate_path = Path(calibrate_dirpath).resolve()
+    calibration_file = (
+        Path(calibration_filepath).resolve()
+        if calibration_filepath is not None
+        else (Path(calibrate_dirpath).resolve() / "calibrate.json")
+    )
+    calibrate_path = calibration_file.parent
     notebooks_path = Path(notebooks_dirpath).resolve()
     dataset_notebook = notebooks_path / "_dataset.ipynb"
     export_dirpath = calibrate_path.parent / "export"
@@ -1032,6 +1038,9 @@ def export_and_upload(
 
     if not dataset_path.exists():
         logger.error(f"Dataset directory not found: {dataset_path}")
+        return False
+    if not calibration_file.exists():
+        logger.error(f"Calibration file not found: {calibration_file}")
         return False
 
     config_file = Path(config_filepath)
@@ -1190,7 +1199,7 @@ def export_and_upload(
                     "RESOLUTION": res,
                     "DATASET_DIRPATH": str(dataset_path),
                     "CONFIG_FILEPATH": str(config_file),
-                    "CALIBRATE_FILEPATH": str(calibrate_path / "calibrate.json"),
+                    "CALIBRATE_FILEPATH": str(calibration_file),
                     "MAX_WORKERS": cpus or 8,
                 }
                 retries = None if max_notebook_retries == 0 else max_notebook_retries

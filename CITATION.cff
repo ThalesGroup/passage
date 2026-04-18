@@ -10,6 +10,8 @@ authors:
   - family-names: Trap
     given-names: Francois
     affiliation: Thales Group
+  - family-names: Kaakai
+    given-names: Fateh
 version: 0.1.0
 date-released: 2026-03-30
 license: MIT
@@ -29,5 +31,7 @@ preferred-citation:
       given-names: Geoffrey
     - family-names: Trap
       given-names: Francois
+    - family-names: Kaakai
+      given-names: Fateh
   year: 2026
   url: https://github.com/ThalesGroup/passage

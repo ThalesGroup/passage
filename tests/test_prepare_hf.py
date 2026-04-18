@@ -72,6 +72,15 @@ solvers:
 
     calibrate_dir = tmp_path / "calibrate"
     calibrate_dir.mkdir(parents=True)
+    (calibrate_dir / "calibrate.json").write_text(
+        """
+{
+  "global_min": 0.0,
+  "global_max": 1.0,
+  "tile_stats": []
+}
+""".strip()
+    )
 
     assets_dir = tmp_path / "assets"
     assets_dir.mkdir(parents=True)
@@ -222,6 +231,49 @@ def test_export_and_upload_passes_num_cpus_to_notebook(tmp_path):
             parameters_dict = arg
             break
     assert parameters_dict is not None and parameters_dict.get("MAX_WORKERS") == 4
+
+
+def test_export_and_upload_uses_explicit_calibration_filepath(tmp_path):
+    dataset_dir, notebooks_dir, calibrate_dir = _setup_minimal_export_tree(tmp_path)
+    custom_calibration = tmp_path / "custom" / "my-calibrate.json"
+    custom_calibration.parent.mkdir(parents=True)
+    custom_calibration.write_text(
+        """
+{
+  "global_min": 10.0,
+  "global_max": 20.0,
+  "tile_stats": []
+}
+""".strip()
+    )
+
+    with patch("passage.export._load_hf_credentials", return_value=("me", "repo", "token")):
+        with patch("passage.export.login", return_value=None):
+            with patch("passage.export.HfApi") as api_mock:
+                api_instance = MagicMock()
+                api_mock.return_value = api_instance
+                with patch("passage.export._execute_notebook_with_retries") as exec_mock:
+                    ok = export_and_upload(
+                        dataset_dirpath=dataset_dir,
+                        calibrate_dirpath=calibrate_dir,
+                        calibration_filepath=custom_calibration,
+                        notebooks_dirpath=notebooks_dir,
+                        resolutions=[64],
+                        repo_id=None,
+                        execute_notebooks=True,
+                        skip_upload=True,
+                    )
+
+    assert ok is True
+    copied_calibration = tmp_path / "export" / "calibration" / custom_calibration.name
+    assert copied_calibration.exists()
+    parameters_dict = None
+    for arg in exec_mock.call_args[0]:
+        if isinstance(arg, dict) and "CALIBRATE_FILEPATH" in arg:
+            parameters_dict = arg
+            break
+    assert parameters_dict is not None
+    assert parameters_dict.get("CALIBRATE_FILEPATH") == str(custom_calibration.resolve())
 
     assert ok is True
 

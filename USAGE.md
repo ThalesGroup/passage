@@ -32,7 +32,7 @@ Key flags: `--outputs-dirpath`, `--no-resume`, `--num-cpus`, `--log-level`.
 ## generate 🔧
 
 Generate dataset samples from DSM tiles. By default it reads configuration from `config/config.yaml` and uses
-`outputs/download/tiles` as the tiles source and writes to `outputs/dataset`.
+`outputs/download/tiles` as the tiles source, `outputs/calibrate/calibrate.json` as the calibration file, and writes to `outputs/dataset`.
 
 Examples:
 
@@ -46,11 +46,14 @@ passage generate --resolution 64 128 256
 # Generate a fixed number of samples and disable saving PNG images
 passage generate --num-samples 10000 --no-images
 
+# Use a specific calibration file
+passage generate --calibration-filepath /path/to/calibrate.json
+
 # Force recreation (delete existing outputs and regenerate)
 passage generate --force
 ```
 
-Important flags: `--config` (path to `config.yaml`), `--tiles-dirpath`, `--resolution`, `--num-samples`, `--no-images`, `--force`, `--num-cpus`, `--log-level`.
+Important flags: `--config` (path to `config.yaml`), `--tiles-dirpath`, `--calibration-filepath`, `--resolution`, `--num-samples`, `--no-images`, `--force`, `--num-cpus`, `--log-level`.
 
 Note: If `--resolution` is not provided, resolutions are taken from `config/config.yaml` (the `resolutions` key). Obstacle generation is controlled by the `obstacles` section in `config/config.yaml` — when enabled, generated samples include an obstacle channel and metadata contains paths with and without obstacles.
 
@@ -90,9 +93,14 @@ passage export --no-upload
 
 # Export a specific resolution without uploading
 passage export --resolution 128 --no-upload
+
+# Export with a specific calibration file
+passage export --calibration-filepath /path/to/calibrate.json --no-upload
 ```
 
-Useful flags: `--config`, `--dataset-dirpath`, `--calibrate-dirpath`, `--resolution`, `--repo-id`, `--no-exec-notebooks`, `--no-upload`, `--private`, `--no-create-repo`, `--log-level`.
+Useful flags: `--config`, `--dataset-dirpath`, `--calibrate-dirpath`, `--calibration-filepath`, `--resolution`, `--repo-id`, `--no-exec-notebooks`, `--no-upload`, `--private`, `--no-create-repo`, `--log-level`.
+
+If both `--calibrate-dirpath` and `--calibration-filepath` are provided to `export`, the explicit calibration file takes precedence and its parent directory is used for calibration assets.
 
 After preparing an export, run `make manifest` to write `outputs/export/manifest.sha256`. Repository-level release
 metadata also lives in `croissant.json`, `DATASHEET.md`, `CITATION.cff`, and `CHANGELOG.md`.

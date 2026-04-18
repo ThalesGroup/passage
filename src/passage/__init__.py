@@ -93,6 +93,11 @@ def main() -> None:
         help="Directory containing DSM tiles (default: outputs/download/tiles)",
     )
     generate_parser.add_argument(
+        "--calibration-filepath",
+        default="outputs/calibrate/calibrate.json",
+        help="Path to calibration JSON file (default: outputs/calibrate/calibrate.json)",
+    )
+    generate_parser.add_argument(
         "--resolution",
         type=int,
         nargs="+",
@@ -182,6 +187,11 @@ def main() -> None:
         "--calibrate-dirpath",
         default="outputs/calibrate",
         help="Directory containing calibration data (default: outputs/calibrate)",
+    )
+    export_parser.add_argument(
+        "--calibration-filepath",
+        default=None,
+        help="Path to calibration JSON file (default: <calibrate-dirpath>/calibrate.json; takes precedence over --calibrate-dirpath)",
     )
     export_parser.add_argument(
         "--notebooks-dirpath",
@@ -278,6 +288,7 @@ def main() -> None:
             args.outputs_dirpath,
             args.config,
             args.tiles_dirpath,
+            calibration_filepath=args.calibration_filepath,
             resolution=args.resolution,
             num_samples=args.num_samples,
             num_cpus=args.num_cpus,
@@ -315,6 +326,7 @@ def main() -> None:
             config_filepath=args.config,
             dataset_dirpath=args.dataset_dirpath,
             calibrate_dirpath=args.calibrate_dirpath,
+            calibration_filepath=args.calibration_filepath,
             notebooks_dirpath=args.notebooks_dirpath,
             resolutions=args.resolution,
             repo_id=args.repo_id,

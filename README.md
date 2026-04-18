@@ -4,10 +4,10 @@
   <img src="assets/banner.png" alt="PASSAGE — Path Solving Dataset & Generator" width="100%"/>
 </p>
 
-<h1 align="center">🌍 PASSAGE — Path Solving Dataset & Generator</h1>
+<h1 align="center">🌍 PASSAGE — Real-Terrain Benchmark & Generator</h1>
 
 <p align="center">
-  <strong>Real-world elevation-based pathfinding benchmarks for reproducible terrain-routing research.</strong>
+  <strong>Trustworthiness-oriented real-terrain benchmark and generation pipeline for pathfinding and surrogate modeling.</strong>
 </p>
 
 <!-- Badges -->
@@ -86,7 +86,7 @@ Please also set the repository **About** metadata:
 
 **PASSAGE** was created to change that. Built from **real-world satellite elevation data** (JAXA ALOS AW3D30 at 30 m/pixel), it provides the research community with large-scale, multi-resolution pathfinding benchmarks that capture the true complexity of terrain navigation.
 
-We open-source this toolkit because better benchmarks make routing methods easier to compare, reproduce, and audit.
+We open-source this toolkit to make terrain-routing methods easier to compare, reproduce, and audit under a shared benchmark surface.
 
 ---
 
@@ -148,6 +148,10 @@ passage calibrate                      # 2️⃣  Compute global elevation stats
 passage generate --resolution 256      # 3️⃣  Generate pathfinding samples
 passage export --no-upload             # 4️⃣  Package as Parquet shards
 make manifest                          # 5️⃣  Write outputs/export/manifest.sha256
+
+# Point generate/export at a specific calibration file when needed
+passage generate --calibration-filepath /path/to/calibrate.json --resolution 256
+passage export --calibration-filepath /path/to/calibrate.json --no-upload
 ```
 
 <details>
@@ -163,12 +167,17 @@ pip install -e ".[dev]"
 
 ## 🔁 Pipeline Overview
 
-```mermaid
-flowchart LR
-  D["Download<br/>JAXA DSM tiles"] --> C["Calibrate<br/>min / max elevation"]
-  C --> G["Generate<br/>samples + paths"]
-  G --> E["Export<br/>Parquet + HF Hub"]
-```
+<table>
+<tr>
+  <td align="center"><strong>1. Download</strong><br><small>JAXA DSM tiles</small></td>
+  <td align="center"><strong>→</strong></td>
+  <td align="center"><strong>2. Calibrate</strong><br><small>min / max elevation</small></td>
+  <td align="center"><strong>→</strong></td>
+  <td align="center"><strong>3. Generate</strong><br><small>samples + paths</small></td>
+  <td align="center"><strong>→</strong></td>
+  <td align="center"><strong>4. Export</strong><br><small>Parquet + HF Hub</small></td>
+</tr>
+</table>
 
 | Step | Command | What it does |
 |:----:|---------|--------------|
@@ -338,12 +347,12 @@ uv run pre-commit run --all-files
 Citation metadata is available in [`CITATION.cff`](CITATION.cff). If you prefer BibTeX, use:
 
 ```bibtex
-@article{delhomme2025passage,
-  title   = {PASSAGE: A Multi-Resolution Pathfinding Dataset mixing Complex
-             Obstacles and Elevation-based Tiles towards Certified Machine
+@article{delhomme2026passage,
+  title   = {PASSAGE: A Multi-Resolution Pathfinding Dataset Mixing Complex
+             Obstacles and Elevation-Based Tiles Towards Certified Machine
              Learning Systems},
-  author  = {Delhomme, Geoffrey and Trap, Fran{\c{c}}ois},
-  year    = {2025},
+  author  = {Delhomme, Geoffrey and Trap, Fran{\c{c}}ois and Kaakai, Fateh},
+  year    = {2026},
   url     = {https://github.com/ThalesGroup/passage}
 }
 ```

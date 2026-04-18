@@ -34,6 +34,7 @@ def test_no_images_flag_passed_to_run_generate(monkeypatch):
         outputs_dirpath,
         config_filepath,
         tiles_dirpath,
+        calibration_filepath="outputs/calibrate/calibrate.json",
         resolution=None,
         num_samples=None,
         num_cpus=None,

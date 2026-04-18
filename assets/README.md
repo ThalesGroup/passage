@@ -4,10 +4,10 @@
   <img src="assets/banner.png" alt="PASSAGE — Path Solving Dataset & Generator" width="100%"/>
 </p>
 
-<h1 align="center">🌍 PASSAGE — Path Solving Dataset & Generator</h1>
+<h1 align="center">🌍 PASSAGE — Real-Terrain Benchmark & Generator</h1>
 
 <p align="center">
-  <strong>Real-world elevation-based pathfinding benchmarks to advance research — and save lives.</strong>
+  <strong>Trustworthiness-oriented real-terrain benchmark and generation pipeline for pathfinding and surrogate modeling.</strong>
 </p>
 
 <!-- Badges -->
@@ -35,7 +35,7 @@
 
 **PASSAGE** was created to change that. Built from **real-world satellite elevation data** (JAXA ALOS AW3D30 at 30 m/pixel), it provides the research community with large-scale, multi-resolution pathfinding benchmarks that capture the true complexity of terrain navigation.
 
-We open-source this toolkit because **better benchmarks lead to better algorithms, and better algorithms save lives**.
+We open-source this toolkit to make terrain-routing methods easier to compare, reproduce, and audit under a shared benchmark surface.
 
 ---
 
@@ -58,7 +58,7 @@ We open-source this toolkit because **better benchmarks lead to better algorithm
 
 <table>
 <tr>
-  <td align="center"><strong>141,300</strong><br><small>Default Samples</small></td>
+  <td align="center"><strong>14,130</strong><br><small>Default Samples</small></td>
   <td align="center"><strong>7</strong><br><small>Resolution Levels</small></td>
   <td align="center"><strong>5</strong><br><small>Cost Models</small></td>
   <td align="center"><strong>3</strong><br><small>Solver Backends</small></td>
@@ -196,13 +196,17 @@ Each sample consists of:
 
 ## 🔁 Pipeline Overview
 
-```
- ┌──────────┐     ┌───────────┐     ┌───────────┐     ┌───────────┐
- │ Download  │────▶│ Calibrate │────▶│ Generate  │────▶│  Export   │
- │ JAXA DSM │     │ min / max │     │ samples   │     │ Parquet + │
- │  tiles   │     │ elevation │     │ + paths   │     │  HF Hub   │
- └──────────┘     └───────────┘     └───────────┘     └───────────┘
-```
+<table>
+<tr>
+  <td align="center"><strong>1. Download</strong><br><small>JAXA DSM tiles</small></td>
+  <td align="center"><strong>→</strong></td>
+  <td align="center"><strong>2. Calibrate</strong><br><small>min / max elevation</small></td>
+  <td align="center"><strong>→</strong></td>
+  <td align="center"><strong>3. Generate</strong><br><small>samples + paths</small></td>
+  <td align="center"><strong>→</strong></td>
+  <td align="center"><strong>4. Export</strong><br><small>Parquet + HF Hub</small></td>
+</tr>
+</table>
 
 | Step | Command | What it does |
 |:----:|---------|--------------|
@@ -355,7 +359,7 @@ These equations match the runtime implementation used by NetworkX and grid solve
 | **Classical AI** | A\*, Dijkstra benchmarking | 5 cost models, timing data, multi-resolution |
 | **Reinforcement Learning** | Terrain navigation agents | Grid observations, reward shaping with cost models |
 | **Graph Neural Networks** | Learned heuristics | Graph structure from elevation grids, path labels |
-| **Surrogate Models** | Fast approximation of optimal paths | Input/output pairs at scale (141 K+ samples) |
+| **Surrogate Models** | Fast approximation of optimal paths | Input/output pairs at scale (14 K+ samples) |
 | **Computer Vision** | Path prediction from elevation images | Tensor format, multi-channel images |
 | **Certified ML** | ARP 6983 / ED-324 compliance | Bounded ODD, deterministic generation, traceability |
 
@@ -366,12 +370,12 @@ These equations match the runtime implementation used by NetworkX and grid solve
 If you use PASSAGE in your research, please cite:
 
 ```bibtex
-@article{delhomme2025passage,
-  title   = {PASSAGE: A Multi-Resolution Pathfinding Dataset mixing Complex
-             Obstacles and Elevation-based Tiles towards Certified Machine
+@article{delhomme2026passage,
+  title   = {PASSAGE: A Multi-Resolution Pathfinding Dataset Mixing Complex
+             Obstacles and Elevation-Based Tiles Towards Certified Machine
              Learning Systems},
-  author  = {Delhomme, Geoffrey and Trap, Fran{\c{c}}ois},
-  year    = {2025},
+  author  = {Delhomme, Geoffrey and Trap, Fran{\c{c}}ois and Kaakai, Fateh},
+  year    = {2026},
   url     = {https://github.com/ThalesGroup/passage}
 }
 ```

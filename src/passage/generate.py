@@ -1757,12 +1757,12 @@ def generate_sample(
             duration = (end_time - start_time).total_seconds()
             num_solvers = len(solver_results)
             first_solver_name = list(solver_results.keys())[0]
-            logger.info(
-                f"Resolution: {resolution} / Sample {index}: success=True, elevation_attempts={elevation_attempts}, "
-                f"marker_retries={marker_attempt + 1 if 'marker_attempt' in locals() else 0}, "
-                f"solvers={num_solvers}, first_solver_path_len={len(solver_results[first_solver_name]['path_free'])}, "
-                f"grid_shape=({grid_h},{grid_w}), duration={duration:.2f}s"
-            )
+            # logger.info(
+            #     f"Resolution: {resolution} / Sample {index}: success=True, elevation_attempts={elevation_attempts}, "
+            #     f"marker_retries={marker_attempt + 1 if 'marker_attempt' in locals() else 0}, "
+            #     f"solvers={num_solvers}, first_solver_path_len={len(solver_results[first_solver_name]['path_free'])}, "
+            #     f"grid_shape=({grid_h},{grid_w}), duration={duration:.2f}s"
+            # )
 
             end_time = datetime.now()
             duration = (end_time - start_time).total_seconds()
@@ -2025,6 +2025,7 @@ def run_generate(
     outputs_dirpath: str,
     config_filepath: str,
     tiles_dirpath: str,
+    calibration_filepath: str = "outputs/calibrate/calibrate.json",
     resolution: int | list[int] | None = None,
     num_samples: int | None = None,
     num_cpus: int | None = None,
@@ -2038,6 +2039,7 @@ def run_generate(
         outputs_dirpath: Directory path for output files.
         config_filepath: Path to config.yaml file.
         tiles_dirpath: Directory containing DSM tiles.
+        calibration_filepath: Path to calibration JSON file.
         resolution: Image resolution (single int) or list of resolutions.
         num_samples: Number of samples to generate.
         num_cpus: Number of CPUs to use for multiprocessing.
@@ -2093,18 +2095,21 @@ def run_generate(
         # Do not return early; downstream code (and tests) may rely on generate_sample being mocked.
 
     # Load calibrate.json to get global min/max and tile_stats
-    calibrate_path = Path("outputs/calibrate/calibrate.json")
-    if not calibrate_path.exists():
-        logger.error(f"Calibration file not found: {calibrate_path}. Run 'passage calibrate' first.")
+    calibration_path = Path(calibration_filepath)
+    if not calibration_path.exists():
+        logger.error(f"Calibration file not found: {calibration_path}. Run 'passage calibrate' first.")
         return
 
     try:
-        with open(calibrate_path) as f:
+        with open(calibration_path) as f:
             calibration = json.load(f)
         global_min = calibration["global_min"]
         global_max = calibration["global_max"]
         tile_stats = calibration["tile_stats"]
-        logger.info(f"Loaded calibration: global_min={global_min}, global_max={global_max}, tiles={len(tile_stats)}")
+        logger.info(
+            f"Loaded calibration from {calibration_path}: "
+            f"global_min={global_min}, global_max={global_max}, tiles={len(tile_stats)}"
+        )
     except Exception as e:
         logger.error(f"Failed to load calibration file: {e}")
         return

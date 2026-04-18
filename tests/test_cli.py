@@ -146,6 +146,7 @@ class TestGenerateCLI:
                 assert args[0] == "outputs/dataset"
                 assert args[1] == "config/config.yaml"
                 assert args[2] == "outputs/download/tiles"
+                assert kwargs.get("calibration_filepath") == "outputs/calibrate/calibrate.json"
                 assert kwargs.get("resolution") is None
                 assert kwargs.get("num_samples") is None
                 assert kwargs.get("num_cpus") is None
@@ -257,6 +258,8 @@ class TestGenerateCLI:
                 "/custom/config.yaml",
                 "--tiles-dirpath",
                 "/custom/tiles",
+                "--calibration-filepath",
+                "/custom/calibrate.json",
                 "--resolution",
                 "512",
                 "--num-samples",
@@ -275,6 +278,7 @@ class TestGenerateCLI:
                 assert args[0] == "/custom/dataset"
                 assert args[1] == "/custom/config.yaml"
                 assert args[2] == "/custom/tiles"
+                assert kwargs.get("calibration_filepath") == "/custom/calibrate.json"
                 assert kwargs.get("resolution") == [512]
                 assert kwargs.get("num_samples") == 100
                 assert kwargs.get("num_cpus") == 4
@@ -384,6 +388,30 @@ class TestMainCLI:
                 mock_export.assert_called_once()
                 _, kwargs = mock_export.call_args
                 assert kwargs.get("config_filepath") == "/custom/config.yaml"
+
+    @pytest.mark.unit
+    def test_export_passes_calibration_filepath(self):
+        """The export subcommand should pass the explicit calibration JSON path through."""
+        from passage import main
+
+        with patch.object(
+            sys,
+            "argv",
+            [
+                "passage",
+                "export",
+                "--calibration-filepath",
+                "/custom/calibrate.json",
+                "--no-exec-notebooks",
+                "--no-upload",
+            ],
+        ):
+            with patch("passage.export_and_upload") as mock_export:
+                main()
+
+                mock_export.assert_called_once()
+                _, kwargs = mock_export.call_args
+                assert kwargs.get("calibration_filepath") == "/custom/calibrate.json"
 
     @pytest.mark.unit
     def test_export_passes_explicit_resolutions(self):
