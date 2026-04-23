@@ -139,6 +139,14 @@ SPLIT_ORDER = ["train", "calibration", "validation", "test"]
 # Default path for hold-out mask (relative to config directory)
 DEFAULT_HOLD_OUT_MASK_PATH = "config/hold_out_mask.png"
 
+# Conservative auto-caps for large crops when worker count is left to auto-detection.
+# Large resolutions create multiple full-resolution arrays per worker, so using every
+# visible CPU on an HPC node can exhaust RAM long before CPU becomes the bottleneck.
+AUTO_CPU_CAPS_BY_RESOLUTION: tuple[tuple[int, int], ...] = (
+    (4096, 8),
+    (2048, 16),
+)
+
 # Global cache for hold-out mask (loaded once at startup)
 _HOLD_OUT_MASK: np.ndarray | None = None
 _HOLD_OUT_MASK_PATH: str | None = None
@@ -149,6 +157,65 @@ def tensor_to_image(*args, **kwargs) -> np.ndarray:
     from passage.visualization import tensor_to_image as _tensor_to_image
 
     return _tensor_to_image(*args, **kwargs)
+
+
+def _recommended_generate_cpu_cap(resolution: int) -> int | None:
+    """Return a conservative worker cap for memory-heavy resolutions."""
+    for min_resolution, cap in AUTO_CPU_CAPS_BY_RESOLUTION:
+        if resolution >= min_resolution:
+            return cap
+    return None
+
+
+def _resolve_generation_pool_size(num_cpus: int | None, resolution: int, num_tasks: int) -> int:
+    """Choose a worker count that avoids obvious oversubscription.
+
+    The generator defaults to all visible CPUs when ``num_cpus`` is omitted, but that
+    can be unsafe for large crops on HPC nodes. We therefore:
+    1. cap workers to the number of remaining samples,
+    2. auto-cap only the default/all-CPU case for large resolutions,
+    3. preserve explicit ``--num-cpus`` choices while warning when they look risky.
+    """
+    if num_cpus == 0:
+        return 0
+
+    available_cpus = max(1, os.cpu_count() or 1)
+    requested_cpus = available_cpus if num_cpus is None else max(1, int(num_cpus))
+    effective_cpus = min(requested_cpus, max(1, int(num_tasks)))
+
+    if effective_cpus < requested_cpus:
+        logger.info(
+            "Limiting generation workers to %s because only %s sample(s) remain for resolution %s",
+            effective_cpus,
+            num_tasks,
+            resolution,
+        )
+
+    recommended_cap = _recommended_generate_cpu_cap(resolution)
+    if recommended_cap is not None and effective_cpus > recommended_cap:
+        if num_cpus is None:
+            logger.warning(
+                "Auto-capping generation workers from %s to %s for resolution %s. "
+                "Large crops are memory-heavy and the all-CPU default can OOM on shared or HPC nodes. "
+                "Pass --num-cpus explicitly to override if your node can sustain more workers.",
+                effective_cpus,
+                recommended_cap,
+                resolution,
+            )
+            effective_cpus = recommended_cap
+        else:
+            logger.warning(
+                "Using %s generation workers for resolution %s. Large crops are memory-heavy; "
+                "consider --num-cpus <= %s if you see OOM kills or BrokenPipeError traces.",
+                effective_cpus,
+                resolution,
+                recommended_cap,
+            )
+
+    if effective_cpus <= 1:
+        return 0
+
+    return effective_cpus
 
 
 def _save_png(image_path: Path, image_bgr: np.ndarray) -> None:
@@ -2186,7 +2253,7 @@ def run_generate(
     cpus = num_cpus if num_cpus is not None else os.cpu_count()
     logger.info(
         f"Starting generate: outputs={outputs_path}, tiles={tiles_path}, resolution_override={resolution}, "
-        f"num_samples={cfg_num_samples}, cpus={cpus}, disable_images={disable_images}, "
+        f"num_samples={cfg_num_samples}, requested_cpus={cpus}, disable_images={disable_images}, "
         f"split_seed={split_seed}, generation_seed={generation_seed}, "
         f"preview_images_enabled={preview_images_cfg['enabled']}, "
         f"preview_images_per_split={preview_images_cfg['num_samples_per_split']}"
@@ -2314,7 +2381,8 @@ def run_generate(
         # Process samples
         durations = []
         successful = 0
-        if num_cpus == 0:
+        pool_size = _resolve_generation_pool_size(num_cpus, res, samples_to_generate)
+        if pool_size == 0:
             logger.info("Running in sequential mode (no multiprocessing)")
             for args in tqdm(args_list, total=samples_to_generate):
                 idx, success, msg, duration = generate_sample(args)
@@ -2327,7 +2395,6 @@ def run_generate(
                         split_success.get(split_assignments.get(idx, "train"), 0) + 1
                     )
         else:
-            pool_size = num_cpus if num_cpus is not None else os.cpu_count()
             logger.info(f"Running with {pool_size} CPUs")
             with multiprocessing.Pool(pool_size) as pool:
                 for idx, success, msg, duration in tqdm(

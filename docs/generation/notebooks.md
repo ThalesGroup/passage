@@ -33,7 +33,7 @@ from passage.utils import decode_tensor_blob
 import matplotlib.pyplot as plt
 
 # Load dataset
-ds = load_dataset("geoffrey-g-delhomme/passage", name="256x256")
+ds = load_dataset("thalesgroup/passage", name="256x256")
 sample = ds["train"][0]
 
 # Decode tensor
@@ -112,9 +112,10 @@ When you run `passage export`, notebooks are automatically:
 
 1. **Copied** to the export directory under `notebooks/`
 2. **Executed** via `papermill` (for `_dataset.ipynb` — parameterized per resolution)
-3. **Uploaded** to the Hugging Face Hub alongside the dataset
+
+When you subsequently run `passage upload`, that prepared notebook bundle is published alongside the dataset.
 
 This means users can view pre-executed notebooks directly on the HF dataset page without needing to run them locally.
 
 !!! tip "Viewing on Hugging Face"
-    Navigate to the `notebooks/` directory in your [HF dataset repository](https://huggingface.co/datasets/geoffrey-g-delhomme/passage) to view rendered notebooks with all outputs.
+    Navigate to the `notebooks/` directory in your [HF dataset repository](https://huggingface.co/datasets/thalesgroup/passage) to view rendered notebooks with all outputs.

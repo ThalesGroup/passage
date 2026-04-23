@@ -1,116 +1,145 @@
 ---
-title: "Step 4 — Export & Publish"
+title: "Steps 4-6 — Release"
 ---
 
-# Step 4 — Export & Publish
+# Steps 4-6 — Release
 
-The final step packages your generated dataset into compressed **Parquet shards**, executes analysis notebooks, and optionally uploads everything to the **Hugging Face Hub** for public or private sharing.
+PASSAGE splits release preparation into three explicit commands:
 
----
+1. `passage compress` rewrites Parquet shards for the selected resolutions.
+2. `passage export` refreshes the upload-ready export tree.
+3. `passage upload` publishes that prepared tree to Hugging Face.
 
-## Usage
-
-### Full export with upload
-
-```bash
-passage export --repo-id alice/passage-dataset
-```
-
-### Dry run (no upload)
-
-```bash
-passage export --no-upload
-```
-
-### With all options
-
-```bash
-passage export \
-  --dataset-dirpath outputs/dataset \
-  --calibrate-dirpath outputs/calibrate \
-  --config config/config.yaml \
-  --outputs-dirpath outputs/export \
-  --repo-id alice/passage-dataset \
-  --env-path .env \
-  --secret-path .env.secret \
-  --max-notebook-retries 3 \
-  --num-cpus 4
-```
+The default export directory is derived from the calibration path. For example, `--calibrate-dirpath /data/PASSAGE/calibrate`
+targets `/data/PASSAGE/export` automatically, so the `/data` workflow stays compatible with the previous setup.
 
 ---
 
-## CLI Reference
+## 1. Compress
+
+`compress` scans the generated dataset, deletes any existing prepared configs for the selected resolutions, and writes fresh
+zstd-compressed Parquet shards under `outputs/export` (or the export directory derived from your calibration path).
+
+```bash
+# Compress every discovered dataset resolution
+passage compress
+
+# Compress one resolution locally
+passage compress --resolution 256
+
+# Compress against the /data dataset tree
+passage compress \
+  --dataset-dirpath /data/PASSAGE/dataset \
+  --calibrate-dirpath /data/PASSAGE/calibrate \
+  --resolution 256
+```
+
+Key flags for `compress`:
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--dataset-dirpath` | `outputs/dataset` | Generated dataset directory |
-| `--calibrate-dirpath` | `outputs/calibrate` | Calibration results |
 | `--config` | `config/config.yaml` | Configuration file |
-| `--outputs-dirpath` | `outputs/export` | Export output directory |
-| `--repo-id` | From `.env` | Hugging Face repo (`user/name`) |
-| `--no-upload` | `false` | Skip uploading to HF Hub |
-| `--private` | `false` | Create a private HF repository |
-| `--no-create-repo` | `false` | Don't create repo if it doesn't exist |
-| `--no-exec-notebooks` | `false` | Skip notebook execution |
-| `--max-notebook-retries` | `3` | Max retries for notebook execution |
-| `--notebook-retry-delay` | `5` | Seconds between retries |
-| `--env-path` | `.env` | Path to public env file |
-| `--secret-path` | `.env.secret` | Path to secret env file |
-| `--num-cpus` | `1` | Parallel workers |
-| `--log-level` | `INFO` | Logging verbosity |
+| `--dataset-dirpath` | `outputs/dataset` | Generated dataset directory |
+| `--calibrate-dirpath` | `outputs/calibrate` | Used to derive the export directory |
+| `--calibration-filepath` | `<calibrate-dirpath>/calibrate.json` | Explicit calibration file for export-dir derivation |
+| `--export-dirpath` | Derived from calibration path | Explicit export directory override |
+| `--resolution` | All discovered dataset resolutions | Restrict compression to specific resolutions |
+| `--num-cpus` | All CPUs | Multiprocessing workers (`0` = sequential) |
 
 ---
 
-## Export Pipeline
+## 2. Export
+
+`export` assumes Parquet shards already exist. It refreshes the export root by copying assets and calibration files, copying
+analysis notebooks, executing `_dataset.ipynb` for each selected resolution, and rebuilding `README.md` for upload.
+
+```bash
+# Refresh every prepared resolution
+passage export
+
+# Refresh one prepared resolution
+passage export --resolution 256
+
+# Refresh the /data-backed export tree
+passage export \
+  --dataset-dirpath /data/PASSAGE/dataset \
+  --calibrate-dirpath /data/PASSAGE/calibrate \
+  --resolution 256
+```
+
+Key flags for `export`:
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--config` | `config/config.yaml` | Configuration file |
+| `--dataset-dirpath` | `outputs/dataset` | Dataset root passed to the notebooks |
+| `--calibrate-dirpath` | `outputs/calibrate` | Calibration directory copied into the export tree |
+| `--calibration-filepath` | `<calibrate-dirpath>/calibrate.json` | Explicit calibration file |
+| `--notebooks-dirpath` | `notebooks` | Notebook directory containing `_dataset.ipynb` |
+| `--export-dirpath` | Derived from calibration path | Explicit export directory override |
+| `--resolution` | All prepared resolutions | Restrict notebook refresh to specific resolutions |
+| `--repo-id` | `thalesgroup/passage` | Repo id embedded in the generated README |
+| `--max-notebook-retries` | `3` | Retry count for `_dataset.ipynb` execution |
+| `--notebook-retry-delay` | `5` | Delay between retries, in seconds |
+
+If the selected `<resolution>x<resolution>` or `<resolution>x<resolution>_samples` Parquet directories do not exist yet,
+`export` fails fast and asks you to run `passage compress` first.
+
+---
+
+## 3. Upload
+
+`upload` publishes the prepared export tree. By default it targets `thalesgroup/passage` and reads `HF_TOKEN` from
+`.env.secret` after optionally loading `.env`.
+
+```bash
+# Upload the prepared export tree to the default dataset repo
+passage upload
+
+# Upload just one prepared resolution
+passage upload --resolution 256
+
+# Override the repo explicitly
+passage upload --repo-id alice/passage-dataset --env-path .env --secret-path .env.secret
+```
+
+Key flags for `upload`:
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--calibrate-dirpath` | `outputs/calibrate` | Used to derive the export directory |
+| `--calibration-filepath` | `<calibrate-dirpath>/calibrate.json` | Explicit calibration file for export-dir derivation |
+| `--export-dirpath` | Derived from calibration path | Explicit export directory override |
+| `--resolution` | Full prepared export tree | Restrict upload to specific prepared resolutions |
+| `--repo-id` | `thalesgroup/passage` | Hugging Face dataset repo |
+| `--env-path` | `.env` | Optional env file loaded before reading the token |
+| `--secret-path` | `.env.secret` | Secret env file containing `HF_TOKEN` |
+| `--private` | `false` | Create a private dataset repo |
+| `--no-create-repo` | `false` | Skip repo creation |
+
+---
+
+## Release Flow
 
 ```mermaid
 flowchart TD
-    A[Read dataset + calibration] --> B[Create Parquet shards\nper resolution × split]
-    B --> C[Copy assets & calibration]
-    C --> D[Execute notebooks\nvia papermill]
-    D --> E[Generate HF README\nwith YAML header]
-    E --> F{Upload enabled?}
-    F -->|Yes| G[Push to HF Hub\nvia upload_large_folder]
-    F -->|No| H[Done — local export ready]
+    A[Read dataset tree] --> B[Compress selected resolutions\ninto Parquet shards]
+    B --> C[Refresh assets, calibration,\nREADME, and notebooks]
+    C --> D[Execute _dataset.ipynb\nper selected resolution]
+    D --> E[Upload prepared export tree\nvia upload_large_folder]
 
     style A fill:#1565C0,color:#fff
-    style B fill:#42A5F5,color:#fff
+    style B fill:#00897B,color:#fff
+    style C fill:#6D4C41,color:#fff
     style D fill:#2E7D32,color:#fff
-    style G fill:#D32F2F,color:#fff
-```
-
-### What happens
-
-1. **Parquet Creation** — for each resolution and split, samples are read, processed, and written as zstd-compressed Parquet files with a rich `Features` schema
-2. **Asset Bundling** — banner, sample images, calibration data, and hold-out mask are copied into the export tree
-3. **Notebook Execution** — `_dataset.ipynb` is parameterized and executed for each resolution via `papermill`; analysis notebooks (`demo`, `obstacles`, `solve`, `costmodel`) are copied
-4. **README Generation** — the HF dataset card (`assets/README.md`) is customized with a YAML front-matter header describing all configs, splits, and data files
-5. **Upload** — the entire export folder is pushed to HF Hub using `HfApi.upload_large_folder`
-
----
-
-## Parquet Schema
-
-Each Parquet file uses the Hugging Face `Features` schema:
-
-```
-tensor                bytes      # zstd-compressed (H,W,3) numpy array
-metadata
-  ├── tile             struct    # lat, lon, filename
-  ├── crop             struct    # row_start, col_start, height, width
-  ├── markers          struct    # start (row,col), end (row,col)
-  ├── obstacles        struct    # enabled, count, coverage_ratio
-  └── solvers[]        list      # per-solver config + timing
-path_<solver>_free     string    # CSV path coordinates (obstacle-free)
-path_<solver>_obstacles string   # CSV path coordinates (with obstacles)
-image                  bytes     # (Optional) PNG image
+    style E fill:#D32F2F,color:#fff
 ```
 
 ---
 
 ## Output Structure
 
-```
+```text
 outputs/export/
 ├── README.md                     # HF dataset card with YAML header
 ├── assets/
@@ -126,36 +155,35 @@ outputs/export/
 │   └── costmodel.ipynb
 ├── 256x256/
 │   ├── train/
-│   │   ├── 0000000000.parquet
-│   │   ├── 0000000001.parquet
+│   │   ├── data-00000.parquet
 │   │   └── ...
 │   ├── validation/
 │   ├── test/
 │   ├── calibration/
 │   └── dataset.ipynb             # Executed per-resolution notebook
-└── ...                           # Other resolutions
+└── ...                           # Other resolutions and *_samples configs
 ```
+
+`make manifest` still writes `outputs/export/manifest.sha256` once the tree is ready.
 
 ---
 
 ## Loading from Hugging Face
 
-Once exported and uploaded, anyone can load your dataset with:
+Once uploaded, anyone can load the dataset with:
 
 ```python
 from datasets import load_dataset
 from passage.utils import decode_tensor_blob
 
-# Load a specific resolution config
-ds = load_dataset("alice/passage-dataset", name="256x256")
+ds = load_dataset("thalesgroup/passage", name="256x256")
 sample = ds["train"][0]
 
-# Decode the compressed tensor
 tensor = decode_tensor_blob(sample["tensor"], (256, 256, 3))
-elevation = tensor[:, :, 0]  # Normalized [0, 1]
-markers   = tensor[:, :, 1]  # -1 bg, 0 start, 1 goal
-obstacles = tensor[:, :, 2]  # Binary mask
+elevation = tensor[:, :, 0]
+markers = tensor[:, :, 1]
+obstacles = tensor[:, :, 2]
 ```
 
-!!! success "You're done!"
-    Your dataset is now publicly available on Hugging Face Hub, with rich metadata, analysis notebooks, and documentation — ready for the research community.
+!!! success "Release ready"
+    Once `compress`, `export`, and `upload` have all run successfully, the PASSAGE export tree is ready for distribution.

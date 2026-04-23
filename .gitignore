@@ -14,6 +14,7 @@ wheels/
 
 outputs
 tmp
+logs
 
 # Test outputs
 outputs/tests/

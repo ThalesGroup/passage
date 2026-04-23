@@ -47,6 +47,9 @@ def _setup_minimal_export_tree(tmp_path: Path) -> tuple[Path, Path, Path]:
 
     notebooks_dir = tmp_path / "notebooks"
     notebooks_dir.mkdir()
+    (notebooks_dir / "_dataset.ipynb").write_text(
+        '{"cells": [], "metadata": {}, "nbformat": 4, "nbformat_minor": 5}'
+    )
     config_dir = tmp_path / "config"
     config_dir.mkdir(parents=True)
     (config_dir / "config.yaml").write_text(
@@ -203,6 +206,7 @@ def test_export_and_upload_limits_sample_metadata_scan_to_sample_size(tmp_path):
 def test_export_and_upload_passes_num_cpus_to_notebook(tmp_path):
     """If num_cpus is provided, ensure the MAX_WORKERS parameter passed to notebook execution reflects it."""
     dataset_dir, notebooks_dir, calibrate_dir = _setup_minimal_export_tree(tmp_path)
+    _write_dummy_metadata(dataset_dir, 64)
 
     with patch("passage.export._load_hf_credentials", return_value=("me", "repo", "token")):
         with patch("passage.export.login", return_value=None):
@@ -210,16 +214,18 @@ def test_export_and_upload_passes_num_cpus_to_notebook(tmp_path):
                 api_instance = MagicMock()
                 api_mock.return_value = api_instance
                 with patch("passage.export._execute_notebook_with_retries") as exec_mock:
-                    ok = export_and_upload(
-                        dataset_dirpath=dataset_dir,
-                        calibrate_dirpath=calibrate_dir,
-                        notebooks_dirpath=notebooks_dir,
-                        resolutions=[64],
-                        repo_id=None,
-                        execute_notebooks=True,
-                        skip_upload=True,
-                        num_cpus=4,
-                    )
+                    with patch("passage.export._process_meta_for_prepare", new=_mock_prepare_row):
+                        with patch("passage.export._features", new=_mock_features):
+                            ok = export_and_upload(
+                                dataset_dirpath=dataset_dir,
+                                calibrate_dirpath=calibrate_dir,
+                                notebooks_dirpath=notebooks_dir,
+                                resolutions=[64],
+                                repo_id=None,
+                                execute_notebooks=True,
+                                skip_upload=True,
+                                num_cpus=4,
+                            )
 
     assert ok is True
     # Ensure we attempted to execute the dataset notebook and the parameters included MAX_WORKERS=4
@@ -235,6 +241,7 @@ def test_export_and_upload_passes_num_cpus_to_notebook(tmp_path):
 
 def test_export_and_upload_uses_explicit_calibration_filepath(tmp_path):
     dataset_dir, notebooks_dir, calibrate_dir = _setup_minimal_export_tree(tmp_path)
+    _write_dummy_metadata(dataset_dir, 64)
     custom_calibration = tmp_path / "custom" / "my-calibrate.json"
     custom_calibration.parent.mkdir(parents=True)
     custom_calibration.write_text(
@@ -253,16 +260,18 @@ def test_export_and_upload_uses_explicit_calibration_filepath(tmp_path):
                 api_instance = MagicMock()
                 api_mock.return_value = api_instance
                 with patch("passage.export._execute_notebook_with_retries") as exec_mock:
-                    ok = export_and_upload(
-                        dataset_dirpath=dataset_dir,
-                        calibrate_dirpath=calibrate_dir,
-                        calibration_filepath=custom_calibration,
-                        notebooks_dirpath=notebooks_dir,
-                        resolutions=[64],
-                        repo_id=None,
-                        execute_notebooks=True,
-                        skip_upload=True,
-                    )
+                    with patch("passage.export._process_meta_for_prepare", new=_mock_prepare_row):
+                        with patch("passage.export._features", new=_mock_features):
+                            ok = export_and_upload(
+                                dataset_dirpath=dataset_dir,
+                                calibrate_dirpath=calibrate_dir,
+                                calibration_filepath=custom_calibration,
+                                notebooks_dirpath=notebooks_dir,
+                                resolutions=[64],
+                                repo_id=None,
+                                execute_notebooks=True,
+                                skip_upload=True,
+                            )
 
     assert ok is True
     copied_calibration = tmp_path / "export" / "calibration" / custom_calibration.name
@@ -317,18 +326,21 @@ def test_process_meta_for_prepare_missing_tensor_still_fails(tmp_path):
 
 def test_export_and_upload_skips_upload_when_requested(tmp_path):
     dataset_dir, notebooks_dir, calibrate_dir = _setup_minimal_export_tree(tmp_path)
+    _write_dummy_metadata(dataset_dir, 64)
 
     with patch("passage.export.HfApi") as api_mock:
         with patch("passage.export._reset_hf_upload_cache") as reset_mock:
-            ok = export_and_upload(
-                dataset_dirpath=dataset_dir,
-                calibrate_dirpath=calibrate_dir,
-                notebooks_dirpath=notebooks_dir,
-                resolutions=[64],
-                repo_id="alice/repo",
-                execute_notebooks=False,
-                skip_upload=True,
-            )
+            with patch("passage.export._process_meta_for_prepare", new=_mock_prepare_row):
+                with patch("passage.export._features", new=_mock_features):
+                    ok = export_and_upload(
+                        dataset_dirpath=dataset_dir,
+                        calibrate_dirpath=calibrate_dir,
+                        notebooks_dirpath=notebooks_dir,
+                        resolutions=[64],
+                        repo_id="alice/repo",
+                        execute_notebooks=False,
+                        skip_upload=True,
+                    )
 
     assert ok is True
     api_mock.assert_not_called()
@@ -376,6 +388,12 @@ def test_export_and_upload_resets_cache_before_upload(tmp_path):
     upload_kwargs = api_instance.upload_large_folder.call_args.kwargs
     assert upload_kwargs["allow_patterns"] == [
         "README.md",
+        "croissant.json",
+        "DATASHEET.md",
+        "CITATION.cff",
+        "LICENSE",
+        "CHANGELOG.md",
+        "DATASET_LICENSE.md",
         "assets/**",
         "calibration/**",
         "notebooks/**",
@@ -384,7 +402,7 @@ def test_export_and_upload_resets_cache_before_upload(tmp_path):
     ]
 
 
-def test_export_and_upload_merges_remote_configs_into_readme(tmp_path):
+def test_export_and_upload_builds_readme_from_local_configs(tmp_path):
     dataset_dir, notebooks_dir, calibrate_dir = _setup_minimal_export_tree(tmp_path)
     export_dir = calibrate_dir.parent / "export"
     _write_dummy_metadata(dataset_dir, 64)
@@ -413,9 +431,9 @@ def test_export_and_upload_merges_remote_configs_into_readme(tmp_path):
     assert ok is True
     front_matter = _read_readme_front_matter(export_dir / "README.md")
     config_entries = {entry["config_name"]: entry for entry in front_matter["configs"]}
-    assert set(config_entries) == {"64x64", "64x64_samples", "128x128", "128x128_samples"}
+    assert set(config_entries) == {"64x64", "64x64_samples"}
     assert config_entries["64x64_samples"]["default"] is True
-    assert "default" not in config_entries["128x128_samples"]
+    assert front_matter["license"] == ["other"]
 
 
 def test_export_and_upload_cleans_only_selected_incremental_resolution(tmp_path):
@@ -478,3 +496,45 @@ def test_export_and_upload_full_export_keeps_unrestricted_upload(tmp_path):
 
     assert ok is True
     assert api_instance.upload_large_folder.call_args.kwargs["allow_patterns"] is None
+
+
+def test_export_and_upload_stages_release_metadata(tmp_path):
+    dataset_dir, notebooks_dir, calibrate_dir = _setup_minimal_export_tree(tmp_path)
+    export_dir = calibrate_dir.parent / "export"
+    _write_dummy_metadata(dataset_dir, 64)
+
+    with patch("passage.export._process_meta_for_prepare", side_effect=_mock_prepare_row):
+        with patch("passage.export._features", side_effect=_mock_features):
+            ok = export_and_upload(
+                dataset_dirpath=dataset_dir,
+                calibrate_dirpath=calibrate_dir,
+                notebooks_dirpath=notebooks_dir,
+                resolutions=[64],
+                repo_id="anonymous-org/passage",
+                anonymous=True,
+                execute_notebooks=False,
+                skip_upload=True,
+                num_cpus=0,
+            )
+
+    assert ok is True
+    for filename in [
+        "croissant.json",
+        "DATASHEET.md",
+        "CITATION.cff",
+        "LICENSE",
+        "CHANGELOG.md",
+        "DATASET_LICENSE.md",
+    ]:
+        assert (export_dir / filename).exists()
+
+    croissant = yaml.safe_load((export_dir / "croissant.json").read_text(encoding="utf-8"))
+    assert croissant["url"] == "https://huggingface.co/datasets/anonymous-org/passage"
+    assert croissant["creator"][0]["name"] == "Anonymous Authors"
+
+    citation = yaml.safe_load((export_dir / "CITATION.cff").read_text(encoding="utf-8"))
+    assert citation["authors"][0]["family-names"] == "Anonymous"
+
+    datasheet = (export_dir / "DATASHEET.md").read_text(encoding="utf-8")
+    assert "anonymous submission artifact" in datasheet
+    assert "https://huggingface.co/datasets/anonymous-org/passage" in datasheet

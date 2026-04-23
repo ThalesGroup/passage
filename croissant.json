@@ -14,13 +14,13 @@
     "sc": "https://schema.org/",
     "source": "cr:source"
   },
-  "@id": "https://huggingface.co/datasets/geoffrey-g-delhomme/passage",
+  "@id": "https://huggingface.co/datasets/thalesgroup/passage",
   "@type": "sc:Dataset",
   "name": "PASSAGE",
   "description": "PASSAGE is a multi-resolution terrain-routing benchmark generated from JAXA ALOS AW3D30 elevation data. The default benchmark exports 14,130 samples across 64x64 to 4096x4096 resolutions, with deterministic split assignment and deterministic per-sample seeding for tile selection, crop placement, marker placement, and obstacle synthesis.",
-  "url": "https://huggingface.co/datasets/geoffrey-g-delhomme/passage",
+  "url": "https://huggingface.co/datasets/thalesgroup/passage",
   "version": "0.1.0",
-  "license": "https://github.com/ThalesGroup/passage/blob/main/LICENSE",
+  "license": "https://github.com/ThalesGroup/passage/blob/main/DATASET_LICENSE.md",
   "keywords": [
     "pathfinding",
     "terrain routing",
@@ -37,6 +37,10 @@
     {
       "@type": "sc:Person",
       "name": "Francois Trap"
+    },
+    {
+      "@type": "sc:Person",
+      "name": "Fateh Kaakai"
     }
   ],
   "dct:conformsTo": [
@@ -52,7 +56,7 @@
       "@id": "hf-passage-tree",
       "@type": "cr:FileObject",
       "name": "Hugging Face PASSAGE dataset repository tree",
-      "contentUrl": "https://huggingface.co/datasets/geoffrey-g-delhomme/passage/tree/main"
+      "contentUrl": "https://huggingface.co/datasets/thalesgroup/passage/tree/main"
     },
     {
       "@id": "passage-full-parquet",
@@ -441,5 +445,16 @@
     "Train and evaluate learned routing surrogates in vision, graph, and reinforcement-learning settings.",
     "Study reproducibility and geographic hold-out generalization across resolutions."
   ],
-  "rai:dataSocialImpact": "PASSAGE is intended for research and evaluation of routing methods in safety-relevant terrain settings. It is not a certified operational navigation product."
+  "rai:dataSocialImpact": "PASSAGE is intended for research and evaluation of routing methods in safety-relevant terrain settings. It is not a certified operational navigation product.",
+  "rai:annotationsPerItem": "Every sample carries exactly one ordered path annotation per configured cost model (default: astar_elevation, astar_energy, astar_slope) and, where applicable, per obstacle variant (free-terrain and obstacle-aware). No multi-annotator redundancy.",
+  "rai:annotatorDemographics": "Not applicable: annotations are produced exclusively by the Numba-JIT A* grid solver documented in src/passage/pathfinding_utils.py. No human annotators were involved.",
+  "rai:dataAnnotationAnalysis": "Annotations are exact under the documented cost model and are validated by construction (same solver, same heuristic, same connectivity). Consistency is enforced by deterministic seeding and by the outputs/export/manifest.sha256 checksum file bundled with each release.",
+  "rai:dataAnnotationPlatform": "None: annotations are computational. Generation is driven by the Makefile targets in this repository, executed on CPU with optional GPU used only by downstream baselines, not by dataset generation.",
+  "rai:machineAnnotationTools": [
+    "Numba-JIT grid-backend A* implemented in src/passage/pathfinding_utils.py",
+    "Deterministic blake2b per-sample seed derivation documented in src/passage/seeds.py"
+  ],
+  "rai:dataImpactAssessment": "The dataset is an elevation-derived research benchmark with no personal or biometric content; residual risk is limited to misuse of reference paths as safety-critical navigation outputs outside an in-the-loop deterministic verifier. This risk is mitigated by the scope statement in the Datasheet and by the SECURITY.md misuse disclosure.",
+  "rai:safetyOfLifeStatement": "PASSAGE is an advisory research benchmark. Predicted paths are not safety-of-life outputs without an in-the-loop deterministic verifier and fallback solver, and the dataset does not substitute for system-level verification or EASA/FAA-style certification evidence.",
+  "rai:citation": "Delhomme, G., Trap, F., Kaakai, F. PASSAGE: A Real-Terrain Multi-Resolution Benchmark for Constrained Path Planning. NeurIPS 2026 Evaluations & Datasets Track (submission)."
 }

@@ -46,7 +46,7 @@ passage generate --force
 | `--config` | `config/config.yaml` | Configuration file |
 | `--resolution` | All configured | Resolution(s) to generate |
 | `--num-samples` | From config | Number of samples per resolution |
-| `--num-cpus` | `1` | Parallel generation workers |
+| `--num-cpus` | All visible CPUs | Parallel generation workers (`0` = sequential) |
 | `--no-images` | `false` | Skip PNG image generation |
 | `--force` | `false` | Overwrite existing samples |
 | `--log-level` | `INFO` | Logging verbosity |
@@ -147,16 +147,18 @@ outputs/dataset/
 ## Performance Tips
 
 !!! tip "Speed up generation"
-    - Use `--num-cpus 8` (or more) for parallel sample generation
+    - Use `--num-cpus 8` for typical parallel sample generation
     - Use `--no-images` to skip PNG rendering — **~2× faster**
     - Start with a small `--num-samples` to validate your setup before full runs
     - PASSAGE automatically resumes interrupted runs — no need to start over
 
 !!! warning "Large resolutions"
-    Resolutions ≥2048 require multiple tiles to be assembled and consume significantly more memory and CPU time. Start with smaller resolutions to validate your pipeline.
+    Resolutions ≥2048 require multiple tiles to be assembled and consume significantly more memory and CPU time.
+    For `4096×4096`, start with `--num-cpus 4` or `--num-cpus 8` instead of relying on the all-CPU default.
+    On Slurm, `--cpus-per-task` controls how many CPUs are visible to the job, while `passage generate --num-cpus ...` controls how many Python workers are actually spawned.
 
 ---
 
 ## Next Step
 
-Once samples are generated, proceed to **[Step 4 — Export & Publish](export.md)** to package them for distribution.
+Once samples are generated, proceed to **[Steps 4-6 — Release](export.md)** to compress Parquet shards, refresh the export tree, and publish them.

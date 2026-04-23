@@ -312,47 +312,41 @@ class TestMainCLI:
             assert exc_info.value.code == 0
 
     @pytest.mark.unit
-    def test_export_logs_env_credentials_message(self):
-        """When --repo-id is omitted, the CLI should inform the user that it will read
-        HF credentials from .env and .env.secret (or custom paths)."""
+    def test_upload_logs_token_message(self):
+        """When upload runs, the CLI should log the token source and default target repo."""
         from passage import main
 
-        with patch.object(sys, "argv", ["passage", "export", "--no-exec-notebooks", "--no-upload"]):
+        with patch.object(sys, "argv", ["passage", "upload"]):
             with patch("passage.logger") as mock_logger:
-                with patch("passage.export_and_upload") as mock_export:
+                with patch("passage.upload_export") as mock_upload:
                     main()
 
-                    # Ensure export was called
-                    mock_export.assert_called_once()
+                    mock_upload.assert_called_once()
 
-                    # Confirm an info log was emitted mentioning HF credentials
                     info_calls = [c for c in mock_logger.info.call_args_list]
-                    assert any("Using Hugging Face credentials" in str(c.args[0]) for c in info_calls)
+                    assert any("Using Hugging Face token" in str(c.args[0]) for c in info_calls)
+                    assert any("thalesgroup/passage" in str(c.args[0]) for c in info_calls)
 
     @pytest.mark.unit
-    def test_export_uses_env_repo_id(self):
-        """When --repo-id is not provided, the export subcommand should leave repo_id as None so
-        downstream code can read username/repo from .env."""
+    def test_export_leaves_repo_id_none_for_default(self):
+        """When --repo-id is omitted, the export subcommand should let the implementation apply its default."""
         from passage import main
 
-        with patch.object(sys, "argv", ["passage", "export", "--no-exec-notebooks", "--no-upload"]):
-            with patch("passage.export_and_upload") as mock_export:
+        with patch.object(sys, "argv", ["passage", "export"]):
+            with patch("passage.prepare_export") as mock_export:
                 main()
 
                 mock_export.assert_called_once()
                 _, kwargs = mock_export.call_args
                 assert kwargs.get("repo_id") is None
-                assert kwargs.get("skip_upload") is True
 
     @pytest.mark.unit
     def test_export_passes_explicit_repo_id(self):
-        """If --repo-id is provided it should be passed through unchanged."""
+        """If --repo-id is provided to export it should be passed through unchanged."""
         from passage import main
 
-        with patch.object(
-            sys, "argv", ["passage", "export", "--repo-id", "alice/repo", "--no-exec-notebooks", "--no-upload"]
-        ):
-            with patch("passage.export_and_upload") as mock_export:
+        with patch.object(sys, "argv", ["passage", "export", "--repo-id", "alice/repo"]):
+            with patch("passage.prepare_export") as mock_export:
                 main()
 
                 mock_export.assert_called_once()
@@ -360,12 +354,25 @@ class TestMainCLI:
                 assert kwargs.get("repo_id") == "alice/repo"
 
     @pytest.mark.unit
-    def test_export_passes_num_cpus_cli(self):
-        """The export subcommand should accept --num-cpus and pass it to export_and_upload."""
+    def test_export_passes_anonymous_flag(self):
+        """If --anonymous is provided to export it should be passed through unchanged."""
         from passage import main
 
-        with patch.object(sys, "argv", ["passage", "export", "--num-cpus", "4", "--no-exec-notebooks", "--no-upload"]):
-            with patch("passage.export_and_upload") as mock_export:
+        with patch.object(sys, "argv", ["passage", "export", "--anonymous"]):
+            with patch("passage.prepare_export") as mock_export:
+                main()
+
+                mock_export.assert_called_once()
+                _, kwargs = mock_export.call_args
+                assert kwargs.get("anonymous") is True
+
+    @pytest.mark.unit
+    def test_compress_passes_num_cpus_cli(self):
+        """The compress subcommand should accept --num-cpus and pass it through."""
+        from passage import main
+
+        with patch.object(sys, "argv", ["passage", "compress", "--num-cpus", "4"]):
+            with patch("passage.compress_release") as mock_export:
                 main()
 
                 mock_export.assert_called_once()
@@ -377,12 +384,8 @@ class TestMainCLI:
         """The export subcommand should pass the explicit config path through."""
         from passage import main
 
-        with patch.object(
-            sys,
-            "argv",
-            ["passage", "export", "--config", "/custom/config.yaml", "--no-exec-notebooks", "--no-upload"],
-        ):
-            with patch("passage.export_and_upload") as mock_export:
+        with patch.object(sys, "argv", ["passage", "export", "--config", "/custom/config.yaml"]):
+            with patch("passage.prepare_export") as mock_export:
                 main()
 
                 mock_export.assert_called_once()
@@ -390,8 +393,8 @@ class TestMainCLI:
                 assert kwargs.get("config_filepath") == "/custom/config.yaml"
 
     @pytest.mark.unit
-    def test_export_passes_calibration_filepath(self):
-        """The export subcommand should pass the explicit calibration JSON path through."""
+    def test_upload_passes_calibration_filepath(self):
+        """The upload subcommand should pass the explicit calibration JSON path through."""
         from passage import main
 
         with patch.object(
@@ -399,14 +402,12 @@ class TestMainCLI:
             "argv",
             [
                 "passage",
-                "export",
+                "upload",
                 "--calibration-filepath",
                 "/custom/calibrate.json",
-                "--no-exec-notebooks",
-                "--no-upload",
             ],
         ):
-            with patch("passage.export_and_upload") as mock_export:
+            with patch("passage.upload_export") as mock_export:
                 main()
 
                 mock_export.assert_called_once()
@@ -415,17 +416,26 @@ class TestMainCLI:
 
     @pytest.mark.unit
     def test_export_passes_explicit_resolutions(self):
-        """The export subcommand should pass explicit resolution filters to export_and_upload."""
+        """The export subcommand should pass explicit resolution filters through."""
         from passage import main
 
-        with patch.object(
-            sys,
-            "argv",
-            ["passage", "export", "--resolution", "64", "128", "--no-exec-notebooks", "--no-upload"],
-        ):
-            with patch("passage.export_and_upload") as mock_export:
+        with patch.object(sys, "argv", ["passage", "export", "--resolution", "64", "128"]):
+            with patch("passage.prepare_export") as mock_export:
                 main()
 
                 mock_export.assert_called_once()
                 _, kwargs = mock_export.call_args
                 assert kwargs.get("resolutions") == [64, 128]
+
+    @pytest.mark.unit
+    def test_upload_passes_explicit_repo_id(self):
+        """The upload subcommand should pass the explicit repo id through unchanged."""
+        from passage import main
+
+        with patch.object(sys, "argv", ["passage", "upload", "--repo-id", "alice/repo"]):
+            with patch("passage.upload_export") as mock_upload:
+                main()
+
+                mock_upload.assert_called_once()
+                _, kwargs = mock_upload.call_args
+                assert kwargs.get("repo_id") == "alice/repo"

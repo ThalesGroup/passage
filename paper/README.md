@@ -54,6 +54,21 @@ Each notebook is expected to:
 4. Not mutate state outside `figures/`. Do not write to `../notebooks/` or
    elsewhere in the dataset repository.
 
+## Release Dependency
+
+`dataset_statistics.ipynb` is the release-gated notebook in this workspace.
+Before promoting Fig. 2, Table 2, Datasheet, or Croissant numbers into the
+paper, refresh the dataset release surfaces and checksum them:
+
+```bash
+passage compress
+passage export
+make manifest
+```
+
+Treat `../outputs/export/manifest.sha256` as the checksum anchor for the
+current release tree referenced by `dataset_statistics.ipynb`.
+
 ## Quickstart
 
 From a fresh clone, on a host with the `/data/PASSAGE` share mounted:

@@ -62,7 +62,7 @@ passage = "passage:main"
 Documentation = "https://thalesgroup.github.io/passage/"
 Repository = "https://github.com/ThalesGroup/passage"
 "Bug Tracker" = "https://github.com/ThalesGroup/passage/issues"
-Dataset = "https://huggingface.co/datasets/geoffrey-g-delhomme/passage"
+Dataset = "https://huggingface.co/datasets/thalesgroup/passage"
 
 [tool.coverage.report]
 fail_under = 80

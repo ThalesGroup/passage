@@ -6,12 +6,13 @@ TILES_DIR ?= outputs/download/tiles
 CALIBRATE_DIR ?= outputs/calibrate
 DATASET_DIR ?= outputs/dataset
 EXPORT_DIR ?= outputs/export
+NOTEBOOKS_DIR ?= notebooks
 CALIBRATE_BACKUP ?= $(CALIBRATE_DIR)/calibrate.json.bak
 RESOLUTION ?=
 NUM_CPUS ?=
 REPO_ID ?=
 
-.PHONY: install sync download calibrate restore-calibrate generate export export-local manifest rebuild test lint
+.PHONY: install sync download calibrate restore-calibrate generate compress export upload manifest rebuild test lint
 
 install:
 	bash scripts/install.sh
@@ -37,17 +38,20 @@ restore-calibrate:
 generate:
 	$(PASSAGE) generate --config $(CONFIG) --tiles-dirpath $(TILES_DIR) --outputs-dirpath $(DATASET_DIR) $(if $(strip $(RESOLUTION)),--resolution $(RESOLUTION),) $(if $(strip $(NUM_CPUS)),--num-cpus $(NUM_CPUS),)
 
-export-local:
-	$(PASSAGE) export --config $(CONFIG) --dataset-dirpath $(DATASET_DIR) --calibrate-dirpath $(CALIBRATE_DIR) --no-upload $(if $(strip $(RESOLUTION)),--resolution $(RESOLUTION),) $(if $(strip $(NUM_CPUS)),--num-cpus $(NUM_CPUS),)
+compress:
+	$(PASSAGE) compress --config $(CONFIG) --dataset-dirpath $(DATASET_DIR) --calibrate-dirpath $(CALIBRATE_DIR) $(if $(strip $(RESOLUTION)),--resolution $(RESOLUTION),) $(if $(strip $(NUM_CPUS)),--num-cpus $(NUM_CPUS),)
 
 export:
-	$(PASSAGE) export --config $(CONFIG) --dataset-dirpath $(DATASET_DIR) --calibrate-dirpath $(CALIBRATE_DIR) $(if $(strip $(RESOLUTION)),--resolution $(RESOLUTION),) $(if $(strip $(NUM_CPUS)),--num-cpus $(NUM_CPUS),) $(if $(strip $(REPO_ID)),--repo-id $(REPO_ID),)
+	$(PASSAGE) export --config $(CONFIG) --dataset-dirpath $(DATASET_DIR) --calibrate-dirpath $(CALIBRATE_DIR) --notebooks-dirpath $(NOTEBOOKS_DIR) $(if $(strip $(RESOLUTION)),--resolution $(RESOLUTION),) $(if $(strip $(NUM_CPUS)),--num-cpus $(NUM_CPUS),) $(if $(strip $(REPO_ID)),--repo-id $(REPO_ID),)
+
+upload:
+	$(PASSAGE) upload --calibrate-dirpath $(CALIBRATE_DIR) $(if $(strip $(RESOLUTION)),--resolution $(RESOLUTION),) $(if $(strip $(NUM_CPUS)),--num-cpus $(NUM_CPUS),) $(if $(strip $(REPO_ID)),--repo-id $(REPO_ID),)
 
 manifest:
 	mkdir -p $(EXPORT_DIR)
 	find $(EXPORT_DIR) \( -path "$(EXPORT_DIR)/.cache" -o -path "$(EXPORT_DIR)/.cache/*" \) -prune -o -type f ! -name manifest.sha256 -print0 | sort -z | xargs -0 sha256sum > $(EXPORT_DIR)/manifest.sha256
 
-rebuild: download calibrate generate export-local manifest
+rebuild: download calibrate generate compress export manifest
 
 test:
 	@status=0; \

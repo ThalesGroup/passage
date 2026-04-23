@@ -12,19 +12,18 @@
 
 <!-- Badges -->
 <p align="center">
-  <a href="https://github.com/ThalesGroup/passage/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/ThalesGroup/passage/ci.yml?label=CI&logo=githubactions&logoColor=white" alt="CI"></a>
   <a href="https://www.python.org/"><img src="https://img.shields.io/badge/python-≥3.11-3776AB?logo=python&logoColor=white" alt="Python"></a>
-  <a href="https://github.com/ThalesGroup/passage/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-green?logo=opensourceinitiative&logoColor=white" alt="License"></a>
-  <a href="https://huggingface.co/datasets/geoffrey-g-delhomme/passage"><img src="https://img.shields.io/badge/%F0%9F%A4%97-Dataset-yellow" alt="HuggingFace Dataset"></a>
+  <a href="DATASET_LICENSE.md"><img src="https://img.shields.io/badge/dataset%20terms-AW3D30%20%2B%20MIT%20code-orange?logo=opensourceinitiative&logoColor=white" alt="Dataset Terms"></a>
+  <a href="https://huggingface.co/datasets/your-username/passage-dataset"><img src="https://img.shields.io/badge/%F0%9F%A4%97-Dataset-yellow" alt="HuggingFace Dataset"></a>
   <a href="https://docs.astral.sh/ruff/"><img src="https://img.shields.io/badge/code%20style-ruff-000000?logo=ruff&logoColor=white" alt="Ruff"></a>
   <a href="https://docs.astral.sh/uv/"><img src="https://img.shields.io/badge/package-uv-DE5FE9?logo=uv&logoColor=white" alt="uv"></a>
 </p>
 
 <p align="center">
-  <a href="https://thalesgroup.github.io/passage/">📖 Documentation</a> •
-  <a href="https://huggingface.co/datasets/geoffrey-g-delhomme/passage">🤗 Dataset</a> •
-  <a href="https://github.com/ThalesGroup/passage">💻 GitHub</a> •
-  <a href="#-citation">📝 Cite</a>
+  <a href="https://huggingface.co/datasets/your-username/passage-dataset">🤗 Dataset</a> •
+  <a href="croissant.json">🧾 Croissant</a> •
+  <a href="DATASHEET.md">📋 Datasheet</a> •
+  <a href="#-citation">📝 Citation</a>
 </p>
 
 ---
@@ -46,10 +45,10 @@ We open-source this toolkit to make terrain-routing methods easier to compare, r
   <td align="center" width="25%">🌐<br><strong>Multi-Resolution</strong><br><small>64×64 → 4096×4096 px</small></td>
   <td align="center" width="25%">🏔️<br><strong>Real Elevation</strong><br><small>JAXA ALOS AW3D30 DSM</small></td>
   <td align="center" width="25%">🔷<br><strong>Rich Obstacles</strong><br><small>Superellipse shapes</small></td>
-  <td align="center" width="25%">⚡<br><strong>5 Cost Models</strong><br><small>Elevation, slope, energy…</small></td>
+  <td align="center" width="25%">⚡<br><strong>3 A* Cost Variants</strong><br><small>Elevation, energy, slope-uphill</small></td>
 </tr>
 <tr>
-  <td align="center">🧮<br><strong>3 Solver Backends</strong><br><small>NetworkX, pathfinding, Numba</small></td>
+  <td align="center">🧮<br><strong>Grid A* Oracle</strong><br><small>Exact labels + timings</small></td>
   <td align="center">🤗<br><strong>HuggingFace-Ready</strong><br><small>Parquet + one-command upload</small></td>
   <td align="center">🔁<br><strong>Fully Resumable</strong><br><small>No wasted compute</small></td>
   <td align="center">🛡️<br><strong>Certification-Aware</strong><br><small>ARP 6983 / ED-324</small></td>
@@ -60,8 +59,8 @@ We open-source this toolkit to make terrain-routing methods easier to compare, r
 <tr>
   <td align="center"><strong>14,130</strong><br><small>Default Samples</small></td>
   <td align="center"><strong>7</strong><br><small>Resolution Levels</small></td>
-  <td align="center"><strong>5</strong><br><small>Cost Models</small></td>
-  <td align="center"><strong>3</strong><br><small>Solver Backends</small></td>
+  <td align="center"><strong>3</strong><br><small>A* Configurations</small></td>
+  <td align="center"><strong>1</strong><br><small>Solver Backend</small></td>
   <td align="center"><strong>30 m/px</strong><br><small>Spatial Resolution</small></td>
 </tr>
 </table>
@@ -215,7 +214,7 @@ Each sample consists of:
 | 3 | `passage generate` | Create multi-resolution samples with paths, obstacles, tensors |
 | 4 | `passage export` | Write Parquet shards, execute notebooks, push to HF Hub |
 
-> 📖 **Full walkthrough:** see the [Documentation](https://thalesgroup.github.io/passage/guide/).
+> 📖 **Full walkthrough:** see [`notebooks/demo.ipynb`](notebooks/demo.ipynb), [`DATASHEET.md`](DATASHEET.md), and [`croissant.json`](croissant.json).
 
 ---
 
@@ -224,7 +223,7 @@ Each sample consists of:
 | Notebook | Description |
 |----------|-------------|
 | [`demo.ipynb`](notebooks/demo.ipynb) | Quick-start: load, decode, and visualize a sample |
-| [`costmodel.ipynb`](notebooks/costmodel.ipynb) | Compare all 5 cost models on the same terrain |
+| [`costmodel.ipynb`](notebooks/costmodel.ipynb) | Compare the configured terrain-cost variants on the same terrain |
 | [`obstacles.ipynb`](notebooks/obstacles.ipynb) | Explore superellipse obstacle generation |
 | [`solve.ipynb`](notebooks/solve.ipynb) | Solver timing and quality comparison |
 | `_dataset.ipynb` | Template — auto-executed per resolution during export |
@@ -324,21 +323,13 @@ Obstacles are iteratively added until coverage approaches $r_{\text{target}}$, w
 
 ---
 
-## ⚖️ Path Cost Models
+## ⚖️ Exported Path Cost Models
 
-Each edge weight uses physical step distance $d$ (30 m cardinal, $30\sqrt{2}$ diagonal), weight $\alpha$, and elevation values from the current crop:
+The current paper benchmark exports three grid-backend A* configurations. Each edge weight uses physical step distance $d$ (30 m cardinal, $30\sqrt{2}$ diagonal), weight $\alpha$, and elevation values from the current crop:
 
 - **elevation**
 
 $$w = d \cdot \left(1 + \alpha \cdot \bar{e}_{\text{dst}}\right), \quad \bar{e}_{\text{dst}} = \frac{e_{\text{dst}} - e_{\min}}{e_{\max} - e_{\min}}$$
-
-- **absolute_elevation**
-
-$$w = d \cdot \left(1 + \alpha \cdot \bar{e}^{\text{abs}}_{\text{dst}}\right), \quad \bar{e}^{\text{abs}}_{\text{dst}} = \frac{|e_{\text{dst}}|}{\max |e|}$$
-
-- **distance**
-
-$$w = d$$
 
 - **slope_uphill**
 
@@ -348,7 +339,7 @@ $$w = d \cdot \left(1 + \alpha \cdot \frac{\max(0, e_{\text{dst}} - e_{\text{src
 
 $$w = d + \alpha \cdot \max(0, e_{\text{dst}} - e_{\text{src}})$$
 
-These equations match the runtime implementation used by NetworkX and grid solvers.
+These equations match the runtime implementation used by the grid-backend A* exporter.
 
 ---
 
@@ -356,8 +347,8 @@ These equations match the runtime implementation used by NetworkX and grid solve
 
 | Domain | Use Case | Relevant Features |
 |--------|----------|-------------------|
-| **Classical AI** | A\*, Dijkstra benchmarking | 5 cost models, timing data, multi-resolution |
-| **Reinforcement Learning** | Terrain navigation agents | Grid observations, reward shaping with cost models |
+| **Classical AI** | A\* benchmarking | Multi-resolution labels, timings, terrain-cost variants |
+| **Reinforcement Learning** | Terrain navigation agents | Grid observations, reward shaping with configured cost models |
 | **Graph Neural Networks** | Learned heuristics | Graph structure from elevation grids, path labels |
 | **Surrogate Models** | Fast approximation of optimal paths | Input/output pairs at scale (14 K+ samples) |
 | **Computer Vision** | Path prediction from elevation images | Tensor format, multi-channel images |
@@ -367,40 +358,10 @@ These equations match the runtime implementation used by NetworkX and grid solve
 
 ## 📝 Citation
 
-If you use PASSAGE in your research, please cite:
-
-```bibtex
-@article{delhomme2026passage,
-  title   = {PASSAGE: A Multi-Resolution Pathfinding Dataset Mixing Complex
-             Obstacles and Elevation-Based Tiles Towards Certified Machine
-             Learning Systems},
-  author  = {Delhomme, Geoffrey and Trap, Fran{\c{c}}ois and Kaakai, Fateh},
-  year    = {2026},
-  url     = {https://github.com/ThalesGroup/passage}
-}
-```
-
----
-
-## 🙏 Acknowledgments
-
-- **[JAXA](https://www.eorc.jaxa.jp/ALOS/en/dataset/aw3d30/aw3d30_e.htm)** 🇯🇵 for the ALOS AW3D30 Digital Surface Model
-- **[Hugging Face](https://huggingface.co/)** for the Datasets library and Hub infrastructure
-- **[Thales Group](https://www.thalesgroup.com/)** for supporting open-source research in safety-critical AI
+Use the metadata in [`CITATION.cff`](CITATION.cff). Anonymous submission mirrors intentionally omit author-identifying citation fields until de-anonymisation.
 
 ---
 
 ## 📄 License
 
-This dataset is released under the **MIT License**. The underlying elevation data is sourced from JAXA's ALOS AW3D30 product, freely available for research purposes.
-
----
-
-<p align="center">
-  <a href="https://thalesgroup.github.io/passage/">📖 Documentation</a> •
-  <a href="https://huggingface.co/datasets/geoffrey-g-delhomme/passage">🤗 Dataset</a> •
-  <a href="https://github.com/ThalesGroup/passage">💻 GitHub</a> •
-  <a href="https://github.com/ThalesGroup/passage/issues">🐛 Issues</a>
-</p>
-
-<p align="center"><em>Made with ❤️ for the pathfinding research community</em></p>
+The PASSAGE generator code is MIT-licensed, but the exported dataset artifacts inherit attribution and reuse obligations from JAXA ALOS AW3D30. See [`DATASET_LICENSE.md`](DATASET_LICENSE.md) for the dataset terms and [`LICENSE`](LICENSE) for the code license.

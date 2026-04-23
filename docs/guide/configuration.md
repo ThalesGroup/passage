@@ -161,7 +161,7 @@ export:
   sample:
     num_samples: 64
   compression_level: 12
-  chunk_sizes:
+  chunk_size:
     64: 2048
     128: 512
     256: 128
@@ -175,12 +175,12 @@ export:
 |-----|-------------|
 | `default` | Default HF dataset config name |
 | `sample.num_samples` | Number of samples in `_samples` configs |
-| `compression_level` | Zstandard compression level (1–22) |
-| `chunk_sizes` | Rows per Parquet file, per resolution |
+| `compression_level` | Zstandard compression level (1–22), used by `passage compress` |
+| `chunk_size` | Rows per Parquet file, per resolution |
 
-Preview images are generated deterministically during `generate`, not during `export`. By default, PASSAGE writes
-preview images for the first `sample.num_samples` rows of each split so the matching `{R}x{R}_samples` export can be
-built reproducibly from the same dataset tree.
+Preview images are generated deterministically during `generate`, then consumed by `compress` and `export`. By default,
+PASSAGE writes preview images for the first `sample.num_samples` rows of each split so the matching `{R}x{R}_samples`
+release configs can be rebuilt reproducibly from the same dataset tree.
 
 ```yaml
 generation:
@@ -263,7 +263,7 @@ generation:
       sample:
         num_samples: 64
       compression_level: 12
-      chunk_sizes:
+      chunk_size:
         64: 2048
         128: 512
         256: 128

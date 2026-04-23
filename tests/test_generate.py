@@ -74,6 +74,43 @@ class TestWrapLon:
         assert gen.wrap_lon(-359) == 1
 
 
+class TestResolveGenerationPoolSize:
+    """Tests for generation worker-count selection."""
+
+    @pytest.mark.unit
+    @pytest.mark.generate
+    def test_uses_visible_cpus_for_small_resolution(self, monkeypatch):
+        monkeypatch.setattr(gen.os, "cpu_count", lambda: 120)
+
+        assert gen._resolve_generation_pool_size(None, 256, 1000) == 120
+
+    @pytest.mark.unit
+    @pytest.mark.generate
+    def test_caps_workers_to_remaining_samples(self, monkeypatch):
+        monkeypatch.setattr(gen.os, "cpu_count", lambda: 120)
+
+        assert gen._resolve_generation_pool_size(None, 256, 10) == 10
+
+    @pytest.mark.unit
+    @pytest.mark.generate
+    def test_auto_caps_default_workers_for_4096(self, monkeypatch):
+        monkeypatch.setattr(gen.os, "cpu_count", lambda: 120)
+
+        assert gen._resolve_generation_pool_size(None, 4096, 10) == 8
+
+    @pytest.mark.unit
+    @pytest.mark.generate
+    def test_preserves_explicit_worker_choice_up_to_task_count(self, monkeypatch):
+        monkeypatch.setattr(gen.os, "cpu_count", lambda: 120)
+
+        assert gen._resolve_generation_pool_size(4, 4096, 10) == 4
+
+    @pytest.mark.unit
+    @pytest.mark.generate
+    def test_zero_workers_selects_sequential_mode(self):
+        assert gen._resolve_generation_pool_size(0, 4096, 10) == 0
+
+
 class TestFindPath:
     """Tests for find_path function."""
 

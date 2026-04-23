@@ -183,7 +183,7 @@ extra:
       link: https://github.com/ThalesGroup/passage
       name: GitHub
     - icon: simple/huggingface
-      link: https://huggingface.co/datasets/geoffrey-g-delhomme/passage
+      link: https://huggingface.co/datasets/thalesgroup/passage
       name: Hugging Face Dataset
   status:
     new: Recently added
@@ -205,7 +205,7 @@ nav:
         - "#1 | Download Tiles": guide/download.md
         - "#2 | Calibrate Elevations": guide/calibrate.md
         - "#3 | Generate Dataset": guide/generate.md
-        - "#4 | Export & Publish": guide/export.md
+        - "#4-6 | Release Pipeline": guide/export.md
       - "Configuration": guide/configuration.md
   - "Generation Process":
       - "Overview": generation/index.md

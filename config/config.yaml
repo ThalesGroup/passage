@@ -44,19 +44,7 @@ export:
     4096: 25 # 83
 
 # Number of samples to generate. Can be either a single integer (applies to all resolutions) or a mapping per-resolution.
-# Examples:
-# num_samples: 100        # 100 samples for every resolution
-# num_samples: { 64: 1000, 128: 500, 256: 200 }  # per-resolution counts
-# num_samples: 10
-# num_samples:
-#   64: 1000000
-#   128: 250000
-#   256: 100000
-#   512: 50000
-#   1024: 10000
-#   2048: 2000
-#   4096: 1000
-num_samples: # debug
+num_samples:
   64: 1000000
   128: 1000000
   256: 1000000
@@ -83,8 +71,8 @@ generation:
   seed: 42
   preview_images:
     enabled: true
-    resolutions:
-    num_samples_per_split:
+    resolutions: [64, 128, 256, 512, 1024, 2048, 4096]
+    num_samples_per_split: 64
 
 # Geographic hold-out region configuration
 # The hold-out mask defines geographic regions reserved exclusively for testing.

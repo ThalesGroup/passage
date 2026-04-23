@@ -1,6 +1,6 @@
 # PASSAGE Usage
 
-PASSAGE provides a small CLI with four main subcommands: `download`, `generate`, `calibrate`, and `export`.
+PASSAGE provides a small CLI with six main subcommands: `download`, `generate`, `calibrate`, `compress`, `export`, and `upload`.
 Run `passage --help` or `passage <subcommand> --help` to see all available options for a subcommand.
 
 For a local end-to-end rebuild, the repository also ships a `Makefile` with `make rebuild RESOLUTION=256` and
@@ -79,28 +79,67 @@ Key flags: `--tiles-dirpath`, `--outputs-dirpath`, `--no-resume`, `--num-cpus`, 
 
 ---
 
-## export 📦
+## compress 📦
 
-Prepare parquet shards under `outputs/export` and upload the full export folder to the Hugging Face Hub. If `--repo-id` is not
-provided, the CLI reads `HF_USER_NAME`/`HF_REPO_NAME` from `.env` and `HF_TOKEN` from `.env.secret` by default.
+Generate Parquet shards under `outputs/export`. Existing `<resolution>x<resolution>` and `<resolution>x<resolution>_samples`
+directories for the selected resolutions are deleted before new shards are written.
 
 ```bash
-# Push export folder with executed per-resolution dataset notebooks (default)
-passage export --repo-id alice/passage-dataset
+# Compress every discovered dataset resolution
+passage compress
 
-# Dry run: prepare export folder but skip push
-passage export --no-upload
+# Compress a single resolution
+passage compress --resolution 256
 
-# Export a specific resolution without uploading
-passage export --resolution 128 --no-upload
-
-# Export with a specific calibration file
-passage export --calibration-filepath /path/to/calibrate.json --no-upload
+# Compress against a /data-backed dataset tree
+passage compress --dataset-dirpath /data/PASSAGE/dataset --calibrate-dirpath /data/PASSAGE/calibrate --resolution 256
 ```
 
-Useful flags: `--config`, `--dataset-dirpath`, `--calibrate-dirpath`, `--calibration-filepath`, `--resolution`, `--repo-id`, `--no-exec-notebooks`, `--no-upload`, `--private`, `--no-create-repo`, `--log-level`.
+Useful flags: `--config`, `--dataset-dirpath`, `--calibrate-dirpath`, `--calibration-filepath`, `--export-dirpath`, `--resolution`, `--num-cpus`, `--log-level`.
 
-If both `--calibrate-dirpath` and `--calibration-filepath` are provided to `export`, the explicit calibration file takes precedence and its parent directory is used for calibration assets.
+If both `--calibrate-dirpath` and `--calibration-filepath` are provided to `compress`, the explicit calibration file takes precedence when deriving the export directory.
+
+---
+
+## export 🧾
+
+Refresh the upload-ready export tree. This stage copies assets and calibration files, copies notebooks, executes
+`notebooks/_dataset.ipynb` per selected resolution, and rebuilds the root `README.md`.
+
+```bash
+# Refresh the full prepared export tree
+passage export
+
+# Refresh one prepared resolution
+passage export --resolution 256
+
+# Refresh a /data-backed export tree
+passage export --dataset-dirpath /data/PASSAGE/dataset --calibrate-dirpath /data/PASSAGE/calibrate --resolution 256
+```
+
+Useful flags: `--config`, `--dataset-dirpath`, `--calibrate-dirpath`, `--calibration-filepath`, `--notebooks-dirpath`, `--export-dirpath`, `--resolution`, `--repo-id`, `--max-notebook-retries`, `--notebook-retry-delay`, `--num-cpus`, `--log-level`.
+
+The `export` command expects Parquet shards to already exist for the requested resolutions. Run `passage compress` first.
+
+---
+
+## upload 🚀
+
+Upload the prepared export tree to the Hugging Face Hub. By default, uploads target `thalesgroup/passage` and read
+`HF_TOKEN` from `.env.secret` (with optional `.env` loading before that).
+
+```bash
+# Upload the full prepared tree to the default dataset repo
+passage upload
+
+# Upload a single prepared resolution
+passage upload --resolution 256
+
+# Override the target repo explicitly
+passage upload --repo-id alice/passage-dataset --env-path .env --secret-path .env.secret
+```
+
+Useful flags: `--calibrate-dirpath`, `--calibration-filepath`, `--export-dirpath`, `--resolution`, `--repo-id`, `--env-path`, `--secret-path`, `--private`, `--no-create-repo`, `--num-cpus`, `--log-level`.
 
 After preparing an export, run `make manifest` to write `outputs/export/manifest.sha256`. Repository-level release
 metadata also lives in `croissant.json`, `DATASHEET.md`, `CITATION.cff`, and `CHANGELOG.md`.
@@ -118,7 +157,7 @@ Uploaded artifacts include:
 - See `config/config.yaml` for dataset settings (resolutions, obstacle generation, and other options).
 - Use `passage <subcommand> --help` for the full list of options for any subcommand.
 - Use `make rebuild RESOLUTION=<n>` when you want a single entrypoint for local download, calibration, generation,
-  parquet export, and checksum manifest refresh.
+  Parquet compression, export-tree refresh, and checksum manifest refresh.
 
 ---
 
@@ -132,7 +171,7 @@ from passage.utils import decode_tensor_blob
 
 RESOLUTION = 64
 # Load a specific resolution
-dataset = load_dataset("your-username/passage-dataset", name=f"{RESOLUTION}x{RESOLUTION}")
+dataset = load_dataset("thalesgroup/passage", name=f"{RESOLUTION}x{RESOLUTION}")
 
 # Access a sample and decode compressed tensor
 sample = dataset["train"][0]

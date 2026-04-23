@@ -204,8 +204,8 @@ Default config: `1024x1024_samples`
 
 ```python
 # Load full dataset at 256×256
-ds = load_dataset("geoffrey-g-delhomme/passage", name="256x256")
+ds = load_dataset("thalesgroup/passage", name="256x256")
 
 # Load quick sample
-ds = load_dataset("geoffrey-g-delhomme/passage", name="256x256_samples")
+ds = load_dataset("thalesgroup/passage", name="256x256_samples")
 ```

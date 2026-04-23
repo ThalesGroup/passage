@@ -32,6 +32,9 @@ from loguru import logger
 run_calibrate = None
 run_download = None
 run_generate = None
+compress_release = None
+prepare_export = None
+upload_export = None
 export_and_upload = None
 
 
@@ -44,7 +47,6 @@ def main() -> None:
 
     subparsers = parser.add_subparsers(dest="command")
 
-    # Download subcommand
     download_parser = subparsers.add_parser(
         "download",
         help="Download ALOS tiles and track URL status",
@@ -72,7 +74,6 @@ def main() -> None:
         help="Set log level (default: info)",
     )
 
-    # Generate subcommand
     generate_parser = subparsers.add_parser(
         "generate",
         help="Generate dataset samples from DSM tiles",
@@ -135,7 +136,6 @@ def main() -> None:
         help="Set log level (default: info)",
     )
 
-    # Calibrate subcommand
     calibrate_parser = subparsers.add_parser(
         "calibrate",
         help="Find min/max elevation values across all DSM tiles",
@@ -168,10 +168,58 @@ def main() -> None:
         help="Set log level (default: info)",
     )
 
-    # Export subcommand (direct push to Hugging Face datasets)
+    compress_parser = subparsers.add_parser(
+        "compress",
+        help="Generate parquet shards for the selected resolutions",
+    )
+    compress_parser.add_argument(
+        "--config",
+        default="config/config.yaml",
+        help="Path to config.yaml file (default: config/config.yaml)",
+    )
+    compress_parser.add_argument(
+        "--dataset-dirpath",
+        default="outputs/dataset",
+        help="Directory containing generated datasets (default: outputs/dataset)",
+    )
+    compress_parser.add_argument(
+        "--calibrate-dirpath",
+        default="outputs/calibrate",
+        help="Directory used to derive the export directory (default: outputs/calibrate)",
+    )
+    compress_parser.add_argument(
+        "--calibration-filepath",
+        default=None,
+        help="Calibration JSON used to derive the export directory (takes precedence over --calibrate-dirpath)",
+    )
+    compress_parser.add_argument(
+        "--export-dirpath",
+        default=None,
+        help="Explicit export directory override (default: derive from calibration path)",
+    )
+    compress_parser.add_argument(
+        "--resolution",
+        type=int,
+        nargs="+",
+        default=None,
+        help="Specific resolutions to compress. If not specified, compress all dataset resolutions.",
+    )
+    compress_parser.add_argument(
+        "--num-cpus",
+        type=int,
+        default=None,
+        help="Number of CPUs for multiprocessing (can be specified before or after subcommand)",
+    )
+    compress_parser.add_argument(
+        "--log-level",
+        choices=["debug", "info", "warning", "error", "critical"],
+        default="info",
+        help="Set log level (default: info)",
+    )
+
     export_parser = subparsers.add_parser(
         "export",
-        help="Push prepared datasets directly to Hugging Face (zstd shards, no parquet)",
+        help="Prepare the export directory for upload by refreshing notebooks, assets, calibration, and README",
     )
     export_parser.add_argument(
         "--config",
@@ -199,21 +247,26 @@ def main() -> None:
         help="Directory containing notebooks (default: notebooks)",
     )
     export_parser.add_argument(
+        "--export-dirpath",
+        default=None,
+        help="Explicit export directory override (default: derive from calibration path)",
+    )
+    export_parser.add_argument(
         "--resolution",
         type=int,
         nargs="+",
         default=None,
-        help="Specific resolutions to prepare. If not specified, prepares all found.",
+        help="Specific resolutions to refresh in the export directory. If not specified, use prepared configs.",
     )
     export_parser.add_argument(
         "--repo-id",
         default=None,
-        help="Hugging Face dataset repo id for README and upload commands (default: read from .env)",
+        help="Hugging Face dataset repo id to embed in the export README (default: thalesgroup/passage)",
     )
     export_parser.add_argument(
-        "--no-exec-notebooks",
+        "--anonymous",
         action="store_true",
-        help="Disable executing dataset.ipynb with papermill",
+        help="Prepare anonymous metadata copies for reviewer-facing submission mirrors",
     )
     export_parser.add_argument(
         "--max-notebook-retries",
@@ -228,29 +281,86 @@ def main() -> None:
         help="Seconds to wait between notebook execution retries (default: 5)",
     )
     export_parser.add_argument(
-        "--env-path",
-        default=None,
-        help="Path to .env file containing HF_USER_NAME and HF_REPO_NAME (default: project root .env)",
-    )
-    export_parser.add_argument(
-        "--secret-path",
-        default=None,
-        help="Path to .env.secret file containing HF_TOKEN (default: project root .env.secret)",
-    )
-    export_parser.add_argument(
-        "--no-upload",
+        "--force",
         action="store_true",
-        help="Run notebook prep but skip pushing to Hugging Face (useful for local testing)",
+        help="Force every step regardless of existing artifacts (overrides per-step skip-if-existing)",
     )
     export_parser.add_argument(
-        "--private",
+        "--force-notebooks",
         action="store_true",
-        help="Make the uploaded repository private (default: public)",
+        help="Re-execute per-resolution dataset.ipynb even if a valid output already exists",
     )
     export_parser.add_argument(
-        "--no-create-repo",
+        "--force-assets",
         action="store_true",
-        help="Don't create the repository if it doesn't exist",
+        help="Re-copy assets/ even if banner.png is present",
+    )
+    export_parser.add_argument(
+        "--force-calibration",
+        action="store_true",
+        help="Re-copy calibration/ even if calibrate.json is present",
+    )
+    export_parser.add_argument(
+        "--force-analysis-notebooks",
+        action="store_true",
+        help="Re-copy notebooks/*.ipynb even if already present",
+    )
+    export_parser.add_argument(
+        "--force-metadata",
+        action="store_true",
+        help="Re-copy LICENSE, croissant.json, DATASHEET.md, CITATION.cff, ... even if present",
+    )
+    export_parser.add_argument(
+        "--force-readme",
+        action="store_true",
+        help="Re-write README.md even if its content is unchanged",
+    )
+    export_parser.add_argument(
+        "--force-gitattributes",
+        action="store_true",
+        help="Re-write .gitattributes even if its content matches",
+    )
+    export_parser.add_argument(
+        "--force-strip-outputs",
+        action="store_true",
+        help="Re-run notebook output stripping (no-op if already stripped, but re-scans every notebook)",
+    )
+    export_parser.add_argument(
+        "--no-strip-outputs",
+        action="store_true",
+        help="Skip stripping outputs from copied analysis notebooks",
+    )
+    export_parser.add_argument(
+        "--no-gitattributes",
+        action="store_true",
+        help="Skip writing .gitattributes (HF LFS rules)",
+    )
+    export_parser.add_argument(
+        "--no-validate-croissant",
+        action="store_true",
+        help="Skip croissant.json validation",
+    )
+    export_parser.add_argument(
+        "--no-validate-readme",
+        action="store_true",
+        help="Skip README YAML (HF DatasetCard) validation",
+    )
+    export_parser.add_argument(
+        "--no-audit-compression",
+        action="store_true",
+        help="Skip parquet ZSTD compression audit",
+    )
+    export_parser.add_argument(
+        "--sample-size-warn-mb",
+        type=int,
+        default=512,
+        help="Warn when a *_samples config exceeds this size in MB (default: 512)",
+    )
+    export_parser.add_argument(
+        "--parquet-size-warn-mb",
+        type=int,
+        default=5000,
+        help="Warn when an individual parquet file exceeds this size in MB (default: 5000; HF hard cap is 50000)",
     )
     export_parser.add_argument(
         "--num-cpus",
@@ -265,15 +375,77 @@ def main() -> None:
         help="Set log level (default: info)",
     )
 
+    upload_parser = subparsers.add_parser(
+        "upload",
+        help="Upload the prepared export directory to Hugging Face",
+    )
+    upload_parser.add_argument(
+        "--calibrate-dirpath",
+        default="outputs/calibrate",
+        help="Directory used to derive the export directory (default: outputs/calibrate)",
+    )
+    upload_parser.add_argument(
+        "--calibration-filepath",
+        default=None,
+        help="Calibration JSON used to derive the export directory (takes precedence over --calibrate-dirpath)",
+    )
+    upload_parser.add_argument(
+        "--export-dirpath",
+        default=None,
+        help="Explicit export directory override (default: derive from calibration path)",
+    )
+    upload_parser.add_argument(
+        "--resolution",
+        type=int,
+        nargs="+",
+        default=None,
+        help="Specific resolutions to upload. If not specified, upload the full prepared export tree.",
+    )
+    upload_parser.add_argument(
+        "--repo-id",
+        default=None,
+        help="Hugging Face dataset repo id (default: thalesgroup/passage)",
+    )
+    upload_parser.add_argument(
+        "--env-path",
+        default=None,
+        help="Path to .env file to load before reading HF_TOKEN (default: project root .env)",
+    )
+    upload_parser.add_argument(
+        "--secret-path",
+        default=None,
+        help="Path to .env.secret file containing HF_TOKEN (default: project root .env.secret)",
+    )
+    upload_parser.add_argument(
+        "--private",
+        action="store_true",
+        help="Make the uploaded repository private (default: public)",
+    )
+    upload_parser.add_argument(
+        "--no-create-repo",
+        action="store_true",
+        help="Don't create the repository if it doesn't exist",
+    )
+    upload_parser.add_argument(
+        "--num-cpus",
+        type=int,
+        default=None,
+        help="Number of CPUs to use for upload workers (can be specified before or after subcommand)",
+    )
+    upload_parser.add_argument(
+        "--log-level",
+        choices=["debug", "info", "warning", "error", "critical"],
+        default="info",
+        help="Set log level (default: info)",
+    )
+
     args = parser.parse_args()
 
-    # Configure global log level (default 'info') when provided on subcommands
     level = getattr(args, "log_level", "info")
     logger.remove()
     logger.add(sys.stderr, level=level.upper())
 
     if args.command == "download":
-        # Prefer module-level patched function if present, otherwise import lazily
         if run_download is None:
             from passage.download import run_download as _rd
 
@@ -296,7 +468,6 @@ def main() -> None:
             force=args.force,
         )
     elif args.command == "calibrate":
-        # When --no-resume is set, user expects a full recompute: set overwrite=True
         if run_calibrate is None:
             from passage.calibrate import run_calibrate as _rc
 
@@ -308,36 +479,81 @@ def main() -> None:
             overwrite=args.no_resume,
             num_cpus=args.num_cpus,
         )
+    elif args.command == "compress":
+        if compress_release is None:
+            from passage.export import compress_release as _cr
+
+            globals()["compress_release"] = _cr
+        compress_release(
+            config_filepath=args.config,
+            dataset_dirpath=args.dataset_dirpath,
+            calibrate_dirpath=args.calibrate_dirpath,
+            calibration_filepath=args.calibration_filepath,
+            export_dirpath=args.export_dirpath,
+            resolutions=args.resolution,
+            num_cpus=args.num_cpus,
+        )
     elif args.command == "export":
-        # Inform the user when the CLI will read credentials from .env/.env.secret
-        if args.repo_id is None:
-            env_display = args.env_path if args.env_path else ".env"
-            secret_display = args.secret_path if args.secret_path else ".env.secret"
-            logger.info(
-                f"Using Hugging Face credentials from {env_display} and {secret_display} "
-                "(HF_USER_NAME/HF_REPO_NAME and HF_TOKEN). To override, pass --repo-id or --env-path/--secret-path."
-            )
+        if prepare_export is None:
+            from passage.export import prepare_export as _pe
 
-        if export_and_upload is None:
-            from passage.export import export_and_upload as _ea
+            globals()["prepare_export"] = _pe
+        from passage.export import ExportSteps
 
-            globals()["export_and_upload"] = _ea
-        export_and_upload(
+        steps = ExportSteps(
+            force_all=args.force,
+            force_notebooks=args.force_notebooks,
+            force_assets=args.force_assets,
+            force_calibration=args.force_calibration,
+            force_analysis_notebooks=args.force_analysis_notebooks,
+            force_metadata=args.force_metadata,
+            force_readme=args.force_readme,
+            force_gitattributes=args.force_gitattributes,
+            force_strip_outputs=args.force_strip_outputs,
+            skip_strip_outputs=args.no_strip_outputs,
+            skip_gitattributes=args.no_gitattributes,
+            skip_validate_croissant=args.no_validate_croissant,
+            skip_validate_readme=args.no_validate_readme,
+            skip_audit_compression=args.no_audit_compression,
+            sample_size_warn_mb=args.sample_size_warn_mb,
+            parquet_size_warn_mb=args.parquet_size_warn_mb,
+        )
+        prepare_export(
             config_filepath=args.config,
             dataset_dirpath=args.dataset_dirpath,
             calibrate_dirpath=args.calibrate_dirpath,
             calibration_filepath=args.calibration_filepath,
             notebooks_dirpath=args.notebooks_dirpath,
+            export_dirpath=args.export_dirpath,
             resolutions=args.resolution,
             repo_id=args.repo_id,
-            execute_notebooks=not args.no_exec_notebooks,
+            anonymous=args.anonymous,
             max_notebook_retries=(None if args.max_notebook_retries == 0 else args.max_notebook_retries),
             notebook_retry_delay=args.notebook_retry_delay,
+            num_cpus=args.num_cpus,
+            steps=steps,
+        )
+    elif args.command == "upload":
+        env_display = args.env_path if args.env_path else ".env"
+        secret_display = args.secret_path if args.secret_path else ".env.secret"
+        logger.info(
+            f"Using Hugging Face token from {env_display} and {secret_display}. "
+            f"Upload target: {args.repo_id or 'thalesgroup/passage'}."
+        )
+        if upload_export is None:
+            from passage.export import upload_export as _ue
+
+            globals()["upload_export"] = _ue
+        upload_export(
+            calibrate_dirpath=args.calibrate_dirpath,
+            calibration_filepath=args.calibration_filepath,
+            export_dirpath=args.export_dirpath,
+            resolutions=args.resolution,
+            repo_id=args.repo_id,
             env_path=args.env_path,
             secret_path=args.secret_path,
             private=args.private,
             create_repo=not args.no_create_repo,
-            skip_upload=args.no_upload,
             num_cpus=args.num_cpus,
         )
     elif args.command is None:

@@ -11,18 +11,22 @@ Welcome to the PASSAGE User Guide. This section walks you through the **complete
 
 ## Overview
 
-PASSAGE follows a linear, four-step pipeline. Each step is a CLI subcommand that can be run independently, supports resume, and produces well-defined outputs:
+PASSAGE follows a linear, six-step pipeline. Each step is a CLI subcommand that can be run independently, supports resume, and produces well-defined outputs:
 
 ```mermaid
 flowchart LR
     A["🌐 Download\nJAXA tiles"] --> B["📏 Calibrate\nElevation stats"]
     B --> C["⚙️ Generate\nDataset samples"]
-    C --> D["📦 Export\nParquet + HF Hub"]
+    C --> D["🗜️ Compress\nParquet shards"]
+    D --> E["🧾 Export\nREADME + notebooks + assets"]
+    E --> F["🚀 Upload\nHF Hub publish"]
 
     style A fill:#1565C0,color:#fff,stroke:#0D47A1
     style B fill:#42A5F5,color:#fff,stroke:#1565C0
     style C fill:#2E7D32,color:#fff,stroke:#1B5E20
-    style D fill:#D32F2F,color:#fff,stroke:#B71C1C
+    style D fill:#00897B,color:#fff,stroke:#00695C
+    style E fill:#6D4C41,color:#fff,stroke:#4E342E
+    style F fill:#D32F2F,color:#fff,stroke:#B71C1C
 ```
 
 | Step | Command | What it does | Typical runtime |
@@ -30,7 +34,9 @@ flowchart LR
 | 1 | `passage download` | Downloads JAXA ALOS AW3D30 5°×5° tile archives | Hours (network-bound) |
 | 2 | `passage calibrate` | Scans all tiles for global min/max elevation | Minutes (I/O-bound) |
 | 3 | `passage generate` | Creates samples with paths, obstacles, tensors | Hours (CPU-bound) |
-| 4 | `passage export` | Writes Parquet shards, executes notebooks, uploads | Minutes to hours |
+| 4 | `passage compress` | Rewrites Parquet shards for the selected resolutions | Minutes to hours |
+| 5 | `passage export` | Refreshes the upload-ready export tree | Minutes |
+| 6 | `passage upload` | Publishes the prepared export tree to Hugging Face | Minutes to hours |
 
 !!! tip "Each step is resumable"
     If a step is interrupted, simply re-run the same command. PASSAGE will detect existing progress and pick up where it left off.
@@ -42,7 +48,7 @@ flowchart LR
 - **Python 3.11+**
 - **`uv`** package manager (recommended) or `pip`
 - ~50 GB free disk space for full tile download
-- Hugging Face account + token (only for `export` with upload)
+- Hugging Face token (only for `upload`)
 
 ---
 
@@ -71,8 +77,8 @@ Create multi-resolution pathfinding samples.
 </div>
 
 <div class="feature-card" markdown>
-### [Step 4 — Export](export.md)
-Package and publish to Hugging Face Hub.
+### [Steps 4-6 — Release](export.md)
+Compress Parquet shards, refresh the export tree, and publish to Hugging Face Hub.
 </div>
 
 <div class="feature-card" markdown>

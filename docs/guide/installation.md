@@ -78,14 +78,7 @@ You should see output listing the four subcommands: `download`, `calibrate`, `ge
 
 ## Configure Hugging Face Credentials :lock:
 
-The `export` command can upload your dataset directly to the [Hugging Face Hub](https://huggingface.co/). To enable this, create two files in the project root:
-
-=== "`.env` — Public settings"
-
-    ```bash
-    HF_USER_NAME=your-hf-username
-    HF_REPO_NAME=passage-dataset
-    ```
+The `upload` command can publish your prepared export tree directly to the [Hugging Face Hub](https://huggingface.co/). By default it targets `thalesgroup/passage` and reads `HF_TOKEN` from `.env.secret`.
 
 === "`.env.secret` — Private token"
 
@@ -96,10 +89,11 @@ The `export` command can upload your dataset directly to the [Hugging Face Hub](
 !!! warning "Never commit secrets"
     Both `.env` and `.env.secret` are listed in `.gitignore`. Never commit your Hugging Face token to version control.
 
-You can also pass credentials via CLI flags:
+You can also point the CLI at custom env files or override the repo explicitly:
 
 ```bash
-passage export --repo-id username/passage-dataset --env-path .env --secret-path .env.secret
+passage upload --env-path .env --secret-path .env.secret
+passage upload --repo-id username/passage-dataset --env-path .env --secret-path .env.secret
 ```
 
 ---
@@ -117,7 +111,7 @@ passage/
 │   ├── download.py           # Tile download module
 │   ├── calibrate.py          # Elevation calibration
 │   ├── generate.py           # Dataset generation
-│   ├── export.py             # Parquet export & HF upload
+│   ├── export.py             # Release pipeline (compress/export/upload)
 │   ├── obstacles.py          # Superellipse generation
 │   ├── pathfinding_utils.py  # Solver implementations
 │   ├── utils.py              # Tensor compression

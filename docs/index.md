@@ -23,7 +23,7 @@ hide:
 
 [:material-rocket-launch: **Get Started**](guide/index.md){ .btn-primary }
 [:fontawesome-brands-github: **View on GitHub**](https://github.com/ThalesGroup/passage){ .btn-secondary }
-[:simple-huggingface: **Dataset on HF**](https://huggingface.co/datasets/geoffrey-g-delhomme/passage){ .btn-secondary }
+[:simple-huggingface: **Dataset on HF**](https://huggingface.co/datasets/thalesgroup/passage){ .btn-secondary }
 
 </div>
 
@@ -128,9 +128,25 @@ Create multi-resolution samples with start/end markers, superellipse obstacles, 
 <div class="pipeline-step" markdown>
   <div class="step-number">4</div>
 
+#### Compress
+
+Rewrite the selected resolutions as Parquet shards in the release tree.
+</div>
+
+<div class="pipeline-step" markdown>
+  <div class="step-number">5</div>
+
 #### Export
 
-Compress tensors, write Parquet shards, execute analysis notebooks, and push everything to Hugging Face Hub.
+Refresh the upload-ready export tree: README, notebooks, calibration assets, and per-resolution analyses.
+</div>
+
+<div class="pipeline-step" markdown>
+  <div class="step-number">6</div>
+
+#### Upload
+
+Publish the prepared export tree to Hugging Face Hub and verify it with the release manifest.
 </div>
 
 </div>
@@ -186,7 +202,7 @@ NetworkX graphs, `python-pathfinding` grids, and a custom **Numba-JIT** grid eng
 
 ### HuggingFace-Ready
 
-One command exports compressed Parquet shards with full metadata, executed notebooks, and uploads to the Hugging Face Hub.
+Split release flow with `compress`, `export`, and `upload`, plus `manifest.sha256` for release verification.
 </div>
 
 <div class="feature-card" markdown>
@@ -194,7 +210,7 @@ One command exports compressed Parquet shards with full metadata, executed noteb
 
 ### Fully Resumable
 
-Every stage (download, calibrate, generate) supports **resume** — no wasted compute if a run is interrupted.
+The generation and release-preparation stages can be rerun independently — no need to rebuild the whole dataset after an interruption.
 </div>
 
 <div class="feature-card" markdown>
@@ -232,7 +248,9 @@ uv sync
 passage download                        # Step 1 — fetch JAXA tiles
 passage calibrate                       # Step 2 — compute elevation stats
 passage generate --resolution 256       # Step 3 — generate samples
-passage export --no-upload              # Step 4 — prepare parquet export
+passage compress --resolution 256       # Step 4 — write parquet shards
+passage export --resolution 256         # Step 5 — refresh export tree
+passage upload                          # Step 6 — publish to Hugging Face
 ```
 
 !!! tip "Explore a sample in 3 lines"
@@ -241,7 +259,7 @@ passage export --no-upload              # Step 4 — prepare parquet export
     from datasets import load_dataset
     from passage.utils import decode_tensor_blob
 
-    ds = load_dataset("geoffrey-g-delhomme/passage", name="256x256")
+    ds = load_dataset("thalesgroup/passage", name="256x256")
     sample = ds["train"][0]
     tensor = decode_tensor_blob(sample["tensor"], (256, 256, 3))
     ```

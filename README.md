@@ -15,8 +15,8 @@
   <a href="https://github.com/ThalesGroup/passage/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/ThalesGroup/passage/ci.yml?label=CI&logo=githubactions&logoColor=white" alt="CI"></a>
   <a href="https://github.com/ThalesGroup/passage/actions/workflows/docs.yml"><img src="https://img.shields.io/github/actions/workflow/status/ThalesGroup/passage/docs.yml?label=docs&logo=materialformkdocs&logoColor=white" alt="Docs"></a>
   <a href="https://www.python.org/"><img src="https://img.shields.io/badge/python-≥3.11-3776AB?logo=python&logoColor=white" alt="Python"></a>
-  <a href="https://github.com/ThalesGroup/passage/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-green?logo=opensourceinitiative&logoColor=white" alt="License"></a>
-  <a href="https://huggingface.co/datasets/geoffrey-g-delhomme/passage"><img src="https://img.shields.io/badge/%F0%9F%A4%97-Dataset-yellow" alt="HuggingFace Dataset"></a>
+  <a href="DATASET_LICENSE.md"><img src="https://img.shields.io/badge/dataset%20terms-AW3D30%20%2B%20MIT%20code-orange?logo=opensourceinitiative&logoColor=white" alt="Dataset Terms"></a>
+  <a href="https://huggingface.co/datasets/thalesgroup/passage"><img src="https://img.shields.io/badge/%F0%9F%A4%97-Dataset-yellow" alt="HuggingFace Dataset"></a>
   <a href="https://docs.astral.sh/ruff/"><img src="https://img.shields.io/badge/code%20style-ruff-000000?logo=ruff&logoColor=white" alt="Ruff"></a>
   <a href="https://docs.astral.sh/uv/"><img src="https://img.shields.io/badge/package-uv-DE5FE9?logo=uv&logoColor=white" alt="uv"></a>
   <a href="https://pre-commit.com/"><img src="https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit&logoColor=white" alt="Pre-commit"></a>
@@ -24,7 +24,7 @@
 
 <p align="center">
   <a href="https://thalesgroup.github.io/passage/">📖 Documentation</a> •
-  <a href="https://huggingface.co/datasets/geoffrey-g-delhomme/passage">🤗 Dataset</a> •
+  <a href="https://huggingface.co/datasets/thalesgroup/passage">🤗 Dataset</a> •
   <a href="https://github.com/ThalesGroup/passage">💻 GitHub</a> •
   <a href="#-citation">📝 Cite</a>
 </p>
@@ -97,10 +97,10 @@ We open-source this toolkit to make terrain-routing methods easier to compare, r
   <td align="center" width="25%">🌐<br><strong>Multi-Resolution</strong><br><small>64×64 → 4096×4096 px</small></td>
   <td align="center" width="25%">🏔️<br><strong>Real Elevation</strong><br><small>JAXA ALOS AW3D30 DSM</small></td>
   <td align="center" width="25%">🔷<br><strong>Rich Obstacles</strong><br><small>Superellipse shapes</small></td>
-  <td align="center" width="25%">⚡<br><strong>5 Cost Models</strong><br><small>Elevation, slope, energy…</small></td>
+  <td align="center" width="25%">⚡<br><strong>3 A* Cost Variants</strong><br><small>Elevation, energy, slope-uphill</small></td>
 </tr>
 <tr>
-  <td align="center">🧮<br><strong>3 Solver Backends</strong><br><small>NetworkX, pathfinding, Numba</small></td>
+  <td align="center">🧮<br><strong>Grid A* Oracle</strong><br><small>Exact labels + timings</small></td>
   <td align="center">🤗<br><strong>HuggingFace-Ready</strong><br><small>Parquet + one-command upload</small></td>
   <td align="center">🔁<br><strong>Fully Resumable</strong><br><small>No wasted compute</small></td>
   <td align="center">✅<br><strong>Tested & CI/CD</strong><br><small>80%+ coverage, pre-commit</small></td>
@@ -111,8 +111,8 @@ We open-source this toolkit to make terrain-routing methods easier to compare, r
 <tr>
   <td align="center"><strong>14,130</strong><br><small>Default Samples</small></td>
   <td align="center"><strong>7</strong><br><small>Resolution Levels</small></td>
-  <td align="center"><strong>5</strong><br><small>Cost Models</small></td>
-  <td align="center"><strong>3</strong><br><small>Solver Backends</small></td>
+  <td align="center"><strong>3</strong><br><small>A* Configurations</small></td>
+  <td align="center"><strong>1</strong><br><small>Solver Backend</small></td>
   <td align="center"><strong>30 m/px</strong><br><small>Spatial Resolution</small></td>
 </tr>
 </table>
@@ -209,7 +209,7 @@ from datasets import load_dataset
 from passage.utils import decode_tensor_blob
 
 # Load a specific resolution from Hugging Face
-ds = load_dataset("geoffrey-g-delhomme/passage", name="256x256")
+ds = load_dataset("thalesgroup/passage", name="256x256")
 sample = ds["train"][0]
 
 # Decode the compressed tensor → (256, 256, 3) numpy array
@@ -280,7 +280,7 @@ HF_TOKEN=hf_XXXXXXXXXXXXXXXXXXXXXXXX
 | Notebook | Description |
 |----------|-------------|
 | [`demo.ipynb`](notebooks/demo.ipynb) | Quick-start: load, decode, and visualize a sample |
-| [`costmodel.ipynb`](notebooks/costmodel.ipynb) | Compare all 5 cost models on the same terrain |
+| [`costmodel.ipynb`](notebooks/costmodel.ipynb) | Compare the configured terrain-cost variants on the same terrain |
 | [`obstacles.ipynb`](notebooks/obstacles.ipynb) | Explore superellipse obstacle generation |
 | [`solve.ipynb`](notebooks/solve.ipynb) | Solver timing and quality comparison |
 | `_dataset.ipynb` | Template — auto-executed per resolution during export |
@@ -421,7 +421,7 @@ If you discover a vulnerability, please use private reporting channels described
 
 ## License
 
-This project is licensed under the **MIT License** — see the [LICENSE](LICENSE) file for details. Please note that each dependency is subject to its own respective license.
+The PASSAGE generator code is MIT-licensed via [LICENSE](LICENSE). The exported dataset artifacts inherit JAXA ALOS AW3D30 obligations documented in [DATASET_LICENSE.md](DATASET_LICENSE.md).
 
 The license is defined in an explicit root-level `LICENSE` file.
 
@@ -431,7 +431,7 @@ The underlying elevation data is sourced from [JAXA's ALOS AW3D30](https://www.e
 
 <p align="center">
   <a href="https://thalesgroup.github.io/passage/">📖 Documentation</a> •
-  <a href="https://huggingface.co/datasets/geoffrey-g-delhomme/passage">🤗 Dataset</a> •
+  <a href="https://huggingface.co/datasets/thalesgroup/passage">🤗 Dataset</a> •
   <a href="https://github.com/ThalesGroup/passage/issues">🐛 Issues</a> •
   <a href="https://github.com/ThalesGroup/passage/discussions">💬 Discussions</a>
 </p>

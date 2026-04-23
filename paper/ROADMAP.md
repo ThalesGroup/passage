@@ -34,13 +34,16 @@ layout starts in the skeleton and propagates here.
 - Paper anchors: Sec. 3.3 (Fig. 2 sample grid, Table 2 split counts), App. A
   preview, App. F Datasheet mirror.
 - Owner: dataset generation lead.
-- Inputs: one generated Parquet shard per resolution, the geographic
+- Inputs: one release-ready Parquet shard per resolution, the geographic
   hold-out mask (`passage/config/split_mask.npy`), and the current dataset
-  manifest (`passage/outputs/export/manifest.sha256`).
+  manifest (`passage/outputs/export/manifest.sha256`) produced after
+  `passage compress`, `passage export`, and `make manifest`.
 - Outputs:
   - `figures/sample_grid.pdf` (+ `.png`) — Fig. 2 in `main.tex`.
   - `figures/dataset_statistics.csv` — Table 2 in `main.tex`.
   - `figures/dataset_statistics.manifest.json` — provenance.
+- Gate: do not promote new split counts until the release tree and manifest
+  have been refreshed for the same dataset snapshot.
 - Promotes to: `../../passage-paper/neurips/main.tex` Fig. 2 and Table 2
   cells, and Appendix A / Appendix F text.
 - Reminder: update Datasheet (`../DATASHEET.md`) and Croissant
