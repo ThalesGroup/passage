@@ -425,11 +425,31 @@ If you discover a vulnerability, please use private reporting channels described
 
 ## License
 
-The PASSAGE generator code is MIT-licensed via [LICENSE](LICENSE). The exported dataset artifacts inherit JAXA ALOS AW3D30 obligations documented in [DATASET_LICENSE.md](DATASET_LICENSE.md).
+PASSAGE ships **two distinct licensing surfaces** and you should
+recognise which one applies to what you are doing:
 
-The license is defined in an explicit root-level `LICENSE` file.
+| Surface | License | What it covers |
+| --- | --- | --- |
+| Generator and evaluator code | [MIT License](LICENSE) | every Python file in this repository — the dataset generator (`passage`), the evaluation contract (`passage-eval`), and the documentation source. |
+| Generated elevation data | [JAXA AW3D30 terms of use](https://www.eorc.jaxa.jp/ALOS/en/dataset/aw3d30/aw3d30_e.htm) | every elevation tile that PASSAGE ingests, every sample whose elevation channel is derived from those tiles, and any model whose training data carries that channel. The full text mirrored at release time is in [`DATASET_LICENSE.md`](DATASET_LICENSE.md). |
 
-The underlying elevation data is sourced from [JAXA's ALOS AW3D30](https://www.eorc.jaxa.jp/ALOS/en/dataset/aw3d30/aw3d30_e.htm) product, freely available for research purposes.
+> [!WARNING]
+> **Respect JAXA's licensing terms.** PASSAGE is built on the
+> [JAXA ALOS World 3D 30 m DSM (AW3D30)](https://www.eorc.jaxa.jp/ALOS/en/dataset/aw3d30/aw3d30_e.htm).
+> Any user of PASSAGE — or of any artefact derived from it — **must
+> respect the JAXA terms of use**:
+>
+> 1. **Cite the JAXA AW3D30 source** in publications using PASSAGE
+>    (recommended: Takaku *et al.*, *"Updates of 'AW3D30' ALOS Global
+>    DSM with Other Open Access Datasets,"* ISPRS Archives, 2020).
+> 2. **Reproduce the AW3D30 attribution** in any redistribution of
+>    the elevation channel or of any artefact directly derived from
+>    it.
+> 3. **Read and abide by the JAXA terms-of-use page** linked above
+>    for the authoritative wording.
+>
+> We sincerely thank JAXA for openly sharing AW3D30 with the research
+> community.
 
 ---
 

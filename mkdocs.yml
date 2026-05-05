@@ -201,23 +201,28 @@ extra:
 # ---------------------------------------------------------------------------
 nav:
   - "Home": index.md
-  - "User Guide":
+  - "Dataset Generation":
       - "Overview": guide/index.md
       - "Installation": guide/installation.md
       - "Workflow":
-        - "#1 | Download Tiles": guide/download.md
-        - "#2 | Calibrate Elevations": guide/calibrate.md
-        - "#3 | Generate Dataset": guide/generate.md
-        - "#4-6 | Release Pipeline": guide/export.md
+          - "#1 | Download Tiles": guide/download.md
+          - "#2 | Calibrate Elevations": guide/calibrate.md
+          - "#3 | Generate Dataset": guide/generate.md
+          - "#4-6 | Release Pipeline": guide/export.md
       - "Configuration": guide/configuration.md
-      - "Evaluation (passage-eval)": guide/evaluation.md
-  - "Generation Process":
-      - "Overview": generation/index.md
-      - "Sampling Procedure": generation/sampling.md
-      - "Cost Models": generation/cost-models.md
-      - "Obstacle Generation": generation/obstacles.md
-      - "Solvers & Heuristics": generation/solvers.md
-      - "Interactive Notebooks": generation/notebooks.md
+      - "Generation Process":
+          - "Overview": generation/index.md
+          - "Sampling Procedure": generation/sampling.md
+          - "Cost Models": generation/cost-models.md
+          - "Obstacle Generation": generation/obstacles.md
+          - "Solvers & Heuristics": generation/solvers.md
+          - "Interactive Notebooks": generation/notebooks.md
+  - "Benchmark":
+      - "Overview": benchmark/index.md
+      - "Evaluation Protocol": benchmark/protocol.md
+      - "passage-eval Package": benchmark/passage-eval.md
+      - "End-to-End Walkthrough": benchmark/walkthrough.md
+      - "API Reference": benchmark/api.md
   - "Code Architecture":
       - "Overview": architecture/index.md
       - "Module Reference": architecture/modules.md
@@ -225,5 +230,4 @@ nav:
       - "Testing Strategy": architecture/testing.md
   - "API":
       - "Overview": api/index.md
-      - "passage-eval": api/evaluation.md
   - "Policies": policies/index.md

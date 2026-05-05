@@ -1,11 +1,28 @@
 ---
-title: User Guide
+title: Dataset Generation
 icon: material/book-open-page-variant
 ---
 
-# User Guide
+# Dataset Generation
 
-Welcome to the PASSAGE User Guide. This section walks you through the **complete workflow** — from installing the toolkit to publishing your dataset on Hugging Face Hub.
+Welcome to the PASSAGE Dataset Generation section. It walks you through
+the **complete generator workflow** — from installing the toolkit to
+publishing your dataset on Hugging Face Hub — and includes the deeper
+[**Generation Process**](../generation/index.md) reference covering
+sampling, cost models, obstacles, solvers, and configuration.
+
+To **score a planner** on the resulting benchmark (decoded-path
+metrics, statistical discipline, deployment footprint), see the
+[Benchmark](../benchmark/index.md) section.
+
+!!! info "JAXA AW3D30 — license obligations"
+    Every PASSAGE sample is built on the JAXA ALOS World 3D 30 m DSM
+    (AW3D30). Any user of PASSAGE or its derived artefacts must
+    respect [JAXA's terms of
+    use](https://www.eorc.jaxa.jp/ALOS/en/dataset/aw3d30/aw3d30_e.htm)
+    — cite the AW3D30 source, propagate the attribution downstream,
+    and read the [JAXA license notice](../index.md#jaxa-license-and-attribution)
+    before redistributing.
 
 ---
 

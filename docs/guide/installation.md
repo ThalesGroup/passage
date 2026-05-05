@@ -178,7 +178,7 @@ The full usage walk-through with worked examples for every public
 symbol — including paired-bootstrap CI, three-seed aggregation, and the
 Pareto-dominant / Trade-off / Indistinguishable decision rule used in the
 PASSAGE paper — is at
-**[Evaluation (`passage-eval`)](evaluation.md)**.
+**[Benchmark / `passage-eval`](../benchmark/index.md)**.
 
 ---
 

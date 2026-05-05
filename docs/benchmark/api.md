@@ -1,15 +1,17 @@
 ---
-title: API — `passage-eval`
-icon: material/clipboard-check-outline
+title: API Reference
+icon: material/api
 ---
 
 # `passage-eval` API reference
 
 Auto-generated documentation for every public symbol exported by the
 [`passage-eval`](https://github.com/ThalesGroup/passage/tree/main/src/passage-eval)
-sub-package. Usage walk-throughs live on the
-[Evaluation guide](../guide/evaluation.md); this page is the canonical
-docstring view.
+sub-package. The narrative usage guide lives at the
+[`passage-eval` package page](passage-eval.md); the formal protocol
+sits at [Evaluation protocol](protocol.md); a complete worked example
+is at [End-to-end walkthrough](walkthrough.md). This page is the
+canonical docstring view.
 
 ---
 

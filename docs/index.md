@@ -331,6 +331,35 @@ PASSAGE is built on the shoulders of outstanding open data and open-source commu
 
 ---
 
+## JAXA license and attribution
+
+PASSAGE is itself released under the [MIT License](https://github.com/ThalesGroup/passage/blob/main/LICENSE),
+**but the elevation tiles every PASSAGE sample is built on are provided by
+JAXA under the [JAXA ALOS World 3D 30 m DSM (AW3D30) terms of
+use](https://www.eorc.jaxa.jp/ALOS/en/dataset/aw3d30/aw3d30_e.htm)**. Any
+user of PASSAGE — or of any artefact derived from it (a trained model, a
+generated planning result, a downstream benchmark) — **must respect those
+JAXA terms**. In practical terms this means:
+
+!!! warning "JAXA AW3D30 — User obligations"
+    1. **Cite the JAXA AW3D30 source** when you publish results using
+       PASSAGE — the recommended citation is
+       Takaku *et al.*, *"Updates of 'AW3D30' ALOS Global DSM with Other
+       Open Access Datasets,"* ISPRS Archives, 2020.
+    2. **Reproduce the AW3D30 attribution** in any redistribution of the
+       elevation channel or of any artefact directly derived from it.
+    3. **Read and abide by the JAXA terms-of-use page** linked above for
+       the authoritative wording.
+
+The full text of the JAXA terms, mirrored at release time, is in
+[`DATASET_LICENSE.md`](https://github.com/ThalesGroup/passage/blob/main/DATASET_LICENSE.md)
+in the repository root. A short license-attribution note also appears as a
+footnote in the Conclusion of the \textsc{Passage} paper, and an
+acknowledgement of JAXA's open sharing of AW3D30 is recorded in every
+release manifest.
+
+---
+
 <p align="center" style="color: var(--md-default-fg-color--light); font-size: 0.9rem;">
   Made with :heart: for the pathfinding research community<br>
   <strong>MIT License</strong> — Free to use, modify, and distribute
