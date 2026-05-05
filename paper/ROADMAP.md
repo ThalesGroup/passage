@@ -47,7 +47,8 @@ layout starts in the skeleton and propagates here.
 - Promotes to: `../../passage-paper/neurips/main.tex` Fig. 2 and Table 2
   cells, and Appendix A / Appendix F text.
 - Reminder: update Datasheet (`../DATASHEET.md`) and Croissant
-  (`../croissant.json`) whenever the numbers change.
+  (`../croissant.json`) whenever the numbers change, following the public
+  release synchronization rules.
 
 ## Stage D1 — Obstacles Showcase
 

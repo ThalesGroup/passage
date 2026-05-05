@@ -97,7 +97,7 @@ We open-source this toolkit to make terrain-routing methods easier to compare, r
   <td align="center" width="25%">🌐<br><strong>Multi-Resolution</strong><br><small>64×64 → 4096×4096 px</small></td>
   <td align="center" width="25%">🏔️<br><strong>Real Elevation</strong><br><small>JAXA ALOS AW3D30 DSM</small></td>
   <td align="center" width="25%">🔷<br><strong>Rich Obstacles</strong><br><small>Superellipse shapes</small></td>
-  <td align="center" width="25%">⚡<br><strong>3 A* Cost Variants</strong><br><small>Elevation, energy, slope-uphill</small></td>
+  <td align="center" width="25%">⚡<br><strong>3 A* Cost Variants</strong><br><small><code>elevation</code>, <code>slope_uphill</code>, <code>energy</code></small></td>
 </tr>
 <tr>
   <td align="center">🧮<br><strong>Grid A* Oracle</strong><br><small>Exact labels + timings</small></td>
@@ -109,7 +109,7 @@ We open-source this toolkit to make terrain-routing methods easier to compare, r
 
 <table>
 <tr>
-  <td align="center"><strong>14,130</strong><br><small>Default Samples</small></td>
+  <td align="center"><strong>4.4 M</strong><br><small>Default Samples</small></td>
   <td align="center"><strong>7</strong><br><small>Resolution Levels</small></td>
   <td align="center"><strong>3</strong><br><small>A* Configurations</small></td>
   <td align="center"><strong>1</strong><br><small>Solver Backend</small></td>
@@ -232,10 +232,13 @@ Core settings live in [`config/config.yaml`](config/config.yaml):
 ```yaml
 resolutions: [64, 128, 256, 512, 1024, 2048, 4096]
 num_samples:
-  64: 10000
-  128: 2500
-  256: 1000
-  # ...
+  64:    1000000
+  128:   1000000
+  256:   1000000
+  512:   1000000
+  1024:   250000
+  2048:   100000
+  4096:    50000
 splits:
   ratios: {train: 0.90, calibration: 0.02, validation: 0.04, test: 0.04}
   seed: 42
@@ -294,7 +297,7 @@ HF_TOKEN=hf_XXXXXXXXXXXXXXXXXXXXXXXX
 | **Classical AI** | A\*, Dijkstra benchmarking across cost models |
 | **Reinforcement Learning** | Grid-based terrain navigation agents |
 | **Graph Neural Networks** | Learned heuristics on elevation graphs |
-| **Surrogate Models** | Fast path prediction from 14K+ multi-resolution terrain-routing examples |
+| **Surrogate Models** | Fast path prediction from 4.4M+ multi-resolution terrain-routing examples |
 | **Computer Vision** | Path segmentation from elevation images |
 | **Certified ML** | ARP 6983 / ED-324 — bounded ODD, deterministic data |
 
@@ -347,13 +350,14 @@ uv run pre-commit run --all-files
 Citation metadata is available in [`CITATION.cff`](CITATION.cff). If you prefer BibTeX, use:
 
 ```bibtex
-@article{delhomme2026passage,
-  title   = {PASSAGE: A Multi-Resolution Pathfinding Dataset Mixing Complex
-             Obstacles and Elevation-Based Tiles Towards Certified Machine
-             Learning Systems},
-  author  = {Delhomme, Geoffrey and Trap, Fran{\c{c}}ois and Kaakai, Fateh},
-  year    = {2026},
-  url     = {https://github.com/ThalesGroup/passage}
+@inproceedings{delhomme2026passage,
+  title     = {{PASSAGE}: A Real-Terrain Multi-Resolution Benchmark for
+               Trustworthy Constrained Path Planning},
+  author    = {Delhomme, Geoffrey and Trap, Fran{\c{c}}ois and Kaakai, Fateh},
+  booktitle = {Advances in Neural Information Processing Systems (NeurIPS),
+               Datasets and Benchmarks Track},
+  year      = {2026},
+  url       = {https://github.com/ThalesGroup/passage}
 }
 ```
 

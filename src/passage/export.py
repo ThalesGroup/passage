@@ -612,7 +612,7 @@ def _generate_huggingface_yaml_header(
         "task_categories": ["image-segmentation", "other"],
         "tags": ["elevation", "pathfinding", "dsm", "alos", "passage", "terrain", "obstacles", "A*"],
         "pretty_name": "PASSAGE",
-        "size_categories": ["n>1T"],
+        "size_categories": ["1M<n<10M"],
     }
 
     for config_name in _sort_config_names(config_names):

@@ -1,3 +1,7 @@
+# MIT License
+#
+# Copyright (c) 2026 THALES
+
 SHELL := /bin/bash
 
 PASSAGE ?= uv run passage
@@ -11,8 +15,11 @@ CALIBRATE_BACKUP ?= $(CALIBRATE_DIR)/calibrate.json.bak
 RESOLUTION ?=
 NUM_CPUS ?=
 REPO_ID ?=
+DOCS_HOST ?= 127.0.0.1
+DOCS_PORT ?= 8000
+DOCS_STRICT_DIR ?= /tmp/passage-public
 
-.PHONY: install sync download calibrate restore-calibrate generate compress export upload manifest rebuild test lint
+.PHONY: install sync download calibrate restore-calibrate generate compress export upload manifest rebuild test lint docs-build pages-local docs-serve
 
 install:
 	bash scripts/install.sh
@@ -62,3 +69,12 @@ test:
 lint:
 	uv run ruff check src tests
 	uv run ruff format --check src tests
+
+docs-build:
+	uv run --locked --all-groups mkdocs build --strict --site-dir $(DOCS_STRICT_DIR)
+
+pages-local:
+	uv run --locked --all-groups mkdocs build --site-dir public
+
+docs-serve:
+	uv run --locked --all-groups mkdocs serve -a $(DOCS_HOST):$(DOCS_PORT)

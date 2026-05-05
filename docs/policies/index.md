@@ -18,3 +18,7 @@ This page embeds root-level governance and security documents to avoid duplicate
 ---
 
 {% include-markdown "../../CODE_OF_CONDUCT.md" heading-offset=1 %}
+
+---
+
+{% include-markdown "../../NOTICE.md" heading-offset=1 %}

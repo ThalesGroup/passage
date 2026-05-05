@@ -90,7 +90,10 @@ plugins:
       default_handler: python
       handlers:
         python:
-          paths: [src]
+          # `src/` for the dataset-generation package (`passage`); the eval
+          # sub-package lives under `src/passage-eval/src/` and is added so
+          # `::: passage_eval` blocks in api/evaluation.md resolve.
+          paths: [src, src/passage-eval/src]
           options:
             show_source: true
             show_root_heading: true
@@ -207,6 +210,7 @@ nav:
         - "#3 | Generate Dataset": guide/generate.md
         - "#4-6 | Release Pipeline": guide/export.md
       - "Configuration": guide/configuration.md
+      - "Evaluation (passage-eval)": guide/evaluation.md
   - "Generation Process":
       - "Overview": generation/index.md
       - "Sampling Procedure": generation/sampling.md
@@ -219,5 +223,7 @@ nav:
       - "Module Reference": architecture/modules.md
       - "Data Format": architecture/data-format.md
       - "Testing Strategy": architecture/testing.md
-  - "API": api/index.md
+  - "API":
+      - "Overview": api/index.md
+      - "passage-eval": api/evaluation.md
   - "Policies": policies/index.md

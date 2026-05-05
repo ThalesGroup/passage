@@ -24,7 +24,7 @@ Each instance is a single path-planning problem on a terrain crop: a three-chann
 
 ### How many instances are there?
 
-The default release emits **14,130 samples** across seven resolutions (64, 128, 256, 512, 1024, 2048, 4096). Per-resolution, per-split counts are recorded in `outputs/paper/results/dataset_statistics.csv` and reported in Table 2 of the paper.
+The default release emits **4,400,000 samples** (≈4.4 M) across seven resolutions (64, 128, 256, 512, 1024, 2048, 4096), with per-resolution targets `1,000,000` for 64–512, `250,000` for 1024, `100,000` for 2048, and `50,000` for 4096 (see `config/config.yaml::num_samples`). Per-resolution, per-split counts (`90/2/4/4` train/calibration/validation/test) are recorded in `outputs/paper/results/dataset_statistics.csv` and reported in Table 2 of the paper.
 
 ### Does the dataset contain all possible instances or is it a sample?
 

@@ -52,7 +52,7 @@ hide:
 <div class="stats-bar" markdown>
 
 <div class="stat-item">
-  <span class="stat-value">141,300</span>
+  <span class="stat-value">4.4 M</span>
   <span class="stat-label">Default Samples</span>
 </div>
 <div class="stat-item">

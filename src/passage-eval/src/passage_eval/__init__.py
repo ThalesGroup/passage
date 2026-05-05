@@ -1,0 +1,146 @@
+# MIT License
+#
+# Copyright (c) 2026 THALES
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+
+"""passage-eval: canonical evaluation contract for the PASSAGE benchmark.
+
+Public API surface mirrors the PASSAGE paper sections:
+
+    Primary metrics (§5.2 / App. J Primary Metrics):
+        cost_regret, cost_regret_summary,
+        path_assd, path_hausdorff_p95,
+        success_rate, obstacle_violation_rate,
+        compute_primary_metrics, paired_bootstrap_ci
+
+    Statistical discipline (§5.3 / App. J Statistical Discipline):
+        DEFAULT_SEEDS, PRIMARY_METRICS, MetricFamily,
+        apply_censored_penalty,
+        paired_bootstrap_delta, multiseed_paired_bootstrap,
+        holm_bonferroni, decide_pairwise,
+        BootstrapDelta, HolmBonferroniResult, PairwiseDecision
+
+    Decoder-readiness diagnostics (App. B / App. C):
+        mask_endpoints_in_same_component, boundary_f_score,
+        descent_direction_agreement, bellman_residual_reachable,
+        local_ordinal_concordance, field_ssi_mae
+
+    Inference / deployment footprint (§5.2 / App. J Deployment Footprint):
+        benchmark_forward, benchmark_decoder, benchmark_end_to_end,
+        astar_expansions_ratio, decoder_recovery_rate
+
+    Reproducibility sidecar (App. J Rule 8):
+        ReproducibilitySidecar, compute_calibration_decisions_hash
+"""
+
+from passage_eval.metrics.geometric import (
+    path_assd,
+    path_hausdorff_p95,
+    path_iou_diagnostic,
+)
+from passage_eval.metrics.regret import (
+    cost_regret,
+    cost_regret_summary,
+)
+from passage_eval.metrics.reliability import (
+    obstacle_violation_rate,
+    obstacle_cells_traversed_per_path,
+    success_rate,
+)
+from passage_eval.metrics.summary import (
+    compute_primary_metrics,
+    paired_bootstrap_ci,
+)
+from passage_eval.diagnostics.segmentation import (
+    boundary_f_score,
+    mask_connected_components_total,
+    mask_endpoints_in_same_component,
+)
+from passage_eval.diagnostics.regression import (
+    bellman_residual_reachable,
+    descent_direction_agreement,
+    field_ssi_mae,
+    local_ordinal_concordance,
+)
+from passage_eval.deployment.efficiency import (
+    astar_expansions_ratio,
+    decoder_recovery_rate,
+)
+from passage_eval.deployment.throughput import (
+    benchmark_decoder,
+    benchmark_end_to_end,
+    benchmark_forward,
+)
+from passage_eval.protocol.discipline import (
+    DEFAULT_SEEDS,
+    PRIMARY_METRICS,
+    BootstrapDelta,
+    HolmBonferroniResult,
+    MetricFamily,
+    PairwiseDecision,
+    apply_censored_penalty,
+    decide_pairwise,
+    holm_bonferroni,
+    multiseed_paired_bootstrap,
+    paired_bootstrap_delta,
+)
+from passage_eval.sidecar import (
+    ReproducibilitySidecar,
+    compute_calibration_decisions_hash,
+)
+
+__version__ = "0.2.0"
+
+__all__ = [
+    "__version__",
+    # primary metrics
+    "cost_regret",
+    "cost_regret_summary",
+    "path_assd",
+    "path_hausdorff_p95",
+    "path_iou_diagnostic",
+    "success_rate",
+    "obstacle_violation_rate",
+    "obstacle_cells_traversed_per_path",
+    "compute_primary_metrics",
+    "paired_bootstrap_ci",
+    # statistical discipline
+    "DEFAULT_SEEDS",
+    "PRIMARY_METRICS",
+    "MetricFamily",
+    "BootstrapDelta",
+    "HolmBonferroniResult",
+    "PairwiseDecision",
+    "apply_censored_penalty",
+    "paired_bootstrap_delta",
+    "multiseed_paired_bootstrap",
+    "holm_bonferroni",
+    "decide_pairwise",
+    # diagnostics — segmentation
+    "mask_connected_components_total",
+    "mask_endpoints_in_same_component",
+    "boundary_f_score",
+    # diagnostics — regression
+    "descent_direction_agreement",
+    "bellman_residual_reachable",
+    "local_ordinal_concordance",
+    "field_ssi_mae",
+    # deployment footprint
+    "benchmark_forward",
+    "benchmark_decoder",
+    "benchmark_end_to_end",
+    "astar_expansions_ratio",
+    "decoder_recovery_rate",
+    # reproducibility sidecar
+    "ReproducibilitySidecar",
+    "compute_calibration_decisions_hash",
+]

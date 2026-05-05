@@ -113,4 +113,5 @@ a stub manifest so the artifact contract is still honoured.
   Table 5 paradigm headline) live in `../../passage-vision/paper/` and are
   **not** reproduced here.
 - GNN and RL families are explicitly out of scope for this submission and
-  must not be introduced in these notebooks.
+  must not be introduced in these notebooks. Keep release synchronization
+  policy in public paper and release documentation, not in local files.

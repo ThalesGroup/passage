@@ -57,7 +57,7 @@ We open-source this toolkit to make terrain-routing methods easier to compare, r
 
 <table>
 <tr>
-  <td align="center"><strong>14,130</strong><br><small>Default Samples</small></td>
+  <td align="center"><strong>4.4 M</strong><br><small>Default Samples</small></td>
   <td align="center"><strong>7</strong><br><small>Resolution Levels</small></td>
   <td align="center"><strong>3</strong><br><small>A* Configurations</small></td>
   <td align="center"><strong>1</strong><br><small>Solver Backend</small></td>
@@ -226,6 +226,7 @@ Each sample consists of:
 | [`costmodel.ipynb`](notebooks/costmodel.ipynb) | Compare the configured terrain-cost variants on the same terrain |
 | [`obstacles.ipynb`](notebooks/obstacles.ipynb) | Explore superellipse obstacle generation |
 | [`solve.ipynb`](notebooks/solve.ipynb) | Solver timing and quality comparison |
+| [`astar_inference_timing.ipynb`](notebooks/astar_inference_timing.ipynb) | A\* inference time vs. resolution profiling |
 | `_dataset.ipynb` | Template — auto-executed per resolution during export |
 
 Per-resolution analysis notebooks are included with each configuration:
@@ -350,7 +351,7 @@ These equations match the runtime implementation used by the grid-backend A* exp
 | **Classical AI** | A\* benchmarking | Multi-resolution labels, timings, terrain-cost variants |
 | **Reinforcement Learning** | Terrain navigation agents | Grid observations, reward shaping with configured cost models |
 | **Graph Neural Networks** | Learned heuristics | Graph structure from elevation grids, path labels |
-| **Surrogate Models** | Fast approximation of optimal paths | Input/output pairs at scale (14 K+ samples) |
+| **Surrogate Models** | Fast approximation of optimal paths | Input/output pairs at scale (4.4 M+ samples) |
 | **Computer Vision** | Path prediction from elevation images | Tensor format, multi-channel images |
 | **Certified ML** | ARP 6983 / ED-324 compliance | Bounded ODD, deterministic generation, traceability |
 

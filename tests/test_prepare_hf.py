@@ -47,9 +47,7 @@ def _setup_minimal_export_tree(tmp_path: Path) -> tuple[Path, Path, Path]:
 
     notebooks_dir = tmp_path / "notebooks"
     notebooks_dir.mkdir()
-    (notebooks_dir / "_dataset.ipynb").write_text(
-        '{"cells": [], "metadata": {}, "nbformat": 4, "nbformat_minor": 5}'
-    )
+    (notebooks_dir / "_dataset.ipynb").write_text('{"cells": [], "metadata": {}, "nbformat": 4, "nbformat_minor": 5}')
     config_dir = tmp_path / "config"
     config_dir.mkdir(parents=True)
     (config_dir / "config.yaml").write_text(

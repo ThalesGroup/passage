@@ -1,3 +1,7 @@
+// MIT License
+//
+// Copyright (c) 2026 THALES
+
 document$.subscribe(({ body }) => {
   renderMathInElement(body, {
     delimiters: [

@@ -16,6 +16,9 @@ outputs
 tmp
 logs
 
+# Local job/scratch scripts
+scripts/*.sbatch
+
 # Test outputs
 outputs/tests/
 .coverage
@@ -23,7 +26,9 @@ htmlcov/
 .pytest_cache/
 
 # Secrets
+.env
 .env.secret
 
 # Documentation
 site
+public

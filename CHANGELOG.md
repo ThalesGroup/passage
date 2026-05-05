@@ -11,7 +11,7 @@
 
 ### Changed
 
-- Corrected public documentation to reflect the default 14,130-sample benchmark size and the current reproducibility contract.
+- Corrected public documentation to reflect the default 4,400,000-sample (≈4.4 M) benchmark size — 1,000,000 per resolution at 64–512, 250,000 at 1024, 100,000 at 2048, 50,000 at 4096 — and the current reproducibility contract.
 - Exposed deterministic-generation provenance in the export schema used for Hugging Face parquet preparation.
-- Restored `config/config.yaml` to the 14,130-sample paper benchmark and aligned preview-image defaults with the sample export settings.
+- Restored `config/config.yaml` to the 4.4 M-sample paper benchmark and aligned preview-image defaults with the sample export settings.
 - Made `passage export` stage release metadata files into the export tree, with anonymous submission copies available via `--anonymous`.

@@ -1,3 +1,7 @@
+# MIT License
+#
+# Copyright (c) 2026 THALES
+
 [build-system]
 requires = ["uv_build>=0.9.2,<0.10.0"]
 build-backend = "uv_build"
@@ -52,8 +56,18 @@ dependencies = [
   "datasets>=2.10.2",
   "zstandard>=0.25.0",
   "python-dotenv>=1.0.0",
-  "huggingface-hub>=0.20.0"
+  "hf-transfer>=0.1.9",
+  "huggingface-hub[hf-transfer,hf-xet]>=1.5.0",
+  "hf-xet>=1.3.2",
 ]
+
+[project.optional-dependencies]
+# `passage-eval` is the standalone evaluation contract bundled at
+# src/passage-eval/. It declares its own pyproject.toml and is fully
+# pip-installable on its own (`pip install ./src/passage-eval`); this extra
+# is only a convenience entry point for users who install `passage` from a
+# source checkout and also want the eval package wired in.
+eval = ["passage-eval"]
 
 [project.scripts]
 passage = "passage:main"
@@ -93,3 +107,15 @@ markers = [
 line-length = 120
 indent-width = 4
 show-fixes = true
+
+# uv workspace declaration: passage-eval lives at src/passage-eval/ as an
+# isolated, independently-installable Python package (it carries its own
+# pyproject.toml and its own src/passage_eval/ layout). Declaring it here
+# lets `uv sync` from the repo root pick up both packages, while
+# `pip install ./src/passage-eval` installs the eval contract on its own
+# without pulling in the dataset-generation dependency stack.
+[tool.uv.workspace]
+members = ["src/passage-eval"]
+
+[tool.uv.sources]
+passage-eval = { workspace = true }

@@ -47,6 +47,27 @@ uv sync --group dev
 
 ---
 
+## Preview the Documentation Site
+
+The documentation site is built with MkDocs Material. To expose it only on
+your local machine:
+
+```bash
+make docs-serve
+```
+
+Then open <http://127.0.0.1:8000/passage/>.
+
+For a GitLab Pages-equivalent local build, run:
+
+```bash
+make pages-local
+```
+
+The generated site is written to `public/`.
+
+---
+
 ## Install with `pip`
 
 If you prefer the standard Python toolchain:
@@ -123,6 +144,41 @@ passage/
 ├── mkdocs.yml                # Documentation config
 └── pyproject.toml            # Project metadata & dependencies
 ```
+
+---
+
+## Optional: install `passage-eval`
+
+The evaluation contract lives in a sibling sub-package
+[`src/passage-eval/`](https://github.com/ThalesGroup/passage/tree/main/src/passage-eval)
+that ships independently from the dataset-generation code. Install it
+when you want to compute the canonical PASSAGE primary metrics,
+statistical-discipline rules, trustworthiness diagnostics, or
+deployment-footprint utilities on a learned planner. **You do not need
+it to generate the dataset** — only to score a model on it.
+
+```bash
+# from the cloned repo (recommended; ships with the data we just generated)
+pip install -e ./src/passage-eval               # core only
+pip install -e ./src/passage-eval[notebook]     # + walk-through notebook deps
+pip install -e ./src/passage-eval[torch]        # + GPU throughput utilities
+pip install -e ./src/passage-eval[dev]          # + pytest, ruff
+```
+
+Sanity check:
+
+```bash
+python -c "import passage_eval; print(passage_eval.__version__)"
+# -> 0.2.0
+pytest src/passage-eval/tests -q
+# -> 49 passed
+```
+
+The full usage walk-through with worked examples for every public
+symbol — including paired-bootstrap CI, three-seed aggregation, and the
+Pareto-dominant / Trade-off / Indistinguishable decision rule used in the
+PASSAGE paper — is at
+**[Evaluation (`passage-eval`)](evaluation.md)**.
 
 ---
 

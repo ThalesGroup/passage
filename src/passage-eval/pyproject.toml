@@ -1,0 +1,49 @@
+# MIT License
+#
+# Copyright (c) 2026 THALES
+
+[build-system]
+requires = ["uv_build>=0.9.2,<0.10.0"]
+build-backend = "uv_build"
+
+[project]
+name = "passage-eval"
+version = "0.2.0"
+description = "PASSAGE evaluation contract: canonical metrics, statistical discipline (paired bootstrap, Holm--Bonferroni, three-seed aggregation), reproducibility sidecar, and deployment-footprint utilities for the PASSAGE benchmark."
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+  {name = "PASSAGE authors"}
+]
+requires-python = ">=3.11"
+dependencies = [
+  "numpy>=1.20.0",
+  "scipy>=1.10.0",
+  "pandas>=2.0.0",
+]
+
+[project.optional-dependencies]
+torch = [
+  "torch>=2.1.0",
+]
+notebook = [
+  "ipykernel>=7.0.0",
+  "matplotlib>=3.7.0",
+  "tqdm>=4.60.0",
+]
+dev = [
+  "pytest>=8.0.0",
+  "ruff>=0.5.0",
+]
+
+[project.urls]
+Repository = "https://github.com/ThalesGroup/passage"
+Dataset = "https://huggingface.co/datasets/thalesgroup/passage"
+
+[tool.ruff]
+line-length = 120
+indent-width = 4
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = ["-q"]
