@@ -1,0 +1,233 @@
+# yaml-language-server: $schema=https://squidfunk.github.io/mkdocs-material/schema.json
+
+site_name: "PASSAGE"
+site_description: "Path Solving Dataset & Generator — Real-world elevation-based pathfinding benchmarks for research"
+site_author: "Geoffrey Delhomme"
+site_url: "https://thalesgroup.github.io/passage/"
+repo_url: "https://github.com/ThalesGroup/passage"
+repo_name: "ThalesGroup/passage"
+copyright: "Copyright &copy; 2024–2026 Thales Group — MIT License"
+
+# ---------------------------------------------------------------------------
+# Theme
+# ---------------------------------------------------------------------------
+theme:
+  name: material
+  custom_dir: docs/overrides
+  language: en
+  logo: assets/favicon.svg
+  # helicopter emoji is used as favicon; file created in docs/assets/favicon.svg
+  favicon: assets/favicon.svg
+
+  icon:
+    repo: fontawesome/brands/github
+    admonition:
+      note: fontawesome/solid/note-sticky
+      abstract: fontawesome/solid/book
+      info: fontawesome/solid/circle-info
+      tip: fontawesome/solid/bullhorn
+      success: fontawesome/solid/check
+      question: fontawesome/solid/circle-question
+      warning: fontawesome/solid/triangle-exclamation
+      failure: fontawesome/solid/bomb
+      danger: fontawesome/solid/skull
+      bug: fontawesome/solid/robot
+      example: fontawesome/solid/flask
+      quote: fontawesome/solid/quote-left
+
+  palette:
+    # Light mode — Alpine blue + warm amber accent
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: amber
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+
+    # Dark mode — Deep mountain blue + amber accent
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: amber
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+  font:
+    text: Inter
+    code: JetBrains Mono
+
+  features:
+    - announce.dismiss
+    - content.code.copy
+    - content.code.annotate
+    - content.tabs.link
+    - content.tooltips
+    - header.autohide
+    - navigation.footer
+    - navigation.indexes
+    - navigation.instant
+    - navigation.instant.prefetch
+    - navigation.sections
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.top
+    - navigation.tracking
+    - search.highlight
+    - search.share
+    - search.suggest
+    - toc.follow
+
+# ---------------------------------------------------------------------------
+# Plugins
+# ---------------------------------------------------------------------------
+plugins:
+  - include-markdown
+  - search:
+      separator: '[\s\-\.]+'
+  - mkdocstrings:
+      default_handler: python
+      handlers:
+        python:
+          # `src/` for the dataset-generation package (`passage`); the eval
+          # sub-package lives under `src/passage-eval/src/` and is added so
+          # `::: passage_eval` blocks in api/evaluation.md resolve.
+          paths: [src, src/passage-eval/src]
+          options:
+            show_source: true
+            show_root_heading: true
+            show_root_full_path: false
+            show_category_heading: true
+            show_symbol_type_heading: true
+            show_symbol_type_toc: true
+            members_order: source
+            merge_init_into_class: true
+            docstring_style: google
+            docstring_section_style: spacy
+            show_if_no_docstring: false
+            annotations_path: brief
+            signature_crossrefs: true
+  - glightbox:
+      touchNavigation: true
+      loop: false
+      effect: zoom
+      slide_effect: slide
+      width: "100%"
+      height: auto
+      zoomable: true
+      draggable: true
+      auto_caption: false
+      caption_position: bottom
+  - minify:
+      minify_html: true
+  - tags
+
+# ---------------------------------------------------------------------------
+# Markdown extensions
+# ---------------------------------------------------------------------------
+markdown_extensions:
+  # Python-Markdown
+  - abbr
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+      toc_depth: 3
+
+  # PyMdown Extensions
+  - pymdownx.arithmatex:
+      generic: true
+  - pymdownx.betterem
+  - pymdownx.caret
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.keys
+  - pymdownx.mark
+  - pymdownx.smartsymbols
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+      combine_header_slug: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.tilde
+
+# ---------------------------------------------------------------------------
+# Extra JavaScript / CSS
+# ---------------------------------------------------------------------------
+extra_css:
+  - https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap
+  - assets/extra.css
+
+extra_javascript:
+  - javascripts/katex.js
+  - https://unpkg.com/katex@0.16.11/dist/katex.min.js
+  - https://unpkg.com/katex@0.16.11/dist/contrib/auto-render.min.js
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/ThalesGroup/passage
+      name: GitHub
+    - icon: simple/huggingface
+      link: https://huggingface.co/datasets/thalesgroup/passage
+      name: Hugging Face Dataset
+  status:
+    new: Recently added
+    deprecated: Deprecated
+  generator: false
+  analytics:
+    provider: google
+    property: ""
+
+# ---------------------------------------------------------------------------
+# Navigation
+# ---------------------------------------------------------------------------
+nav:
+  - "Home": index.md
+  - "Dataset Generation":
+      - "Overview": guide/index.md
+      - "Installation": guide/installation.md
+      - "Workflow":
+          - "#1 | Download Tiles": guide/download.md
+          - "#2 | Calibrate Elevations": guide/calibrate.md
+          - "#3 | Generate Dataset": guide/generate.md
+          - "#4-6 | Release Pipeline": guide/export.md
+      - "Configuration": guide/configuration.md
+      - "Generation Process":
+          - "Overview": generation/index.md
+          - "Sampling Procedure": generation/sampling.md
+          - "Cost Models": generation/cost-models.md
+          - "Obstacle Generation": generation/obstacles.md
+          - "Solvers & Heuristics": generation/solvers.md
+          - "Interactive Notebooks": generation/notebooks.md
+  - "Benchmark":
+      - "Overview": benchmark/index.md
+      - "Evaluation Protocol": benchmark/protocol.md
+      - "passage-eval Package": benchmark/passage-eval.md
+      - "End-to-End Walkthrough": benchmark/walkthrough.md
+      - "API Reference": benchmark/api.md
+  - "Code Architecture":
+      - "Overview": architecture/index.md
+      - "Module Reference": architecture/modules.md
+      - "Data Format": architecture/data-format.md
+      - "Testing Strategy": architecture/testing.md
+  - "API":
+      - "Overview": api/index.md
+  - "Policies": policies/index.md

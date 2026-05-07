@@ -1,0 +1,41 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Ruff
+.ruff_cache/
+
+outputs
+tmp
+logs
+
+# Local job/scratch scripts
+scripts/*.sbatch
+
+# Test outputs
+outputs/tests/
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Secrets
+.env
+.env.secret
+
+# Agent-local instructions and generated agent state
+.claude/
+**/AGENTS.md
+**/CLAUDE.md
+.cursorrules
+.cursor/
+
+# Documentation
+site
+public

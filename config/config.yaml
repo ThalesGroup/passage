@@ -1,0 +1,240 @@
+# MIT License
+#
+# Copyright (c) 2026 THALES
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+
+resolutions:
+  - 64
+  - 128
+  - 256
+  - 512
+  - 1024
+  - 2048
+  - 4096
+
+export:
+  default: 1024x1024_samples
+  sample:
+    num_samples: 64
+  compression_level: 12
+  chunk_size:
+    64: 20000 # 107820
+    128: 10000 # 39079
+    256: 2500 # 12133
+    512: 1500 # 4425
+    1024: 250 # 909
+    2048: 75 # 280
+    4096: 25 # 83
+
+# Number of samples to generate. Can be either a single integer (applies to all resolutions) or a mapping per-resolution.
+num_samples:
+  64: 1000000
+  128: 1000000
+  256: 1000000
+  512: 1000000
+  1024: 250000
+  2048: 100000
+  4096: 50000
+
+# Dataset split configuration
+splits:
+  enabled: true
+  ratios:
+    train: 0.9
+    calibration: 0.02
+    validation: 0.04
+    test: 0.04
+  seed: 42
+
+# Generation reproducibility configuration
+# - `seed` controls deterministic per-sample sampling for tile selection,
+#   crop placement, marker placement, and obstacle synthesis.
+# - Split assignment remains controlled independently by `splits.seed`.
+generation:
+  seed: 42
+  preview_images:
+    enabled: true
+    resolutions: [64, 128, 256, 512, 1024, 2048, 4096]
+    num_samples_per_split: 64
+
+# Geographic hold-out region configuration
+# The hold-out mask defines geographic regions reserved exclusively for testing.
+# - For 'test' split: samples are drawn ONLY from tiles inside the hold-out region.
+# - For other splits (train, validation, calibration): tiles inside the hold-out region are EXCLUDED.
+# This ensures geographic separation between training and test data.
+hold_out:
+  # Enable geographic hold-out filtering (default: true if mask exists)
+  enabled: true
+  # Path to the hold-out mask PNG file (181x361 pixels, 1 degree per pixel)
+  # Row 0 = lat +90, Row 180 = lat -90; Col 0 = lon -180, Col 360 = lon +180
+  # Non-zero RGB values indicate hold-out (test-only) regions.
+  mask_path: assets/hold_out_mask.png
+
+solvers:
+  - name: astar_elevation
+    # Use a name prefix to select backend:
+    #   networkx:   NetworkX graph solvers (supports all cost models)
+    #   pathfinding: pathfinding package solvers (grid-based, no directional cost models)
+    #   grid:       internal NumPy grid solvers (grid_astar/grid_dijkstra)
+    backend: grid
+    # Diagonal movement - controls graph connectivity:
+    #   always  - 8-connectivity (cardinal 30m + diagonal 42.43m) [DEFAULT]
+    #   never   - 4-connectivity (cardinal only: N/S/E/W, 30m each)
+    diagonal_movement: always
+    # Maximum retries for marker sampling before trying new elevation
+    max_marker_retries: 10
+    # Solver name:
+    #   networkx: astar, astar_bi, dijkstra, dijkstra_bi, bellman_ford, unweighted
+    #   pathfinding: astar, dijkstra, best_first
+    #   grid: astar, dijkstra (mapped to grid_astar/grid_dijkstra)
+    solver: astar
+    # Edge cost model:
+    #   elevation          - distance * (1 + weight * normalized_elevation) [DEFAULT]
+    #   absolute_elevation - distance * (1 + weight * normalized_abs_elevation)
+    #   distance           - flat distance only (ignore elevation)
+    #   slope_uphill       - penalize uphill elevation changes (distance-scaled)
+    #   energy             - distance + weight * max(0, elevation_gain)
+    cost_model: elevation
+    # Weight multiplier for elevation cost (higher = prefer flat paths)
+    # Set very high to strongly penalize high-elevation cells so the path follows valleys more aggressively.
+    # Note: this multiplies the normalized elevation term, so large values (100+) heavily favor low-elevation routes.
+    weight: 62.4
+    # Heuristic function for A* search (used by astar/astar_bi):
+    #   euclidean  - Euclidean distance in meters (best for 8-connectivity) [DEFAULT]
+    #   manhattan  - Manhattan distance in meters (best for 4-connectivity)
+    #   chebyshev  - Chebyshev distance in meters (alternative for 8-connectivity)
+    heuristic: euclidean
+  - name: astar_energy
+    # Use a name prefix to select backend:
+    #   networkx:   NetworkX graph solvers (supports all cost models)
+    #   pathfinding: pathfinding package solvers (grid-based, no directional cost models)
+    #   grid:       internal NumPy grid solvers (grid_astar/grid_dijkstra)
+    backend: grid
+    # Diagonal movement - controls graph connectivity:
+    #   always  - 8-connectivity (cardinal 30m + diagonal 42.43m) [DEFAULT]
+    #   never   - 4-connectivity (cardinal only: N/S/E/W, 30m each)
+    diagonal_movement: always
+    # Maximum retries for marker sampling before trying new elevation
+    max_marker_retries: 10
+    # Solver name:
+    #   networkx: astar, astar_bi, dijkstra, dijkstra_bi, bellman_ford, unweighted
+    #   pathfinding: astar, dijkstra, best_first
+    #   grid: astar, dijkstra (mapped to grid_astar/grid_dijkstra)
+    solver: astar
+    # Edge cost model:
+    #   elevation          - distance * (1 + weight * normalized_elevation) [DEFAULT]
+    #   absolute_elevation - distance * (1 + weight * normalized_abs_elevation)
+    #   distance           - flat distance only (ignore elevation)
+    #   slope_uphill       - penalize uphill elevation changes (distance-scaled)
+    #   energy             - distance + weight * max(0, elevation_gain)
+    cost_model: energy
+    # Weight multiplier for elevation cost (higher = prefer flat paths)
+    # Set very high to strongly penalize high-elevation cells so the path follows valleys more aggressively.
+    # Note: this multiplies the normalized elevation term, so large values (100+) heavily favor low-elevation routes.
+    weight: 1125.3
+    # Heuristic function for A* search (used by astar/astar_bi):
+    #   euclidean  - Euclidean distance in meters (best for 8-connectivity) [DEFAULT]
+    #   manhattan  - Manhattan distance in meters (best for 4-connectivity)
+    #   chebyshev  - Chebyshev distance in meters (alternative for 8-connectivity)
+    heuristic: euclidean
+  - name: astar_slope
+    # Use a name prefix to select backend:
+    #   networkx:   NetworkX graph solvers (supports all cost models)
+    #   pathfinding: pathfinding package solvers (grid-based, no directional cost models)
+    #   grid:       internal NumPy grid solvers (grid_astar/grid_dijkstra)
+    backend: grid
+    # Diagonal movement - controls graph connectivity:
+    #   always  - 8-connectivity (cardinal 30m + diagonal 42.43m) [DEFAULT]
+    #   never   - 4-connectivity (cardinal only: N/S/E/W, 30m each)
+    diagonal_movement: always
+    # Maximum retries for marker sampling before trying new elevation
+    max_marker_retries: 10
+    # Solver name:
+    #   networkx: astar, astar_bi, dijkstra, dijkstra_bi, bellman_ford, unweighted
+    #   pathfinding: astar, dijkstra, best_first
+    #   grid: astar, dijkstra (mapped to grid_astar/grid_dijkstra)
+    solver: astar
+    # Edge cost model:
+    #   elevation          - distance * (1 + weight * normalized_elevation) [DEFAULT]
+    #   absolute_elevation - distance * (1 + weight * normalized_abs_elevation)
+    #   distance           - flat distance only (ignore elevation)
+    #   slope_uphill       - penalize uphill elevation changes (distance-scaled)
+    #   energy             - distance + weight * max(0, elevation_gain)
+    cost_model: slope_uphill
+    # Weight multiplier for elevation cost (higher = prefer flat paths)
+    # Set very high to strongly penalize high-elevation cells so the path follows valleys more aggressively.
+    # Note: this multiplies the normalized elevation term, so large values (100+) heavily favor low-elevation routes.
+    weight: 8886.2
+    # Heuristic function for A* search (used by astar/astar_bi):
+    #   euclidean  - Euclidean distance in meters (best for 8-connectivity) [DEFAULT]
+    #   manhattan  - Manhattan distance in meters (best for 4-connectivity)
+    #   chebyshev  - Chebyshev distance in meters (alternative for 8-connectivity)
+    heuristic: euclidean
+
+# Obstacle generation configuration (used by obstacles notebook)
+# Overview:
+#  - `ratio_max` controls the maximum fraction of the image that can be occupied by obstacles.
+#  - `shape.size.min_ratio` / `shape.size.max_ratio` describe the minimum and maximum *relative* linear size
+#    (width/height) for generated superellipses, expressed as fraction of the image width/height.
+#    Example: max_ratio: 0.5 means a superellipse may be up to half the image width/height.
+#  - `generation` contains procedural tuning parameters that affect how many attempts are made
+#    to reach a target obstacle coverage and how many candidate shapes are considered per attempt.
+#  - `obstacle_penalty` is added to elevation values for cells marked as obstacles when running
+#    pathfinding; set very large to make paths avoid obstacle cells.
+obstacles:
+  # Enable obstacle generation in dataset samples
+  enabled: true
+
+  # Maximum target ratio of obstacles in the image (0.0 - 1.0)
+  ratio_max: 0.30
+
+  # Shape-related parameters
+  shape:
+    size:
+      # Superellipse size ratios relative to resolution (simplified defaults)
+      # Example: size_max_ratio: 0.5 means a superellipse may be up to half the image width/height.
+      min_ratio: 0.02
+      max_ratio: 0.25
+    n:
+      # Superellipse exponent 'n' controls shape (1..100)
+      # Defaults chosen to allow both round and rectangular obstacles.
+      min: 1.0
+      max: 80.0
+      # Default distribution to sample superellipse exponent 'n' across [min, max].
+      # Supported types: 'log_uniform' (default), 'uniform', 'beta', 'exponential'
+      # Example exponential: distribution: { type: exponential, lambda: 2.0 }
+      distribution:
+        # type: exponential
+        # lambda: 2.0
+        type: log_uniform
+
+  # Generator tuning parameters (procedural, not shape-specific)
+  generation:
+    # Number of independent attempts to produce a mask (each attempt draws a new target_ratio)
+    max_attempts: 50
+    # Number of candidate superellipses to try when building a mask
+    candidates_per_mask: 200
+
+  # When true, obstacle cells are treated as non-walkable during pathfinding.
+  # Set to false to recover the legacy "very expensive but still crossable" behavior.
+  impassable: true
+
+  # Penalty added to elevation of obstacle cells during pathfinding when impassable=false.
+  obstacle_penalty: 1e8
