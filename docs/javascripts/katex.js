@@ -1,0 +1,15 @@
+// MIT License
+//
+// Copyright (c) 2026 THALES
+
+document$.subscribe(({ body }) => {
+  renderMathInElement(body, {
+    delimiters: [
+      { left: "$$",  right: "$$",  display: true  },
+      { left: "$",   right: "$",   display: false },
+      { left: "\\(", right: "\\)", display: false },
+      { left: "\\[", right: "\\]", display: true  }
+    ],
+    throwOnError: false
+  })
+})

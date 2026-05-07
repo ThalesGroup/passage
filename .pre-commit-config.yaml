@@ -1,0 +1,72 @@
+# MIT License
+#
+# Copyright (c) 2026 THALES
+
+default_install_hook_types:
+  - pre-commit
+
+repos:
+  # ─────────────────────────────────────────────────────────────────────────────
+  # pre-commit-hooks: A collection of general-purpose hooks for file hygiene.
+  # Docs: https://github.com/pre-commit/pre-commit-hooks
+  # ─────────────────────────────────────────────────────────────────────────────
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      # Strips trailing whitespace from all lines in staged files.
+      # Markdown files are excluded to preserve intentional trailing spaces (e.g., line breaks).
+      # DrawIO files are excluded as they are binary XML and may contain whitespace-sensitive data.
+      - id: trailing-whitespace
+        exclude: .*\.md|.*\.drawio
+
+      # Ensures that every file ends with exactly one newline character.
+      # This prevents "No newline at end of file" warnings and keeps diffs clean.
+      # .gitattributes is excluded as it may have special formatting requirements.
+      - id: end-of-file-fixer
+        exclude: .gitattributes
+
+      # Validates YAML syntax to catch common errors like incorrect indentation,
+      # duplicate keys, or invalid characters before they cause runtime issues.
+      - id: check-yaml
+        exclude: mkdocs.yml
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # uv-pre-commit: Ensures uv.lock stays synchronized with pyproject.toml.
+  # Docs: https://github.com/astral-sh/uv-pre-commit
+  # ─────────────────────────────────────────────────────────────────────────────
+  - repo: https://github.com/astral-sh/uv-pre-commit
+    rev: 0.9.24
+    hooks:
+      # Automatically regenerates uv.lock if pyproject.toml dependencies have changed.
+      # Prevents commits with outdated lock files that could cause dependency mismatches.
+      - id: uv-lock
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # ruff-pre-commit: Fast Python linter and formatter written in Rust.
+  # Docs: https://github.com/astral-sh/ruff-pre-commit
+  # ─────────────────────────────────────────────────────────────────────────────
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.14.11
+    hooks:
+      # Runs Ruff linter to detect code quality issues, style violations, and potential bugs.
+      # The --fix flag automatically corrects safe fixes (e.g., unused imports, sorting).
+      # Configuration is loaded from pyproject.toml for project-specific rules.
+      - id: ruff-check
+        args: [--fix, --config, pyproject.toml]
+
+      # Applies consistent code formatting following Ruff's opinionated style (Black-compatible).
+      # Handles line length, indentation, string quotes, and other formatting concerns.
+      - id: ruff-format
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # toml-sort: Sorts TOML file keys alphabetically for consistency and easier diffing.
+  # Docs: https://github.com/pappasam/toml-sort
+  # ─────────────────────────────────────────────────────────────────────────────
+  - repo: https://github.com/pappasam/toml-sort
+    rev: v0.24.2
+    hooks:
+      # Sorts all keys in TOML files alphabetically within their respective sections.
+      # The -i flag edits files in-place rather than outputting to stdout.
+      # Helps maintain consistent ordering in pyproject.toml and other config files.
+      - id: toml-sort
+        args: ["-i"]

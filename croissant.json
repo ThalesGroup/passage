@@ -1,0 +1,576 @@
+{
+  "@context": {
+    "@language": "en",
+    "@vocab": "https://schema.org/",
+    "citeAs": "cr:citeAs",
+    "column": "cr:column",
+    "conformsTo": "dct:conformsTo",
+    "containedIn": "cr:containedIn",
+    "cr": "http://mlcommons.org/croissant/",
+    "prov": "http://www.w3.org/ns/prov#",
+    "rai": "http://mlcommons.org/croissant/RAI/",
+    "data": {
+      "@id": "cr:data",
+      "@type": "@json"
+    },
+    "dataType": {
+      "@id": "cr:dataType",
+      "@type": "@vocab"
+    },
+    "dct": "http://purl.org/dc/terms/",
+    "equivalentProperty": "cr:equivalentProperty",
+    "examples": {
+      "@id": "cr:examples",
+      "@type": "@json"
+    },
+    "extract": "cr:extract",
+    "field": "cr:field",
+    "fileProperty": "cr:fileProperty",
+    "fileObject": "cr:fileObject",
+    "fileSet": "cr:fileSet",
+    "format": "cr:format",
+    "includes": "cr:includes",
+    "isLiveDataset": "cr:isLiveDataset",
+    "jsonPath": "cr:jsonPath",
+    "key": "cr:key",
+    "md5": "cr:md5",
+    "parentField": "cr:parentField",
+    "path": "cr:path",
+    "recordSet": "cr:recordSet",
+    "references": "cr:references",
+    "regex": "cr:regex",
+    "repeated": "cr:repeated",
+    "replace": "cr:replace",
+    "samplingRate": "cr:samplingRate",
+    "sc": "https://schema.org/",
+    "separator": "cr:separator",
+    "source": "cr:source",
+    "subField": "cr:subField",
+    "transform": "cr:transform"
+  },
+  "@id": "https://huggingface.co/datasets/thalesgroup/passage",
+  "@type": "sc:Dataset",
+  "name": "PASSAGE",
+  "description": "PASSAGE is a multi-resolution terrain-routing benchmark generated from JAXA ALOS AW3D30 elevation data. The default benchmark exports 4,400,000 samples (1,000,000 per resolution at 64x64, 128x128, 256x256, 512x512; 250,000 at 1024x1024; 100,000 at 2048x2048; 50,000 at 4096x4096), with deterministic 90/2/4/4 train/calibration/validation/test split assignment and deterministic per-sample seeding for tile selection, crop placement, marker placement, and obstacle synthesis.",
+  "url": "https://huggingface.co/datasets/thalesgroup/passage",
+  "version": "0.1.0",
+  "license": "https://github.com/ThalesGroup/passage/blob/main/DATASET_LICENSE.md",
+  "keywords": [
+    "pathfinding",
+    "terrain routing",
+    "digital elevation model",
+    "benchmark",
+    "remote sensing"
+  ],
+  "datePublished": "2026-03-30",
+  "creator": [
+    {
+      "@type": "sc:Person",
+      "name": "Geoffrey Delhomme"
+    },
+    {
+      "@type": "sc:Person",
+      "name": "Francois Trap"
+    },
+    {
+      "@type": "sc:Person",
+      "name": "Fateh Kaakai"
+    }
+  ],
+  "conformsTo": "http://mlcommons.org/croissant/1.1",
+  "citeAs": "@inproceedings{passage2026,\n  title     = {PASSAGE: A Real-Terrain Multi-Resolution Benchmark for Constrained Path Planning},\n  author    = {Delhomme, Geoffrey and Trap, Francois and Kaakai, Fateh},\n  booktitle = {Advances in Neural Information Processing Systems},\n  year      = {2026},\n  note      = {Evaluations \\& Datasets Track (submission)}\n}",
+  "distribution": [
+    {
+      "@id": "hf-passage-tree",
+      "@type": "cr:FileObject",
+      "name": "Hugging Face PASSAGE dataset repository tree",
+      "description": "The Hugging Face git repository hosting the PASSAGE parquet shards.",
+      "contentUrl": "https://huggingface.co/datasets/thalesgroup/passage",
+      "encodingFormat": "git+https",
+      "sha256": "https://github.com/mlcommons/croissant/issues/80"
+    },
+    {
+      "@id": "passage-full-parquet",
+      "@type": "cr:FileSet",
+      "name": "PASSAGE full parquet shards",
+      "description": "All full PASSAGE parquet configs from 64x64 through 4096x4096.",
+      "containedIn": {
+        "@id": "hf-passage-tree"
+      },
+      "encodingFormat": "application/x-parquet",
+      "includes": [
+        "64x64/*/*.parquet",
+        "128x128/*/*.parquet",
+        "256x256/*/*.parquet",
+        "512x512/*/*.parquet",
+        "1024x1024/*/*.parquet",
+        "2048x2048/*/*.parquet",
+        "4096x4096/*/*.parquet"
+      ]
+    },
+    {
+      "@id": "passage-sample-parquet",
+      "@type": "cr:FileSet",
+      "name": "PASSAGE sample parquet shards",
+      "description": "Sample PASSAGE parquet configs with per-solver preview images.",
+      "containedIn": {
+        "@id": "hf-passage-tree"
+      },
+      "encodingFormat": "application/x-parquet",
+      "includes": [
+        "64x64_samples/*/*.parquet",
+        "128x128_samples/*/*.parquet",
+        "256x256_samples/*/*.parquet",
+        "512x512_samples/*/*.parquet",
+        "1024x1024_samples/*/*.parquet",
+        "2048x2048_samples/*/*.parquet",
+        "4096x4096_samples/*/*.parquet"
+      ]
+    }
+  ],
+  "recordSet": [
+    {
+      "@id": "passage-full-records",
+      "@type": "cr:RecordSet",
+      "name": "PASSAGE full parquet records",
+      "description": "Rows from the non-sample PASSAGE parquet exports.",
+      "field": [
+        {
+          "@id": "passage-full/id",
+          "@type": "cr:Field",
+          "name": "id",
+          "description": "Zero-padded sample identifier.",
+          "dataType": "sc:Text",
+          "source": {
+            "fileSet": {
+              "@id": "passage-full-parquet"
+            },
+            "extract": {
+              "column": "id"
+            }
+          }
+        },
+        {
+          "@id": "passage-full/tensor",
+          "@type": "cr:Field",
+          "name": "tensor",
+          "description": "Compressed binary tensor storing normalized elevation, markers, and obstacles.",
+          "dataType": "sc:Text",
+          "source": {
+            "fileSet": {
+              "@id": "passage-full-parquet"
+            },
+            "extract": {
+              "column": "tensor"
+            }
+          }
+        },
+        {
+          "@id": "passage-full/path-astar-elevation-free",
+          "@type": "cr:Field",
+          "name": "path_astar_elevation_free",
+          "description": "Pixel path for the free-terrain astar_elevation annotation.",
+          "dataType": "sc:Text",
+          "source": {
+            "fileSet": {
+              "@id": "passage-full-parquet"
+            },
+            "extract": {
+              "column": "path_astar_elevation_free"
+            }
+          }
+        },
+        {
+          "@id": "passage-full/path-astar-elevation-obstacles",
+          "@type": "cr:Field",
+          "name": "path_astar_elevation_obstacles",
+          "description": "Pixel path for the obstacle-aware astar_elevation annotation.",
+          "dataType": "sc:Text",
+          "source": {
+            "fileSet": {
+              "@id": "passage-full-parquet"
+            },
+            "extract": {
+              "column": "path_astar_elevation_obstacles"
+            }
+          }
+        },
+        {
+          "@id": "passage-full/path-astar-energy-free",
+          "@type": "cr:Field",
+          "name": "path_astar_energy_free",
+          "description": "Pixel path for the free-terrain astar_energy annotation.",
+          "dataType": "sc:Text",
+          "source": {
+            "fileSet": {
+              "@id": "passage-full-parquet"
+            },
+            "extract": {
+              "column": "path_astar_energy_free"
+            }
+          }
+        },
+        {
+          "@id": "passage-full/path-astar-energy-obstacles",
+          "@type": "cr:Field",
+          "name": "path_astar_energy_obstacles",
+          "description": "Pixel path for the obstacle-aware astar_energy annotation.",
+          "dataType": "sc:Text",
+          "source": {
+            "fileSet": {
+              "@id": "passage-full-parquet"
+            },
+            "extract": {
+              "column": "path_astar_energy_obstacles"
+            }
+          }
+        },
+        {
+          "@id": "passage-full/path-astar-slope-free",
+          "@type": "cr:Field",
+          "name": "path_astar_slope_free",
+          "description": "Pixel path for the free-terrain astar_slope annotation.",
+          "dataType": "sc:Text",
+          "source": {
+            "fileSet": {
+              "@id": "passage-full-parquet"
+            },
+            "extract": {
+              "column": "path_astar_slope_free"
+            }
+          }
+        },
+        {
+          "@id": "passage-full/path-astar-slope-obstacles",
+          "@type": "cr:Field",
+          "name": "path_astar_slope_obstacles",
+          "description": "Pixel path for the obstacle-aware astar_slope annotation.",
+          "dataType": "sc:Text",
+          "source": {
+            "fileSet": {
+              "@id": "passage-full-parquet"
+            },
+            "extract": {
+              "column": "path_astar_slope_obstacles"
+            }
+          }
+        },
+        {
+          "@id": "passage-full/metadata",
+          "@type": "cr:Field",
+          "name": "metadata",
+          "description": "Structured sample metadata including split, resolution, crop geometry, solver settings, timing, and deterministic provenance.",
+          "dataType": "sc:Text",
+          "source": {
+            "fileSet": {
+              "@id": "passage-full-parquet"
+            },
+            "extract": {
+              "column": "metadata"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "@id": "passage-sample-records",
+      "@type": "cr:RecordSet",
+      "name": "PASSAGE sample parquet records",
+      "description": "Rows from the PASSAGE sample parquet exports with preview images.",
+      "field": [
+        {
+          "@id": "passage-sample/id",
+          "@type": "cr:Field",
+          "name": "id",
+          "description": "Zero-padded sample identifier.",
+          "dataType": "sc:Text",
+          "source": {
+            "fileSet": {
+              "@id": "passage-sample-parquet"
+            },
+            "extract": {
+              "column": "id"
+            }
+          }
+        },
+        {
+          "@id": "passage-sample/image-astar-elevation",
+          "@type": "cr:Field",
+          "name": "image_astar_elevation",
+          "description": "Preview image rendered for the astar_elevation solver.",
+          "dataType": "sc:ImageObject",
+          "source": {
+            "fileSet": {
+              "@id": "passage-sample-parquet"
+            },
+            "extract": {
+              "column": "image_astar_elevation"
+            }
+          }
+        },
+        {
+          "@id": "passage-sample/image-astar-energy",
+          "@type": "cr:Field",
+          "name": "image_astar_energy",
+          "description": "Preview image rendered for the astar_energy solver.",
+          "dataType": "sc:ImageObject",
+          "source": {
+            "fileSet": {
+              "@id": "passage-sample-parquet"
+            },
+            "extract": {
+              "column": "image_astar_energy"
+            }
+          }
+        },
+        {
+          "@id": "passage-sample/image-astar-slope",
+          "@type": "cr:Field",
+          "name": "image_astar_slope",
+          "description": "Preview image rendered for the astar_slope solver.",
+          "dataType": "sc:ImageObject",
+          "source": {
+            "fileSet": {
+              "@id": "passage-sample-parquet"
+            },
+            "extract": {
+              "column": "image_astar_slope"
+            }
+          }
+        },
+        {
+          "@id": "passage-sample/tensor",
+          "@type": "cr:Field",
+          "name": "tensor",
+          "description": "Compressed binary tensor storing normalized elevation, markers, and obstacles.",
+          "dataType": "sc:Text",
+          "source": {
+            "fileSet": {
+              "@id": "passage-sample-parquet"
+            },
+            "extract": {
+              "column": "tensor"
+            }
+          }
+        },
+        {
+          "@id": "passage-sample/path-astar-elevation-free",
+          "@type": "cr:Field",
+          "name": "path_astar_elevation_free",
+          "description": "Pixel path for the free-terrain astar_elevation annotation.",
+          "dataType": "sc:Text",
+          "source": {
+            "fileSet": {
+              "@id": "passage-sample-parquet"
+            },
+            "extract": {
+              "column": "path_astar_elevation_free"
+            }
+          }
+        },
+        {
+          "@id": "passage-sample/path-astar-elevation-obstacles",
+          "@type": "cr:Field",
+          "name": "path_astar_elevation_obstacles",
+          "description": "Pixel path for the obstacle-aware astar_elevation annotation.",
+          "dataType": "sc:Text",
+          "source": {
+            "fileSet": {
+              "@id": "passage-sample-parquet"
+            },
+            "extract": {
+              "column": "path_astar_elevation_obstacles"
+            }
+          }
+        },
+        {
+          "@id": "passage-sample/path-astar-energy-free",
+          "@type": "cr:Field",
+          "name": "path_astar_energy_free",
+          "description": "Pixel path for the free-terrain astar_energy annotation.",
+          "dataType": "sc:Text",
+          "source": {
+            "fileSet": {
+              "@id": "passage-sample-parquet"
+            },
+            "extract": {
+              "column": "path_astar_energy_free"
+            }
+          }
+        },
+        {
+          "@id": "passage-sample/path-astar-energy-obstacles",
+          "@type": "cr:Field",
+          "name": "path_astar_energy_obstacles",
+          "description": "Pixel path for the obstacle-aware astar_energy annotation.",
+          "dataType": "sc:Text",
+          "source": {
+            "fileSet": {
+              "@id": "passage-sample-parquet"
+            },
+            "extract": {
+              "column": "path_astar_energy_obstacles"
+            }
+          }
+        },
+        {
+          "@id": "passage-sample/path-astar-slope-free",
+          "@type": "cr:Field",
+          "name": "path_astar_slope_free",
+          "description": "Pixel path for the free-terrain astar_slope annotation.",
+          "dataType": "sc:Text",
+          "source": {
+            "fileSet": {
+              "@id": "passage-sample-parquet"
+            },
+            "extract": {
+              "column": "path_astar_slope_free"
+            }
+          }
+        },
+        {
+          "@id": "passage-sample/path-astar-slope-obstacles",
+          "@type": "cr:Field",
+          "name": "path_astar_slope_obstacles",
+          "description": "Pixel path for the obstacle-aware astar_slope annotation.",
+          "dataType": "sc:Text",
+          "source": {
+            "fileSet": {
+              "@id": "passage-sample-parquet"
+            },
+            "extract": {
+              "column": "path_astar_slope_obstacles"
+            }
+          }
+        },
+        {
+          "@id": "passage-sample/metadata",
+          "@type": "cr:Field",
+          "name": "metadata",
+          "description": "Structured sample metadata including split, resolution, crop geometry, solver settings, timing, and deterministic provenance.",
+          "dataType": "sc:Text",
+          "source": {
+            "fileSet": {
+              "@id": "passage-sample-parquet"
+            },
+            "extract": {
+              "column": "metadata"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "rai:dataCollection": "Observational JAXA ALOS AW3D30 digital surface model tiles combined with deterministic procedural obstacle synthesis and solver-generated path annotations.",
+  "rai:dataCollectionType": [
+    "observational",
+    "synthetic",
+    "computational annotation"
+  ],
+  "rai:dataCollectionRawData": "Raw source tiles are downloaded from JAXA ALOS AW3D30 5x5 degree archives; PASSAGE generation operates on 1x1 degree 3600x3600 sub-tiles at approximately 30 meters per pixel.",
+  "rai:dataPreprocessingProtocol": [
+    "Calibrate global elevation minima and maxima over the local DSM cache.",
+    "Use deterministic per-sample seeding to choose a target elevation, tile, crop, and markers.",
+    "Optionally synthesize superellipse obstacles under the configured coverage and size limits.",
+    "Solve reference paths with the configured astar_elevation, astar_energy, and astar_slope solvers, with and without obstacles.",
+    "Export tensors, metadata, CSV paths, preview images, notebooks, and parquet shards."
+  ],
+  "rai:dataAnnotationProtocol": "Reference paths are computational annotations produced by the configured pathfinding solvers over the generated terrain crops and obstacle masks.",
+  "rai:dataReleaseMaintenancePlan": "Releases are versioned in CHANGELOG.md, regenerated through the repository Makefile, and verified with outputs/export/manifest.sha256.",
+  "rai:hasSyntheticData": true,
+  "prov:wasDerivedFrom": [
+    {
+      "@id": "https://www.eorc.jaxa.jp/ALOS/en/dataset/aw3d30/aw3d30_e.htm",
+      "prov:label": "JAXA ALOS Global Digital Surface Model 'ALOS World 3D - 30m' (AW3D30)",
+      "sc:description": "Global 30 m/pixel digital surface model derived from the PRISM panchromatic stereo sensor on the ALOS satellite. PASSAGE samples its terrain content directly from AW3D30 5x5 degree archive tiles, retaining the native 30 m/pixel resolution as the canonical observational layer; obstacles, start/goal markers, and reference paths are then synthesized on top.",
+      "sc:license": "https://earth.jaxa.jp/policy/en.html",
+      "prov:wasAttributedTo": {
+        "@id": "https://global.jaxa.jp/",
+        "prov:label": "Japan Aerospace Exploration Agency (JAXA)"
+      }
+    }
+  ],
+  "prov:wasGeneratedBy": [
+    {
+      "@type": "prov:Activity",
+      "prov:type": {"@id": "https://www.wikidata.org/wiki/Q4929239"},
+      "prov:label": "AW3D30 tile collection",
+      "sc:description": "Automated download of JAXA ALOS AW3D30 5x5 degree GeoTIFF archive tiles into the local DSM cache covering the configured PASSAGE Operational Design Domain (ODD). No manual sampling: the tile list is generated deterministically from the ODD specification in config/config.yaml and downloaded by the make data target.",
+      "prov:atLocation": "https://github.com/ThalesGroup/passage",
+      "prov:wasAttributedTo": [
+        {
+          "@type": "prov:SoftwareAgent",
+          "@id": "https://github.com/ThalesGroup/passage/tree/main/src/passage",
+          "prov:label": "PASSAGE generation pipeline (Python, Numba)",
+          "sc:description": "Open-source generator implemented in Python with Numba-JIT inner kernels. Deterministic, no human in the loop."
+        }
+      ]
+    },
+    {
+      "@type": "prov:Activity",
+      "prov:type": {"@id": "https://www.wikidata.org/wiki/Q5227332"},
+      "prov:label": "Sample preprocessing and procedural obstacle synthesis",
+      "sc:description": "Per-sample preprocessing: (i) calibrate global elevation minima and maxima from the local DSM cache; (ii) derive a per-sample blake2b seed (src/passage/seeds.py); (iii) select a 1x1 degree sub-tile and an in-tile crop; (iv) place start/goal markers respecting the configured minimum start-goal distance; (v) optionally synthesize super-ellipse obstacle masks. No human annotators or crowdworkers participate; every step is deterministic and reproducible from the seed and config.",
+      "prov:atLocation": "https://github.com/ThalesGroup/passage",
+      "prov:wasAttributedTo": [
+        {
+          "@type": "prov:SoftwareAgent",
+          "@id": "https://github.com/ThalesGroup/passage/tree/main/src/passage",
+          "prov:label": "PASSAGE generation pipeline (Python, Numba)"
+        }
+      ]
+    },
+    {
+      "@type": "prov:Activity",
+      "prov:type": {"@id": "https://www.wikidata.org/wiki/Q109719325"},
+      "prov:label": "Reference-path annotation by exact A* solvers",
+      "sc:description": "Computational (machine-only) annotation. For every (terrain, start, goal, obstacle) sample, exact reference paths are produced by the Numba-JIT grid A* in src/passage/pathfinding_utils.py under the three pre-registered cost models (astar_elevation, astar_energy, astar_slope), both with and without obstacles. No human annotators, no language-model agents, no crowdsourcing platform: annotations are exact under the documented cost model and validated by construction (same solver, same heuristic, same tie-break across all consumers of the dataset).",
+      "prov:atLocation": "https://github.com/ThalesGroup/passage/blob/main/src/passage/pathfinding_utils.py",
+      "prov:wasAttributedTo": [
+        {
+          "@type": "prov:SoftwareAgent",
+          "@id": "https://github.com/ThalesGroup/passage/blob/main/src/passage/pathfinding_utils.py",
+          "prov:label": "Numba-JIT grid-backend A* solver",
+          "sc:description": "Deterministic exact-shortest-path solver. Every annotation is reproducible from the per-sample blake2b seed, the cost model id, and the obstacle flag."
+        }
+      ]
+    },
+    {
+      "@type": "prov:Activity",
+      "prov:type": {"@id": "https://www.wikidata.org/wiki/Q3306762"},
+      "prov:label": "Manifest and shard quality review",
+      "sc:description": "Post-generation quality review. Every released shard is hashed and recorded in outputs/export/manifest.sha256; the make verify target re-checks shard hashes and counts against config/config.yaml before a release is tagged. No subjective review: the gate is exact-bytes equality with the manifest captured at generation time.",
+      "prov:atLocation": "https://github.com/ThalesGroup/passage",
+      "prov:wasAttributedTo": [
+        {
+          "@type": "prov:SoftwareAgent",
+          "@id": "https://github.com/ThalesGroup/passage/blob/main/Makefile",
+          "prov:label": "PASSAGE release-verification Makefile targets"
+        }
+      ]
+    }
+  ],
+  "rai:personalSensitiveInformation": "None. PASSAGE contains no personally identifiable information, no biometric data, and no human-subject content. Every sample is a synthetic terrain-routing instance built on top of the public JAXA ALOS AW3D30 elevation product; obstacles, start/goal markers, and reference paths are procedurally generated from a deterministic blake2b seed.",
+  "rai:dataBiases": [
+    "Coverage and elevation fidelity are limited by the underlying AW3D30 product and the chosen download footprint.",
+    "Terrain-only routing omits weather, airspace, vegetation, built structures, and operational constraints."
+  ],
+  "rai:dataLimitations": [
+    "Procedural obstacle masks are abstractions rather than measured hazards.",
+    "Deterministic generation covers sample content; runtime timestamps remain informational metadata."
+  ],
+  "rai:dataUseCases": [
+    "Benchmark terrain-aware path planners.",
+    "Train and evaluate learned routing surrogates in vision, graph, and reinforcement-learning settings.",
+    "Study reproducibility and geographic hold-out generalization across resolutions."
+  ],
+  "rai:dataSocialImpact": "PASSAGE is intended for research and evaluation of routing methods in safety-relevant terrain settings. It is not a certified operational navigation product.",
+  "rai:annotationsPerItem": "Every sample carries exactly one ordered path annotation per configured cost model (default: astar_elevation, astar_energy, astar_slope) and, where applicable, per obstacle variant (free-terrain and obstacle-aware). No multi-annotator redundancy.",
+  "rai:annotatorDemographics": "Not applicable: annotations are produced exclusively by the Numba-JIT A* grid solver documented in src/passage/pathfinding_utils.py. No human annotators were involved.",
+  "rai:dataAnnotationAnalysis": "Annotations are exact under the documented cost model and are validated by construction (same solver, same heuristic, same connectivity). Consistency is enforced by deterministic seeding and by the outputs/export/manifest.sha256 checksum file bundled with each release.",
+  "rai:dataAnnotationPlatform": "None: annotations are computational. Generation is driven by the Makefile targets in this repository, executed on CPU with optional GPU used only by downstream baselines, not by dataset generation.",
+  "rai:machineAnnotationTools": [
+    "Numba-JIT grid-backend A* implemented in src/passage/pathfinding_utils.py",
+    "Deterministic blake2b per-sample seed derivation documented in src/passage/seeds.py"
+  ]
+}
