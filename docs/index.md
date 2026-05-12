@@ -95,6 +95,7 @@ We open-source this toolkit to give the research community access to realistic t
 
 ---
 
+
 ## :compass: What is PASSAGE?
 
 **PASSAGE** is a complete, reproducible pipeline that transforms raw satellite elevation data into ready-to-use pathfinding datasets:
@@ -230,6 +231,15 @@ Designed with aerospace certification standards (ARP 6983 / ED-324) in mind — 
 </div>
 
 </div>
+
+---
+
+
+<!-- Leaderboard preview ----------------------------------------------------->
+
+## :material-trophy-outline: Leaderboard preview
+
+{% include-markdown "_partials/leaderboard_main_index.md" %}
 
 ---
 

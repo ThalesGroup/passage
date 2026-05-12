@@ -120,6 +120,98 @@ We open-source this toolkit to make terrain-routing methods easier to compare, r
 
 ---
 
+## 🧪 Submit your own method
+
+`passage-eval` ships a CLI so any candidate planner — vision, GNN, RL,
+classical — can join the leaderboard with one command:
+
+```bash
+# 1. Generate a starter spec
+passage-eval init-spec --out my_method.passage-bench.yaml
+
+# 2. Edit it: declare the inference entry-point + accelerator
+#       inference: my_module:MyPlanner    # or my_module:my_predict_fn
+#       edge_accelerator: Thor-GPU
+
+# 3. Score end-to-end (loads val data, runs inference, writes a row)
+passage-eval bench --spec my_method.passage-bench.yaml
+
+# 4. Inspect
+passage-eval leaderboard --metric cost_regret_median
+```
+
+The bench command takes care of loading the released PASSAGE val
+split for the declared (resolution, cost-model) cell, applying the
+pre-registered censored-penalty rule on failed decodes, computing
+the six primary metrics for every pre-registered seed, and (optionally)
+measuring `latency_e2e_ms_p50` on the indicated accelerator. Each run
+is written to
+`outputs/passage-eval/results/runs/r{resolution}/{cost_model}/{accelerator}/<method__seed__ts>/`
+with a `metrics.json` + optional `per_sample.npz` for paired-bootstrap
+recompute. The leaderboard CSV is atomically appended.
+
+📖 Full walk-through:
+[Contributing a method](https://thalesgroup.github.io/passage/benchmark/contributing-a-method/) ·
+[Leaderboard](https://thalesgroup.github.io/passage/benchmark/leaderboard/) ·
+[passage-eval API](https://thalesgroup.github.io/passage/benchmark/passage-eval/).
+
+## 🏆 Leaderboard @ 256² / `elevation`
+
+Live snapshot of `outputs/passage-eval/results/leaderboard.csv` (48 rows · 6 methods · 8 host/accelerator buckets).
+Same checkpoint everywhere — only the latency column varies per accelerator.
+
+<table>
+<thead><tr>
+<th>family</th><th>method</th><th>architecture</th><th>accelerator</th>
+<th align="right">seeds</th><th align="right">CR-med ↓</th>
+<th align="right">latency_e2e_ms_p50</th><th align="right">n</th>
+</tr></thead>
+<tbody>
+<tr><td>🧭 classical</td><td><code>astar_classical</code></td><td><code>analytic</code></td><td><code>h100</code></td><td align="right">1</td><td align="right">0.0000</td><td align="right">50.00</td><td align="right">8</td></tr>
+<tr><td>🧭 classical</td><td><code>astar_classical</code></td><td><code>analytic</code></td><td><code>orin-cpu</code></td><td align="right">1</td><td align="right">0.0000</td><td align="right">80.00</td><td align="right">8</td></tr>
+<tr><td>🧭 classical</td><td><code>astar_classical</code></td><td><code>analytic</code></td><td><code>thor-cpu</code></td><td align="right">1</td><td align="right">0.0000</td><td align="right">50.00</td><td align="right">8</td></tr>
+<tr><td>🧭 classical</td><td><code>astar_classical</code></td><td><code>analytic</code></td><td><code>tiger-cpu</code></td><td align="right">1</td><td align="right">0.0000</td><td align="right">120.00</td><td align="right">8</td></tr>
+<tr><td>🧭 classical</td><td><code>greedy_classical</code></td><td><code>analytic</code></td><td><code>h100</code></td><td align="right">1</td><td align="right">0.1099</td><td align="right">0.05</td><td align="right">8</td></tr>
+<tr><td>🧭 classical</td><td><code>greedy_classical</code></td><td><code>analytic</code></td><td><code>orin-cpu</code></td><td align="right">1</td><td align="right">0.1099</td><td align="right">0.70</td><td align="right">8</td></tr>
+<tr><td>🧭 classical</td><td><code>greedy_classical</code></td><td><code>analytic</code></td><td><code>thor-cpu</code></td><td align="right">1</td><td align="right">0.1099</td><td align="right">0.50</td><td align="right">8</td></tr>
+<tr><td>🧭 classical</td><td><code>greedy_classical</code></td><td><code>analytic</code></td><td><code>tiger-cpu</code></td><td align="right">1</td><td align="right">0.1099</td><td align="right">1.00</td><td align="right">8</td></tr>
+<tr><td>🧠 regression</td><td><code>reg-repvit_m1_bellman_vbridge</code></td><td><code>repvit_m1</code></td><td><code>h100</code></td><td align="right">3</td><td align="right">0.0012 ± 0.0002</td><td align="right">10.80</td><td align="right">1024</td></tr>
+<tr><td>🧠 regression</td><td><code>reg-repvit_m1_bellman_vbridge</code></td><td><code>repvit_m1</code></td><td><code>orin-gpu</code></td><td align="right">3</td><td align="right">0.0012 ± 0.0002</td><td align="right">25.06</td><td align="right">1024</td></tr>
+<tr><td>🧠 regression</td><td><code>reg-repvit_m1_bellman_vbridge</code></td><td><code>repvit_m1</code></td><td><code>orin-npu</code></td><td align="right">3</td><td align="right">0.0012 ± 0.0002</td><td align="right">79.38</td><td align="right">1024</td></tr>
+<tr><td>🧠 regression</td><td><code>reg-repvit_m1_bellman_vbridge</code></td><td><code>repvit_m1</code></td><td><code>thor-gpu</code></td><td align="right">3</td><td align="right">0.0012 ± 0.0002</td><td align="right">8.80</td><td align="right">1024</td></tr>
+<tr><td>🧠 regression</td><td><code>reg-repvit_m1_bellman_vbridge</code></td><td><code>repvit_m1</code></td><td><code>tiger-igpu</code></td><td align="right">3</td><td align="right">0.0012 ± 0.0002</td><td align="right">28.59</td><td align="right">1024</td></tr>
+<tr><td>🖼️ segmentation</td><td><code>seg-convnextv2_atto_baseline</code></td><td><code>convnextv2_atto</code></td><td><code>h100</code></td><td align="right">3</td><td align="right">0.0382 ± 0.0018</td><td align="right">11.25</td><td align="right">1024</td></tr>
+<tr><td>🖼️ segmentation</td><td><code>seg-convnextv2_atto_baseline</code></td><td><code>convnextv2_atto</code></td><td><code>orin-gpu</code></td><td align="right">3</td><td align="right">0.0382 ± 0.0018</td><td align="right">1.29</td><td align="right">1024</td></tr>
+<tr><td>🖼️ segmentation</td><td><code>seg-convnextv2_atto_baseline</code></td><td><code>convnextv2_atto</code></td><td><code>orin-npu</code></td><td align="right">3</td><td align="right">0.0382 ± 0.0018</td><td align="right">1.46</td><td align="right">1024</td></tr>
+<tr><td>🖼️ segmentation</td><td><code>seg-convnextv2_atto_baseline</code></td><td><code>convnextv2_atto</code></td><td><code>thor-gpu</code></td><td align="right">3</td><td align="right">0.0382 ± 0.0018</td><td align="right">0.44</td><td align="right">1024</td></tr>
+<tr><td>🖼️ segmentation</td><td><code>seg-convnextv2_atto_baseline</code></td><td><code>convnextv2_atto</code></td><td><code>tiger-igpu</code></td><td align="right">3</td><td align="right">0.0382 ± 0.0018</td><td align="right">25.45</td><td align="right">1024</td></tr>
+<tr><td>🕸️ graph</td><td><code>graph-edge_mlp_classical_astar</code></td><td><code>edge_mlp_5_16_16_1</code></td><td><code>orin-cpu</code></td><td align="right">3</td><td align="right">0.1230 ± 0.0148</td><td align="right">147.62</td><td align="right">64</td></tr>
+<tr><td>🕸️ graph</td><td><code>graph-edge_mlp_classical_astar</code></td><td><code>edge_mlp_5_16_16_1</code></td><td><code>thor-cpu</code></td><td align="right">3</td><td align="right">0.1230 ± 0.0148</td><td align="right">169.35</td><td align="right">64</td></tr>
+<tr><td>🕸️ graph</td><td><code>graph-edge_mlp_classical_astar</code></td><td><code>edge_mlp_5_16_16_1</code></td><td><code>tiger-cpu</code></td><td align="right">3</td><td align="right">0.1230 ± 0.0148</td><td align="right">189.31</td><td align="right">64</td></tr>
+<tr><td>🕸️ graph</td><td><code>graph-vmpnn</code></td><td><code>vmpnn</code></td><td><code>h100</code></td><td align="right">0</td><td align="right">nan</td><td align="right">29.38</td><td align="right">0</td></tr>
+</tbody>
+</table>
+
+<p align="center">
+  <img src="notebooks/passage-eval/figures/leaderboard_grouped_bars.png" alt="CR-median per (method × accelerator)" width="880"/>
+</p>
+<p align="center">
+  <img src="notebooks/passage-eval/figures/leaderboard_latency_heatmap.png" alt="Method × accelerator latency heatmap" width="880"/>
+</p>
+<p align="center">
+  <img src="notebooks/passage-eval/figures/leaderboard_pareto.png" alt="Accuracy vs latency Pareto frontier" width="720"/>
+</p>
+
+Regenerate with
+
+```bash
+uv run python scripts/passage-eval/generate_256_leaderboard.py --reset
+uv run python scripts/passage-eval/render_leaderboard.py
+```
+
+More: [`SCOREBOARD.md`](outputs/passage-eval/results/SCOREBOARD.md) · [`leaderboard.html`](outputs/passage-eval/results/leaderboard.html) · [Leaderboard documentation](https://thalesgroup.github.io/passage/benchmark/leaderboard/).
+
+
 ## 🗺️ Visual Summary
 
 <p align="center">

@@ -1,0 +1,22 @@
+{
+  "cost_model": "elevation",
+  "family": "dense_segmentation",
+  "method_name": "seg-convnextv2_atto_baseline",
+  "metrics": {
+    "cost_regret_geomean": 0.02371979609677588,
+    "cost_regret_mean": 0.03218971775742259,
+    "cost_regret_median": 0.037425940236991244,
+    "cost_regret_p90": 0.14285753138253118,
+    "cost_regret_p95": 0.18839257227973544,
+    "n_regret_nan": 3,
+    "n_regret_valid": 1021,
+    "n_samples": 1024,
+    "obstacle_cells_traversed_per_path": NaN,
+    "obstacle_violation_rate": NaN,
+    "path_assd": 0.1095948413771326,
+    "path_hausdorff_p95": 0.19426010896091528,
+    "success_rate": 0.9970703125
+  },
+  "resolution": 256,
+  "seed": 2026
+}

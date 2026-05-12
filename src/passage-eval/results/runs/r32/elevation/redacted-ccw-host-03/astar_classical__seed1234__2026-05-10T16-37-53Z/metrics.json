@@ -1,0 +1,22 @@
+{
+  "cost_model": "elevation",
+  "family": "classical",
+  "method_name": "astar_classical",
+  "metrics": {
+    "cost_regret_geomean": 0.0,
+    "cost_regret_mean": 0.0,
+    "cost_regret_median": 0.0,
+    "cost_regret_p90": 0.0,
+    "cost_regret_p95": 0.0,
+    "n_regret_nan": 0,
+    "n_regret_valid": 8,
+    "n_samples": 8,
+    "obstacle_cells_traversed_per_path": NaN,
+    "obstacle_violation_rate": 0.0,
+    "path_assd": 0.0,
+    "path_hausdorff_p95": 0.0,
+    "success_rate": 1.0
+  },
+  "resolution": 32,
+  "seed": 1234
+}

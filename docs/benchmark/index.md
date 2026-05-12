@@ -55,6 +55,36 @@ process. It covers four orthogonal topics:
 
     [:octicons-arrow-right-24: Run a full evaluation](walkthrough.md)
 
+- :material-trophy-outline: **Leaderboard**
+
+    ---
+
+    Live snapshot of every submitted run, organised by resolution,
+    cost-model, host, and accelerator. Includes the headline
+    Pareto frontier, latency heatmap, and per-method bar charts.
+
+    [:octicons-arrow-right-24: Open the leaderboard](leaderboard.md)
+
+- :material-account-plus-outline: **Contributing a method**
+
+    ---
+
+    Step-by-step recipe for hooking up *your* planner — vision, GNN,
+    RL, or classical — to the `passage-eval bench` CLI. One YAML spec
+    in, one leaderboard row out.
+
+    [:octicons-arrow-right-24: Submit a new method](contributing-a-method.md)
+
+- :material-notebook-multiple: **Reproducible Notebooks**
+
+    ---
+
+    Three executed-on-build notebooks: the cross-family `Planner` ABC
+    walkthrough, scoring of the released baselines, and the leaderboard
+    visualisation. Re-run with `make docs-prepare`.
+
+    [:octicons-arrow-right-24: Open the notebook track](notebooks/index.md)
+
 - :material-api: **API Reference**
 
     ---
