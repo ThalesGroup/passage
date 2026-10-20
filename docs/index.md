@@ -95,6 +95,7 @@ We open-source this toolkit to give the research community access to realistic t
 
 ---
 
+
 ## :compass: What is PASSAGE?
 
 **PASSAGE** is a complete, reproducible pipeline that transforms raw satellite elevation data into ready-to-use pathfinding datasets:
@@ -233,6 +234,15 @@ Designed with aerospace certification standards (ARP 6983 / ED-324) in mind — 
 
 ---
 
+
+<!-- Leaderboard preview ----------------------------------------------------->
+
+## :material-trophy-outline: Leaderboard
+
+{% include-markdown "_partials/leaderboard_main_index.md" %}
+
+---
+
 ## :zap: Quick Start
 
 ```bash
@@ -354,7 +364,7 @@ JAXA terms**. In practical terms this means:
 The full text of the JAXA terms, mirrored at release time, is in
 [`DATASET_LICENSE.md`](https://github.com/ThalesGroup/passage/blob/main/DATASET_LICENSE.md)
 in the repository root. A short license-attribution note also appears as a
-footnote in the Conclusion of the \textsc{Passage} paper, and an
+footnote in the Conclusion of the **PASSAGE** paper, and an
 acknowledgement of JAXA's open sharing of AW3D30 is recorded in every
 release manifest.
 

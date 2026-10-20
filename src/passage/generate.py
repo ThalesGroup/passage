@@ -2098,7 +2098,8 @@ def run_generate(
     num_cpus: int | None = None,
     disable_images: bool = False,
     force: bool = False,
-) -> None:
+    scene_indices: range | list[int] | None = None,
+) -> dict | None:
     """
     Main orchestration function for generating dataset samples.
 
@@ -2111,7 +2112,8 @@ def run_generate(
         num_samples: Number of samples to generate.
         num_cpus: Number of CPUs to use for multiprocessing.
         disable_images: If True, skip saving PNG images.
-        force: If True, delete existing directories and regenerate all samples.
+        force: If True, delete existing directories and regenerate all legacy samples.
+        scene_indices: Global indices for a bounded release batch; preserve the full sample count.
     """
     # Load config
     config_path = Path(config_filepath)
@@ -2121,6 +2123,20 @@ def run_generate(
 
     with open(config_path) as f:
         config = yaml.safe_load(f)
+
+    dataset_version = config.get("generation", {}).get("dataset_version") if isinstance(config, dict) else None
+    if dataset_version is not None:
+        from passage.successor_generation import DATASET_VERSION, run_successor_generation
+
+        if dataset_version != DATASET_VERSION:
+            raise ValueError(f"Unsupported generation dataset version: {dataset_version}")
+        return run_successor_generation(
+            outputs_dirpath, config_filepath, tiles_dirpath, calibration_filepath,
+            resolution=resolution, num_samples=num_samples, num_cpus=num_cpus,
+            disable_images=disable_images, force=force, scene_indices=scene_indices,
+        )
+    if scene_indices is not None:
+        raise ValueError("Bounded scene indices require an explicit release dataset version")
 
     # Get parameters from config or arguments
     if isinstance(resolution, list):

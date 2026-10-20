@@ -4,6 +4,12 @@ site_name: "PASSAGE"
 site_description: "Path Solving Dataset & Generator — Real-world elevation-based pathfinding benchmarks for research"
 site_author: "Geoffrey Delhomme"
 site_url: "https://thalesgroup.github.io/passage/"
+
+# Partial fragments included from other pages via include-markdown — not
+# meant to appear as standalone documents in the navigation.
+not_in_nav: |
+  /_partials/**
+
 repo_url: "https://github.com/ThalesGroup/passage"
 repo_name: "ThalesGroup/passage"
 copyright: "Copyright &copy; 2024–2026 Thales Group — MIT License"
@@ -216,11 +222,27 @@ nav:
           - "Cost Models": generation/cost-models.md
           - "Obstacle Generation": generation/obstacles.md
           - "Solvers & Heuristics": generation/solvers.md
-          - "Interactive Notebooks": generation/notebooks.md
+          - "Interactive Notebooks":
+              - "Overview": generation/notebooks.md
+              - "Executed runs":
+                  - "Index": generation/notebooks/index.md
+                  - "Demo (load + visualise)": generation/notebooks/demo.md
+                  - "Obstacle generation": generation/notebooks/obstacles.md
+                  - "Cost model comparison": generation/notebooks/costmodel.md
+                  - "Solver comparison": generation/notebooks/solve.md
+                  - "A* inference timing": generation/notebooks/astar-inference-timing.md
   - "Benchmark":
       - "Overview": benchmark/index.md
       - "Evaluation Protocol": benchmark/protocol.md
       - "passage-eval Package": benchmark/passage-eval.md
+      - "Leaderboard": benchmark/leaderboard.md
+      - "Leaderboard candidates": benchmark/candidates.md
+      - "Submit a candidate": benchmark/contributing-a-method.md
+      - "Reproducible Notebooks":
+          - "Overview": benchmark/notebooks/index.md
+          - "A* walkthrough": benchmark/notebooks/01-astar-walkthrough.md
+          - "Paper results": benchmark/notebooks/02-paper-results.md
+          - "Leaderboard": benchmark/notebooks/03-leaderboard.md
       - "End-to-End Walkthrough": benchmark/walkthrough.md
       - "API Reference": benchmark/api.md
   - "Code Architecture":

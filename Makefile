@@ -19,7 +19,7 @@ DOCS_HOST ?= 127.0.0.1
 DOCS_PORT ?= 8000
 DOCS_STRICT_DIR ?= /tmp/passage-public
 
-.PHONY: install sync download calibrate restore-calibrate generate compress export upload manifest rebuild test lint docs-build pages-local docs-serve
+.PHONY: install sync download calibrate restore-calibrate generate compress export upload manifest rebuild test lint docs-prepare docs-prepare-all docs-build pages-local docs-serve
 
 install:
 	bash scripts/install.sh
@@ -70,11 +70,19 @@ lint:
 	uv run ruff check src tests
 	uv run ruff format --check src tests
 
-docs-build:
+docs-prepare:
+	uv run --locked --group docs python scripts/passage-eval/docs_prepare.py --clean
+	uv run --locked --group docs python scripts/passage-eval/render_plotly_leaderboard.py
+
+docs-prepare-all:
+	uv run --locked --group docs python scripts/passage-eval/docs_prepare.py --clean --all
+	uv run --locked --group docs python scripts/passage-eval/render_plotly_leaderboard.py
+
+docs-build: docs-prepare
 	uv run --locked --all-groups mkdocs build --strict --site-dir $(DOCS_STRICT_DIR)
 
-pages-local:
+pages-local: docs-prepare
 	uv run --locked --all-groups mkdocs build --site-dir public
 
-docs-serve:
+docs-serve: docs-prepare
 	uv run --locked --all-groups mkdocs serve -a $(DOCS_HOST):$(DOCS_PORT)

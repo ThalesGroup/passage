@@ -5,26 +5,51 @@
 name: Deploy Documentation
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/**"
+      - "mkdocs.yml"
+      - "src/**"
+      - "README.md"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/docs.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "docs/**"
+      - "mkdocs.yml"
+      - "src/**"
+      - ".github/workflows/docs.yml"
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
   pages: write
   id-token: write
 
+# Allow only one Pages deploy at a time, but do not cancel in-progress runs;
+# the queue ordering matters because each run replaces the live site.
 concurrency:
-  group: deploy-docs
-  cancel-in-progress: true
+  group: pages
+  cancel-in-progress: false
 
 jobs:
-  deploy:
-    name: Build & Deploy Docs
+  # -----------------------------------------------------------------------
+  # Build — runs on every push and PR so docs failures surface early. The
+  # built site is uploaded as a Pages artifact that only the deploy job
+  # consumes. Decoupled from lint/test in ci.yml on purpose: a docs change
+  # ships even when CI is red.
+  # -----------------------------------------------------------------------
+  build:
+    name: Build site
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Full history for git-revision-date
+          fetch-depth: 0  # full history for git-revision-date-localized
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -35,24 +60,45 @@ jobs:
         uses: astral-sh/setup-uv@v4
         with:
           version: "latest"
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
 
-      - name: Install dependencies
+      - name: Install dependencies (docs group)
         run: |
           uv sync --group docs
           uv pip install \
             mkdocs-material \
-            mkdocstrings[python] \
+            "mkdocstrings[python]" \
             mkdocs-include-markdown-plugin \
             mkdocs-minify-plugin \
             pymdown-extensions
 
+      - name: Configure Pages
+        if: github.event_name == 'push'
+        uses: actions/configure-pages@v5
+
       - name: Build documentation
         run: uv run mkdocs build --strict
 
-      - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v4
-        if: github.ref == 'refs/heads/main'
+      - name: Upload Pages artifact
+        if: github.event_name == 'push'
+        uses: actions/upload-pages-artifact@v3
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./site
-          force_orphan: true
+          path: ./site
+
+  # -----------------------------------------------------------------------
+  # Deploy — only on push to main. Independent of CI; deploys as soon as
+  # `build` succeeds, regardless of lint/test job state.
+  # -----------------------------------------------------------------------
+  deploy:
+    name: Deploy to GitHub Pages
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

@@ -22,6 +22,10 @@
 
 import json
 
+import numpy as np
+import rasterio
+from rasterio.transform import from_origin
+
 import pytest
 
 import passage.calibrate as cal
@@ -41,10 +45,20 @@ def test_run_calibrate_with_existing_resume(tmp_path, monkeypatch):
     with open(outputs_dir / "calibrate.json", "w") as f:
         json.dump(existing, f)
 
-    # Create tiles dir with a matching DSM file name (content not important for resume path)
+    # Legacy stats are recomputed from an actual raster.
     tiles_dir = tmp_path / "tiles"
     tiles_dir.mkdir()
-    (tiles_dir / "N000E000_DSM.tif").write_text("")
+    with rasterio.open(
+        tiles_dir / "N000E000_DSM.tif",
+        "w",
+        driver="GTiff",
+        height=1,
+        width=2,
+        count=1,
+        dtype="float32",
+        transform=from_origin(0, 1, 1, 1),
+    ) as raster:
+        raster.write(np.array([[10, 20]], dtype=np.float32), 1)
 
     # Run calibrate in sequential mode; should read existing stats and write outputs
     cal.run_calibrate(str(outputs_dir), str(tiles_dir), resume=True, num_cpus=0)
@@ -52,6 +66,10 @@ def test_run_calibrate_with_existing_resume(tmp_path, monkeypatch):
     # Expect outputs/calibrate.json to exist and map image to be created
     assert (outputs_dir / "calibrate.json").exists()
     assert (outputs_dir / "max_elevation_map.png").exists()
+    receipt = json.loads((outputs_dir / "calibrate.json").read_text())
+    assert receipt["global_min"] == 10
+    assert receipt["global_max"] == 20
+    assert receipt["complete"] is True
 
 
 @pytest.mark.unit
@@ -62,5 +80,6 @@ def test_run_calibrate_no_tiles(tmp_path):
     tiles_dir.mkdir()
 
     # No DSM tiles present -> should early return and not create outputs/calibrate.json
-    cal.run_calibrate(str(outputs_dir), str(tiles_dir), resume=False, num_cpus=0)
+    with pytest.raises(ValueError, match="No DSM tiles"):
+        cal.run_calibrate(str(outputs_dir), str(tiles_dir), resume=False, num_cpus=0)
     assert not (outputs_dir / "calibrate.json").exists()

@@ -810,3 +810,82 @@ html {
     padding: 1.5rem 1.5rem 1.5rem 2rem;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Leaderboard preview (docs/index.md + docs/benchmark/leaderboard.md):
+   stats block, candidate table, distinctive oracle row styling. All colours
+   resolve to Material theme variables so the section reads correctly in
+   both light and dark schemes.
+   --------------------------------------------------------------------------- */
+
+:root {
+  --pe-oracle-accent: #7a2222;
+  --pe-oracle-bg-light: rgba(122, 34, 34, 0.06);
+}
+[data-md-color-scheme="slate"] {
+  --pe-oracle-accent: #ffa07a;
+  --pe-oracle-bg-light: rgba(255, 160, 122, 0.10);
+}
+
+.md-typeset table.leaderboard-candidates {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+  margin: 1rem 0;
+  background: var(--md-default-bg-color);
+  color: var(--md-default-fg-color);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.md-typeset table.leaderboard-candidates th {
+  background: var(--md-default-fg-color--lightest);
+  color: var(--md-default-fg-color);
+  text-align: left;
+  font-weight: 700;
+  padding: 0.6rem 0.8rem;
+  border-bottom: 1px solid var(--md-default-fg-color--lighter);
+}
+.md-typeset table.leaderboard-candidates td {
+  padding: 0.6rem 0.8rem;
+  border-bottom: 1px solid var(--md-default-fg-color--lightest);
+  color: var(--md-default-fg-color);
+}
+.md-typeset table.leaderboard-candidates code {
+  background: var(--md-code-bg-color);
+  color: var(--md-code-fg-color);
+}
+.md-typeset table.leaderboard-candidates tr.oracle-row {
+  background: var(--pe-oracle-bg-light);
+  border-left: 4px solid var(--pe-oracle-accent);
+}
+.md-typeset table.leaderboard-candidates tr.oracle-row td {
+  font-weight: 500;
+}
+.md-typeset table.leaderboard-candidates tr.oracle-row td:first-child {
+  color: var(--pe-oracle-accent);
+}
+
+.md-typeset .leaderboard-fullsize {
+  text-align: right;
+  font-size: 0.85rem;
+  margin-top: 0.25rem;
+  color: var(--md-default-fg-color--light);
+}
+.md-typeset .leaderboard-fullsize a {
+  text-decoration: none;
+  font-weight: 500;
+  color: var(--md-primary-fg-color);
+}
+.md-typeset .leaderboard-fullsize a:hover {
+  text-decoration: underline;
+}
+.md-typeset .leaderboard-legend,
+.md-typeset .leaderboard-footer {
+  font-size: 0.85rem;
+  color: var(--md-default-fg-color--light);
+  margin-top: 1rem;
+}
+.md-typeset .leaderboard-footer {
+  text-align: center;
+}

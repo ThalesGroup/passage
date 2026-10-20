@@ -1,0 +1,22 @@
+{
+  "resolution": 256,
+  "sample_id": "0000000024",
+  "split": "validation",
+  "source_row": 0,
+  "source_shard": "256x256_samples/validation/data-256-0000000000-0000000063-00000.parquet",
+  "source_sha256": "763cb00d486becb482cc27c37baf3d3c17e264c74fbd8a61e63361a02d3ba1e8",
+  "style": "passage-trajectories-paper-v1-20261017",
+  "route_sha256_int32_row_col": {
+    "path_astar_elevation_free": "78f99ddec4ea515449e9455325e977c78199bc3e5bbbb56446e568078dca6d84",
+    "path_astar_slope_free": "b08eefac6c406620f51cb6063b15d4a42b9cb05fabbe0989f48bb4d76d2bec61",
+    "path_astar_energy_free": "a6410daa3ba0bdada64e7a1a6e6bc511cad8814ec3769b5fdef2ca7f80d85800",
+    "path_astar_elevation_obstacles": "bd58661872bd8e2b344c95b9f0ab6f9c6eadf5bdf3262a33b67e6ce87b4e476a",
+    "path_astar_slope_obstacles": "689f703618f3d3deda4ae293cc2a57fae38d59d58347b4edf086c1dfd483ff57",
+    "path_astar_energy_obstacles": "a3728a6067bec5d7a4353f93e2f1885fa8918a13911dd2dd8d1a3c6a763760f0"
+  },
+  "outputs": {
+    "sample-r256.png": "426529ec4818d90f336800d72884bb015506c3ce9599b294fde43a81d8c51832",
+    "sample-r256.pdf": "5cdec97ea31e22a92209328547a11b7e8766e1e27b73044755f3012f03bf4d29"
+  },
+  "route_optimality_revalidated": false
+}

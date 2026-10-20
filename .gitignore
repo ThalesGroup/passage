@@ -32,3 +32,6 @@ htmlcov/
 # Documentation
 site
 public
+
+# Local downloaded dataset workspace
+/dataset

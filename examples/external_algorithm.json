@@ -1,0 +1,19 @@
+{
+  "method_name": "example_existing_bfs",
+  "family": "classical",
+  "architecture": "breadth_first_search",
+  "decoder_variant": "ordinary_input_no_fallback",
+  "inference": "examples.external_algorithm:ExistingAlgorithm",
+  "inference_format": "request",
+  "resolution": 3,
+  "n_samples": 2,
+  "seeds": [1234],
+  "dataset_path": "outputs/eval-example/data",
+  "split": "validation",
+  "dataset_version": "analytic-harness-example-v1",
+  "latency_warmup": 1,
+  "latency_repeats": 2,
+  "budget": {"max_expansions": 100, "max_queue_operations": 200, "max_live_states": 100},
+  "component_control": {"variant": "budgeted_classical", "guide": "none"},
+  "extra": {"evidence_scope": "analytic_cpu_harness_interoperability_only"}
+}

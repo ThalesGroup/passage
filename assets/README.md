@@ -14,13 +14,13 @@
 <p align="center">
   <a href="https://www.python.org/"><img src="https://img.shields.io/badge/python-≥3.11-3776AB?logo=python&logoColor=white" alt="Python"></a>
   <a href="DATASET_LICENSE.md"><img src="https://img.shields.io/badge/dataset%20terms-AW3D30%20%2B%20MIT%20code-orange?logo=opensourceinitiative&logoColor=white" alt="Dataset Terms"></a>
-  <a href="https://huggingface.co/datasets/your-username/passage-dataset"><img src="https://img.shields.io/badge/%F0%9F%A4%97-Dataset-yellow" alt="HuggingFace Dataset"></a>
+  <a href="https://huggingface.co/datasets/thalesgroup/passage"><img src="https://img.shields.io/badge/%F0%9F%A4%97-Dataset-yellow" alt="HuggingFace Dataset"></a>
   <a href="https://docs.astral.sh/ruff/"><img src="https://img.shields.io/badge/code%20style-ruff-000000?logo=ruff&logoColor=white" alt="Ruff"></a>
   <a href="https://docs.astral.sh/uv/"><img src="https://img.shields.io/badge/package-uv-DE5FE9?logo=uv&logoColor=white" alt="uv"></a>
 </p>
 
 <p align="center">
-  <a href="https://huggingface.co/datasets/your-username/passage-dataset">🤗 Dataset</a> •
+  <a href="https://huggingface.co/datasets/thalesgroup/passage">🤗 Dataset</a> •
   <a href="croissant.json">🧾 Croissant</a> •
   <a href="DATASHEET.md">📋 Datasheet</a> •
   <a href="#-citation">📝 Citation</a>
@@ -75,7 +75,7 @@ We open-source this toolkit to make terrain-routing methods easier to compare, r
   <img src="assets/sample.png" alt="Representative PASSAGE sample" width="720"/>
 </p>
 
-<p align="center"><em>Normalized elevation with start/end markers, procedural superellipse obstacles, and two computed paths (free terrain vs. obstacle-aware).</em></p>
+<p align="center"><em>Six stored routes under three travel costs. Green continuous lines show free-terrain routes; blue short dashes show obstacle-aware routes. Calibrated terrain uses the paper's sage–sand palette, with charcoal hatched obstacles and white start/goal markers.</em></p>
 
 ### Dataset World Coverage
 
@@ -129,7 +129,7 @@ from datasets import load_dataset
 from passage.utils import decode_tensor_blob
 
 # Load a specific resolution from Hugging Face
-ds = load_dataset("your-username/passage-dataset", name="256x256")
+ds = load_dataset("thalesgroup/passage", name="256x256")
 sample = ds["train"][0]
 
 # Decode the compressed tensor → (256, 256, 3) numpy array
@@ -359,10 +359,33 @@ These equations match the runtime implementation used by the grid-backend A* exp
 
 ## 📝 Citation
 
-Use the metadata in [`CITATION.cff`](CITATION.cff). Anonymous submission mirrors intentionally omit author-identifying citation fields until de-anonymisation.
+Use the metadata in [`CITATION.cff`](CITATION.cff).
 
 ---
 
 ## 📄 License
 
-The PASSAGE generator code is MIT-licensed, but the exported dataset artifacts inherit attribution and reuse obligations from JAXA ALOS AW3D30. See [`DATASET_LICENSE.md`](DATASET_LICENSE.md) for the dataset terms and [`LICENSE`](LICENSE) for the code license.
+PASSAGE ships **two distinct licensing surfaces**:
+
+| Surface | License | What it covers |
+| --- | --- | --- |
+| Generator and evaluator code | [MIT License](LICENSE) | every Python file in the upstream repository — the dataset generator (`passage`) and the evaluation contract (`passage-eval`). |
+| Exported elevation data | [JAXA AW3D30 terms of use](https://www.eorc.jaxa.jp/ALOS/en/dataset/aw3d30/aw3d30_e.htm) | every elevation tile, every sample whose elevation channel is derived from those tiles, and any model whose training data carries that channel. The full text mirrored at release time is in [`DATASET_LICENSE.md`](DATASET_LICENSE.md). |
+
+> ⚠️ **Respect JAXA's licensing terms.** PASSAGE is built on the
+> [JAXA ALOS World 3D 30 m DSM (AW3D30)](https://www.eorc.jaxa.jp/ALOS/en/dataset/aw3d30/aw3d30_e.htm).
+> Any user of this dataset — or of any artefact derived from it
+> (a trained model, a generated planning result, a downstream
+> benchmark) — **must respect the JAXA terms of use**:
+>
+> 1. **Cite the JAXA AW3D30 source** in publications using PASSAGE
+>    (recommended: Takaku *et al.*, *"Updates of 'AW3D30' ALOS Global
+>    DSM with Other Open Access Datasets,"* ISPRS Archives, 2020).
+> 2. **Reproduce the AW3D30 attribution** in any redistribution of
+>    the elevation channel or of any artefact directly derived from
+>    it.
+> 3. **Read and abide by the JAXA terms-of-use page** linked above
+>    for the authoritative wording.
+>
+> We sincerely thank JAXA for openly sharing AW3D30 with the research
+> community.

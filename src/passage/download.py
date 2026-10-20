@@ -27,11 +27,17 @@ This module downloads ALOS AW3D30 tiles by checking URL availability,
 tracks the download status in a CSV file, and generates a PNG status map.
 """
 
+import csv
+import hashlib
+import json
 import multiprocessing
 import os
+import re
+import shutil
+import stat
+import tempfile
 import zipfile
-from pathlib import Path
-import csv
+from pathlib import Path, PurePosixPath
 
 import cv2
 import numpy as np
@@ -39,96 +45,184 @@ import pandas as pd
 import requests
 from loguru import logger
 from tqdm import tqdm
-import shutil
 
 HTTP_STATUS_OK = 200
+MAX_ATTEMPTS = 3
+
+
+def _archive_url(lat: int, lon: int) -> str:
+    def coordinate(latitude: int, longitude: int) -> str:
+        return f"{'S' if latitude < 0 else 'N'}{abs(latitude):03d}{'W' if longitude < 0 else 'E'}{abs(longitude):03d}"
+
+    filename = f"{coordinate(lat, lon)}_{coordinate(lat + 5, lon + 5)}.zip"
+    return f"https://www.eorc.jaxa.jp/ALOS/aw3d30/data/release_v2404/{filename}"
+
+
+def _manifest_path(raw_dir: Path, url: str) -> Path:
+    return raw_dir / "manifests" / (Path(url).stem + ".json")
+
+
+def _atomic_json(path: Path, record: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile(mode="w", dir=path.parent, delete=False) as stream:
+        temporary = Path(stream.name)
+        try:
+            json.dump(record, stream, sort_keys=True, indent=2)
+            stream.flush()
+            os.fsync(stream.fileno())
+        except BaseException:
+            temporary.unlink(missing_ok=True)
+            raise
+    try:
+        os.replace(temporary, path)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _read_manifest(raw_dir: Path, url: str) -> dict:
+    try:
+        record = json.loads(_manifest_path(raw_dir, url).read_text())
+        return record if isinstance(record, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def _verified_manifest(raw_dir: Path, url: str, record: dict) -> bool:
+    if record.get("status") != "complete" or record.get("url") != url or not record.get("members"):
+        return False
+    try:
+        seen = set()
+        for member in record["members"]:
+            name = member["filename"]
+            if Path(name).name != name or name in seen or not name.upper().endswith("_DSM.TIF"):
+                return False
+            seen.add(name)
+            path = raw_dir / "tiles" / name
+            if path.is_symlink() or path.stat().st_size != member["size_bytes"] or _sha256(path) != member["sha256"]:
+                return False
+        return True
+    except (OSError, KeyError, TypeError, ValueError):
+        return False
+
+
+def _extract_archive(zip_path: Path, raw_dir: Path, record: dict) -> None:
+    """Validate all DSM members in staging before any final tile is replaced."""
+    files_dir = raw_dir / "tiles"
+    files_dir.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix=".extract-", dir=raw_dir) as staging:
+        members = []
+        seen = set()
+        with zipfile.ZipFile(zip_path) as archive:
+            for entry in archive.infolist():
+                if not entry.filename.upper().endswith("_DSM.TIF"):
+                    continue
+                member_path = PurePosixPath(entry.filename)
+                name = member_path.name
+                if (
+                    member_path.is_absolute()
+                    or ".." in member_path.parts
+                    or "\\" in entry.filename
+                    or name in seen
+                    or stat.S_ISLNK(entry.external_attr >> 16)
+                    or entry.file_size <= 0
+                ):
+                    raise ValueError(f"Unsafe, duplicate or empty DSM member: {entry.filename}")
+                seen.add(name)
+                staged = Path(staging) / name
+                with archive.open(entry) as source, staged.open("wb") as destination:
+                    shutil.copyfileobj(source, destination)
+                    destination.flush()
+                    os.fsync(destination.fileno())
+                if staged.stat().st_size != entry.file_size:
+                    raise ValueError(f"Incomplete DSM member: {entry.filename}")
+                members.append({"filename": name, "size_bytes": entry.file_size, "sha256": _sha256(staged)})
+        if not members:
+            raise ValueError("Archive contains no DSM members")
+        # A crash during publication leaves the receipt incomplete; resume rechecks it.
+        record.update(status="publishing", members=members)
+        _atomic_json(_manifest_path(raw_dir, record["url"]), record)
+        for member in members:
+            os.replace(Path(staging) / member["filename"], files_dir / member["filename"])
+        record.update(status="complete", members=members, error="")
+        _atomic_json(_manifest_path(raw_dir, record["url"]), record)
 
 
 def download_tile(args: tuple[int, int, str | None]) -> tuple[int, int, str, bool, bool]:
+    """Download an archive with bounded retries and a hashed completion receipt.
+
+    ``extracted`` means every DSM member passed CRC/size verification and was
+    published atomically as an individual file. Failures and HTTP absence remain
+    distinct in the archive receipt; the historical five-field return is kept.
     """
-    Check if a URL is valid for a given lat/lon pair, and download/extract if valid.
-
-    Args:
-        args: Tuple of (lat_min, lon_min, raw_dir_str) coordinates.
-              raw_dir_str can be None to skip download, or a path string for multiprocessing compatibility.
-
-    Returns:
-        Tuple of (lat_min, lon_min, url, url_valid, extracted).
-    """
-    lat_min, lon_min, raw_dir_str = args
-    lat_max = lat_min + 5
-    lon_max = lon_min + 5
-    lat_min_char = "S" if lat_min < 0 else "N"
-    lat_max_char = "S" if lat_max < 0 else "N"
-    lon_min_char = "W" if lon_min < 0 else "E"
-    lon_max_char = "W" if lon_max < 0 else "E"
-    part1 = f"{lat_min_char}{abs(lat_min):03d}{lon_min_char}{abs(lon_min):03d}"
-    part2 = f"{lat_max_char}{abs(lat_max):03d}{lon_max_char}{abs(lon_max):03d}"
-    filename = f"{part1}_{part2}.zip"
-    url = f"https://www.eorc.jaxa.jp/ALOS/aw3d30/data/release_v2404/{filename}"
-
-    try:
-        response = requests.head(url, timeout=1)
-        status_code = response.status_code
-        url_valid = status_code == HTTP_STATUS_OK
-    except requests.exceptions.RequestException:
-        url_valid = False
-
-    extracted = False
-
-    # Download and extract if valid and raw_dir is provided
-    if url_valid and raw_dir_str is not None:
-        raw_dir = Path(raw_dir_str)
+    lat, lon, raw_dir_str = args
+    url = _archive_url(lat, lon)
+    raw_dir = Path(raw_dir_str) if raw_dir_str is not None else None
+    record = {
+        "schema_version": 1,
+        "lat_min": lat,
+        "lon_min": lon,
+        "url": url,
+        "status": "failed",
+        "members": [],
+        "error": "",
+        "attempts": 0,
+    }
+    url_valid = False
+    for attempt in range(1, MAX_ATTEMPTS + 1):
+        record["attempts"] = attempt
         try:
-            zip_path = raw_dir / "archives" / filename
-            zip_path.parent.mkdir(parents=True, exist_ok=True)
-            # extract_folder = raw_dir / "extracted"
-            # extract_folder.mkdir(parents=True, exist_ok=True)
-            files_folder = raw_dir / "tiles"
-            files_folder.mkdir(parents=True, exist_ok=True)
-
-            # Download the file once
-            response = requests.get(url, timeout=180, stream=True)
-            if response.status_code == HTTP_STATUS_OK:
-                with open(zip_path, "wb") as f:
-                    for chunk in response.iter_content(chunk_size=8192):
-                        f.write(chunk)
-
-                # Extract only *_DSM.tif entries into files_folder without extracting whole archive
+            response = requests.head(url, timeout=15)
+            try:
+                status_code = response.status_code
+            finally:
+                if hasattr(response, "close"):
+                    response.close()
+            if status_code in (404, 410):
+                record.update(status="unavailable", error=f"HEAD HTTP {status_code}")
+                break
+            if status_code != HTTP_STATUS_OK:
+                raise requests.HTTPError(f"HEAD HTTP {status_code}")
+            url_valid = True
+            if raw_dir is None:
+                return lat, lon, url, True, False
+            archives = raw_dir / "archives"
+            archives.mkdir(parents=True, exist_ok=True)
+            zip_path = archives / Path(url).name
+            part_path = archives / (Path(url).name + ".part")
+            try:
+                response = requests.get(url, timeout=180, stream=True)
                 try:
-                    with zipfile.ZipFile(zip_path, "r") as zip_ref:
-                        members = [m for m in zip_ref.namelist() if m.upper().endswith("_DSM.TIF")]
-                        if members:
-                            count = 0
-                            for member in members:
-                                filename_member = os.path.basename(member)
-                                if not filename_member:
-                                    continue
-                                dest_path = files_folder / filename_member
-                                try:
-                                    with zip_ref.open(member) as src, open(dest_path, "wb") as dst:
-                                        shutil.copyfileobj(src, dst)
-                                    count += 1
-                                except Exception as e:
-                                    logger.warning(f"Failed copying DSM file {member} to {dest_path}: {e}")
-                            if count > 0:
-                                extracted = True
-                                logger.info(f"Copied {count} _DSM.tif files from {zip_path.name} to {files_folder}")
-                        else:
-                            logger.info(f"No _DSM.tif files found in archive {zip_path.name}")
-                except Exception as e:
-                    logger.error(f"Failed to extract DSM files from archive {zip_path}: {e}")
-
-                # Cleanup: remove zip file
-                try:
-                    zip_path.unlink()
-                except Exception as e:
-                    logger.warning(f"Could not remove zip file {zip_path}: {e}")
-        except Exception as e:
-            logger.error(f"Failed to download or extract tile for {lat_min}, {lon_min}: {e}")
-            pass  # Continue even if download fails, we still return validity
-
-    return (lat_min, lon_min, url, url_valid, extracted)
+                    if response.status_code != HTTP_STATUS_OK:
+                        raise requests.HTTPError(f"GET HTTP {response.status_code}")
+                    with part_path.open("wb") as destination:
+                        for chunk in response.iter_content(chunk_size=1024 * 1024):
+                            if chunk:
+                                destination.write(chunk)
+                        destination.flush()
+                        os.fsync(destination.fileno())
+                finally:
+                    if hasattr(response, "close"):
+                        response.close()
+                os.replace(part_path, zip_path)
+                _extract_archive(zip_path, raw_dir, record)
+                zip_path.unlink(missing_ok=True)
+                return lat, lon, url, True, True
+            finally:
+                part_path.unlink(missing_ok=True)
+        except (requests.RequestException, OSError, ValueError, zipfile.BadZipFile, EOFError) as error:
+            record.update(status="failed", error=f"{type(error).__name__}: {error}")
+            logger.warning(f"Archive {Path(url).name} attempt {attempt}/{MAX_ATTEMPTS}: {error}")
+    if raw_dir is not None:
+        _atomic_json(_manifest_path(raw_dir, url), record)
+    return lat, lon, url, url_valid, False
 
 
 def generate_status_map(df_results: pd.DataFrame, output_path: Path) -> None:
@@ -201,135 +295,180 @@ def generate_status_map(df_results: pd.DataFrame, output_path: Path) -> None:
         logger.error(f"Failed to save image {output_path}: {e}")
 
 
-def run_download(outputs_dirpath: str, *, resume: bool = True, num_cpus: int | None = None) -> None:
-    """
-    Main orchestration function for downloading and tracking tile availability.
+def _write_results(csv_path: Path, results: dict) -> None:
+    with tempfile.NamedTemporaryFile(mode="w", dir=csv_path.parent, newline="", delete=False) as stream:
+        temporary = Path(stream.name)
+        try:
+            writer = csv.DictWriter(
+                stream, fieldnames=["lat_min", "lon_min", "url", "url_valid", "extracted", "status", "error"]
+            )
+            writer.writeheader()
+            writer.writerows(results[pair] for pair in sorted(results))
+            stream.flush()
+            os.fsync(stream.fileno())
+        except BaseException:
+            temporary.unlink(missing_ok=True)
+            raise
+    try:
+        os.replace(temporary, csv_path)
+    finally:
+        temporary.unlink(missing_ok=True)
 
-    Args:
-        outputs_dirpath: Directory path for output files.
-        resume: If True, resume from existing CSV file, skipping already-checked pairs.
-        num_cpus: Number of CPUs to use for multiprocessing.
-            None: use all CPUs (default)
-            0: disable multiprocessing (useful for debugging)
-            N: use N CPUs
+
+def _csv_bool(value: object) -> bool:
+    return str(value).strip().lower() == "true"
+
+
+def _legacy_archive_pairs(raw_dir: Path) -> set[tuple[int, int]]:
+    pairs = set()
+    for path in (raw_dir / "tiles").glob("*_DSM.tif"):
+        match = re.search(r"([NS])(\d{3})([EW])(\d{3})_DSM\.tif$", path.name)
+        if match and not path.is_symlink() and path.stat().st_size > 0:
+            lat = int(match[2]) * (-1 if match[1] == "S" else 1)
+            lon = int(match[4]) * (-1 if match[3] == "W" else 1)
+            pairs.add((lat // 5 * 5, lon // 5 * 5))
+    return pairs
+
+
+def run_download(
+    outputs_dirpath: str,
+    *,
+    resume: bool = True,
+    num_cpus: int | None = None,
+    archive_pairs: list[tuple[int, int]] | None = None,
+) -> None:
+    """Download the world grid or explicitly refresh selected 5-degree archives.
+
+    Resume validates hashed receipts. Legacy CSV successes remain
+    ``legacy_unverified`` without being redownloaded automatically. Explicit
+    ``archive_pairs`` retries only those archives, preserving other records
+    and tiles. Use ``resume=False`` to force refresh even verified archives.
+    Unverified or failed records never count as complete coverage.
     """
     outputs_path = Path(outputs_dirpath)
     outputs_path.mkdir(parents=True, exist_ok=True)
-
-    # Harmonized startup log
-    cpus = num_cpus if num_cpus is not None else os.cpu_count()
-    logger.info(f"Starting download: outputs={outputs_path}, cpus={cpus}, resume={resume}")
-
     csv_path = outputs_path / "download.csv"
-    png_path = outputs_path / "world_coverage.png"
-
-    # Generate all lat/lon pairs
-    all_pairs = []
-    for lat_min in range(-90, 90, 5):
-        for lon_min in range(-180, 180, 5):
-            all_pairs.append((lat_min, lon_min))
-
-    # Load existing results if resume is enabled
-    existing_results: list[tuple[int, int, str, bool]] = []
-    existing_pairs: set[tuple[int, int]] = set()
-    existing_extracted: dict[tuple[int, int], bool] = {}
-
-    if resume and csv_path.exists():
-        logger.info(f"Resuming from existing CSV file: {csv_path}")
+    results = {}
+    legacy_csv = False
+    if csv_path.exists() and (resume or archive_pairs is not None):
         try:
-            df_existing = pd.read_csv(csv_path)
-            logger.info(f"Loaded {len(df_existing)} existing results")
-            for _, row in df_existing.iterrows():
-                lat, lon = int(row["lat_min"]), int(row["lon_min"])
-                extracted_flag = bool(row.get("extracted", False))
-                existing_pairs.add((lat, lon))
-                existing_extracted[(lat, lon)] = extracted_flag
-                existing_results.append((lat, lon, row["url"], row["url_valid"], extracted_flag))
-        except (pd.errors.EmptyDataError, Exception) as e:
-            logger.warning(f"Failed to load CSV: {e}. Starting fresh.")
+            with csv_path.open(newline="") as stream:
+                reader = csv.DictReader(stream)
+                legacy_csv = "status" not in (reader.fieldnames or [])
+                for row in reader:
+                    pair = int(row["lat_min"]), int(row["lon_min"])
+                    row = {
+                        key: row.get(key, "")
+                        for key in ["lat_min", "lon_min", "url", "url_valid", "extracted", "status", "error"]
+                    }
+                    row.update(
+                        lat_min=pair[0],
+                        lon_min=pair[1],
+                        url_valid=_csv_bool(row["url_valid"]),
+                        extracted=_csv_bool(row["extracted"]),
+                    )
+                    results[pair] = row
+        except (OSError, ValueError, KeyError) as error:
+            raise ValueError(f"Cannot safely resume malformed download CSV: {csv_path}") from error
+
+    all_pairs = [(lat, lon) for lat in range(-90, 90, 5) for lon in range(-180, 180, 5)]
+    if archive_pairs is not None:
+        if any(pair not in all_pairs for pair in archive_pairs):
+            raise ValueError("Archive coordinates must lie on the world 5-degree grid")
+        selected = sorted(set(archive_pairs))
     else:
-        if csv_path.exists():
-            os.unlink(csv_path)
-        logger.info("Starting fresh download (no resume)")
-
-    # Create raw directory for downloads
-    raw_dir = outputs_path
-    raw_dir.mkdir(parents=True, exist_ok=True)
-    raw_dir_str = str(raw_dir)
-
-    # Filter pairs to process. If resuming, re-queue pairs whose previous 'extracted' value was False
-    pairs_to_process = []
-    for lat, lon in all_pairs:
-        if (lat, lon) not in existing_pairs:
-            pairs_to_process.append((lat, lon, raw_dir_str))
-        else:
-            # if previously checked but not extracted successfully, redo
-            if not existing_extracted.get((lat, lon), False):
-                pairs_to_process.append((lat, lon, raw_dir_str))
-
-    if pairs_to_process:
-        num_already_checked = len(existing_pairs)
-        num_failed_extractions = sum(1 for v in existing_extracted.values() if not v)
-        logger.info(
-            f"Processing {len(pairs_to_process)} remaining pairs (skipping {num_already_checked} already checked; "
-            f"reprocessing {num_failed_extractions} failed extractions)"
-        )
-
-        file_exists = csv_path.exists()
-        new_results = []
-
-        # Open CSV once and append each result as it is produced
-        with open(csv_path, "a", newline="") as csvfile:
-            writer = csv.writer(csvfile)
-            # write header if file did not exist before
-            if not file_exists:
-                writer.writerow(["lat_min", "lon_min", "url", "url_valid", "extracted"])
-                csvfile.flush()
-                try:
-                    os.fsync(csvfile.fileno())
-                except Exception:
-                    pass
-
-            # Process URL checks and downloads, writing each result immediately
-            if num_cpus == 0:
-                # Sequential processing (useful for debugging)
-                logger.info("Running in sequential mode (no multiprocessing)")
-                for res in tqdm((download_tile(pair) for pair in pairs_to_process), total=len(pairs_to_process)):
-                    try:
-                        writer.writerow(res)
-                        csvfile.flush()
-                        try:
-                            os.fsync(csvfile.fileno())
-                        except Exception:
-                            pass
-                    except Exception as e:
-                        logger.warning(f"Failed writing result {res} to CSV: {e}")
-                    new_results.append(res)
+        selected = all_pairs
+    if legacy_csv and not (outputs_path / "download.legacy.csv").exists():
+        with tempfile.NamedTemporaryFile(dir=outputs_path, delete=False) as backup:
+            temporary = Path(backup.name)
+            try:
+                with csv_path.open("rb") as source:
+                    shutil.copyfileobj(source, backup)
+                backup.flush()
+                os.fsync(backup.fileno())
+            except BaseException:
+                temporary.unlink(missing_ok=True)
+                raise
+        try:
+            os.replace(temporary, outputs_path / "download.legacy.csv")
+        finally:
+            temporary.unlink(missing_ok=True)
+    legacy_pairs = _legacy_archive_pairs(outputs_path)
+    for pair, row in results.items():
+        if not row["status"]:
+            if row["extracted"]:
+                row.update(
+                    extracted=False,
+                    status="legacy_unverified" if pair in legacy_pairs else "legacy_missing",
+                    error="No archive member/hash receipt; legacy CSV success is unverified",
+                )
             else:
-                # Multiprocessing
-                pool_size = num_cpus if num_cpus is not None else os.cpu_count()
-                logger.info(f"Running with {pool_size} CPUs")
-                with multiprocessing.Pool(pool_size) as pool:
-                    for res in tqdm(pool.imap(download_tile, pairs_to_process), total=len(pairs_to_process)):
-                        try:
-                            writer.writerow(res)
-                            csvfile.flush()
-                            try:
-                                os.fsync(csvfile.fileno())
-                            except Exception:
-                                pass
-                        except Exception as e:
-                            logger.warning(f"Failed writing result {res} to CSV: {e}")
-                        new_results.append(res)
+                row.update(status="legacy_unavailable", error="Historical HEAD failure/absence was not distinguished")
+    pending = []
+    for pair in selected:
+        row = results.get(pair)
+        url = _archive_url(*pair)
+        record = _read_manifest(outputs_path, url)
+        verified = _verified_manifest(outputs_path, url, record) if resume else False
+        if verified:
+            results[pair] = dict(
+                lat_min=pair[0], lon_min=pair[1], url=url, url_valid=True, extracted=True, status="complete", error=""
+            )
+        elif (
+            archive_pairs is None
+            and resume
+            and row
+            and pair in legacy_pairs
+            and (row["extracted"] or row["status"] == "legacy_unverified")
+            and not record
+        ):
+            row.update(
+                extracted=False,
+                status="legacy_unverified",
+                error="No archive member/hash receipt; legacy CSV success is unverified",
+            )
+        else:
+            pending.append((*pair, str(outputs_path)))
 
-        # Merge existing and new results
-        all_results = existing_results + new_results
-        df_results = pd.DataFrame(all_results, columns=["lat_min", "lon_min", "url", "url_valid", "extracted"])
-        logger.info(f"URL status codes appended to {csv_path}")
-    else:
-        logger.info("All pairs already checked, nothing to process")
-        df_results = pd.DataFrame(existing_results, columns=["lat_min", "lon_min", "url", "url_valid", "extracted"])
+    _write_results(csv_path, results)
 
-    # Generate status map
-    generate_status_map(df_results, png_path)
-    logger.info("Download completed.")
+    def record_result(result: tuple[int, int, str, bool, bool]) -> None:
+        lat, lon, url, valid, extracted = result
+        receipt = _read_manifest(outputs_path, url)
+        # Only the on-disk receipt can establish successful extraction.
+        complete = extracted and receipt.get("status") == "complete"
+        results[(lat, lon)] = dict(
+            lat_min=lat,
+            lon_min=lon,
+            url=url,
+            url_valid=valid,
+            extracted=complete,
+            status=receipt.get("status", "failed"),
+            error=receipt.get("error", "Missing archive receipt"),
+        )
+        _write_results(csv_path, results)
+
+    logger.info(f"Processing {len(pending)} archives; retaining {len(results)} previous records")
+    if num_cpus == 0:
+        for result in tqdm(map(download_tile, pending), total=len(pending)):
+            record_result(result)
+    elif pending:
+        with multiprocessing.Pool(num_cpus if num_cpus is not None else os.cpu_count()) as pool:
+            for result in tqdm(pool.imap(download_tile, pending), total=len(pending)):
+                record_result(result)
+    df_results = pd.DataFrame(
+        list(results.values()), columns=["lat_min", "lon_min", "url", "url_valid", "extracted", "status", "error"]
+    )
+    generate_status_map(df_results, outputs_path / "world_coverage.png")
+    counts = df_results["status"].value_counts().to_dict()
+    _atomic_json(
+        outputs_path / "download_summary.json",
+        {
+            "schema_version": 1,
+            "scope": "selected_archives" if archive_pairs is not None else "world_grid",
+            "requested_archives": len(selected),
+            "statuses": counts,
+            "all_requested_verified": all(results.get(pair, {}).get("status") == "complete" for pair in selected),
+        },
+    )
+    logger.info(f"Download pass finished: {counts}. Only 'complete' archives have verified member receipts.")

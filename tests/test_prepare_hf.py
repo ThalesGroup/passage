@@ -37,6 +37,26 @@ from passage.export import (
 from passage.utils import save_tensor
 
 
+def _mock_executed_notebook(input_path, output_path, parameters, **options):
+    """Produce real executed-cell evidence for the export boundary mock."""
+    import nbformat
+
+    notebook = nbformat.read(input_path, as_version=4)
+    for index, cell in enumerate(notebook.cells):
+        if cell.cell_type == "code":
+            cell.execution_count = index + 1
+            cell.outputs = [nbformat.v4.new_output("stream", name="stdout", text="fixture execution")]
+    nbformat.write(notebook, output_path)
+    artifacts = Path(parameters["output_dir"])
+    artifacts.mkdir(parents=True, exist_ok=True)
+    (artifacts / "_export_receipt.json").write_text('{"report": {}, "section_statuses": {}}')
+    (artifacts / f"{artifacts.name}-{parameters['resolution']}.json").write_text("{}")
+    if artifacts.name == "dataset_qualification":
+        for name in ("qualification_figures.json", "fig_qualification.pdf", "fig_qualification.png"):
+            (artifacts / name).write_text("fixture artifact")
+    return True
+
+
 def _setup_minimal_export_tree(tmp_path: Path) -> tuple[Path, Path, Path]:
     dataset_dir = tmp_path / "dataset"
     split_dir = dataset_dir / "64" / "train"
@@ -47,7 +67,17 @@ def _setup_minimal_export_tree(tmp_path: Path) -> tuple[Path, Path, Path]:
 
     notebooks_dir = tmp_path / "notebooks"
     notebooks_dir.mkdir()
-    (notebooks_dir / "_dataset.ipynb").write_text('{"cells": [], "metadata": {}, "nbformat": 4, "nbformat_minor": 5}')
+    import nbformat
+    from passage.notebook_export import TEMPLATES, PAPER_REPORTS, VISION_REPORTS
+    fixture_notebook = nbformat.v4.new_notebook(cells=[nbformat.v4.new_code_cell(
+        "resolution = 64\noutput_dir = None", metadata={"tags": ["parameters"]})])
+    for kind in TEMPLATES:
+        nbformat.write(fixture_notebook, notebooks_dir / f"_{kind}.ipynb")
+    for group, names in (("paper", PAPER_REPORTS), ("vision/paper", VISION_REPORTS)):
+        directory = tmp_path / group / "notebooks"
+        directory.mkdir(parents=True)
+        for name in names:
+            nbformat.write(fixture_notebook, directory / f"{name}.ipynb")
     config_dir = tmp_path / "config"
     config_dir.mkdir(parents=True)
     (config_dir / "config.yaml").write_text(
@@ -211,7 +241,7 @@ def test_export_and_upload_passes_num_cpus_to_notebook(tmp_path):
             with patch("passage.export.HfApi") as api_mock:
                 api_instance = MagicMock()
                 api_mock.return_value = api_instance
-                with patch("passage.export._execute_notebook_with_retries") as exec_mock:
+                with patch("passage.export._execute_notebook_with_retries", side_effect=_mock_executed_notebook) as exec_mock:
                     with patch("passage.export._process_meta_for_prepare", new=_mock_prepare_row):
                         with patch("passage.export._features", new=_mock_features):
                             ok = export_and_upload(
@@ -257,7 +287,7 @@ def test_export_and_upload_uses_explicit_calibration_filepath(tmp_path):
             with patch("passage.export.HfApi") as api_mock:
                 api_instance = MagicMock()
                 api_mock.return_value = api_instance
-                with patch("passage.export._execute_notebook_with_retries") as exec_mock:
+                with patch("passage.export._execute_notebook_with_retries", side_effect=_mock_executed_notebook) as exec_mock:
                     with patch("passage.export._process_meta_for_prepare", new=_mock_prepare_row):
                         with patch("passage.export._features", new=_mock_features):
                             ok = export_and_upload(
@@ -508,8 +538,7 @@ def test_export_and_upload_stages_release_metadata(tmp_path):
                 calibrate_dirpath=calibrate_dir,
                 notebooks_dirpath=notebooks_dir,
                 resolutions=[64],
-                repo_id="anonymous-org/passage",
-                anonymous=True,
+                repo_id="example-org/passage",
                 execute_notebooks=False,
                 skip_upload=True,
                 num_cpus=0,
@@ -527,12 +556,32 @@ def test_export_and_upload_stages_release_metadata(tmp_path):
         assert (export_dir / filename).exists()
 
     croissant = yaml.safe_load((export_dir / "croissant.json").read_text(encoding="utf-8"))
-    assert croissant["url"] == "https://huggingface.co/datasets/anonymous-org/passage"
-    assert croissant["creator"][0]["name"] == "Anonymous Authors"
+    assert croissant["url"] == "https://huggingface.co/datasets/example-org/passage"
 
     citation = yaml.safe_load((export_dir / "CITATION.cff").read_text(encoding="utf-8"))
-    assert citation["authors"][0]["family-names"] == "Anonymous"
+    assert citation["authors"][0]["family-names"] == "Delhomme"
 
-    datasheet = (export_dir / "DATASHEET.md").read_text(encoding="utf-8")
-    assert "anonymous submission artifact" in datasheet
-    assert "https://huggingface.co/datasets/anonymous-org/passage" in datasheet
+
+def test_prepare_export_rejects_missing_display_template_after_other_jobs_execute(tmp_path):
+    dataset, notebooks, calibration = _setup_minimal_export_tree(tmp_path)
+    _write_dummy_metadata(dataset, 64)
+    (notebooks / '_display.ipynb').unlink()
+    with patch('passage.export._process_meta_for_prepare', side_effect=_mock_prepare_row), \
+         patch('passage.export._features', side_effect=_mock_features), \
+         patch('passage.export._execute_notebook_with_retries', side_effect=_mock_executed_notebook):
+        assert export_and_upload(dataset_dirpath=dataset, calibrate_dirpath=calibration,
+            notebooks_dirpath=notebooks, resolutions=[64], execute_notebooks=True,
+            skip_upload=True, num_cpus=0) is False
+
+
+def test_prepare_export_rejects_absent_global_report_source_directory(tmp_path):
+    import shutil
+    dataset, notebooks, calibration = _setup_minimal_export_tree(tmp_path)
+    _write_dummy_metadata(dataset, 64)
+    shutil.rmtree(tmp_path / 'paper/notebooks')
+    with patch('passage.export._process_meta_for_prepare', side_effect=_mock_prepare_row), \
+         patch('passage.export._features', side_effect=_mock_features), \
+         patch('passage.export._execute_notebook_with_retries', side_effect=_mock_executed_notebook):
+        assert export_and_upload(dataset_dirpath=dataset, calibrate_dirpath=calibration,
+            notebooks_dirpath=notebooks, resolutions=[64], execute_notebooks=True,
+            skip_upload=True, num_cpus=0) is False

@@ -24,7 +24,6 @@
 
 import json
 import math
-from pathlib import Path
 
 import numpy as np
 import pytest
@@ -990,122 +989,101 @@ class TestTensorToImage:
     @pytest.mark.generate
     def test_tensor_to_image_basic(self):
         """Test tensor_to_image with a simple 2-channel tensor and provided path."""
-        # Create a simple 4x4 tensor with known values (elevation + markers)
-        tensor = np.zeros((4, 4, 2), dtype=np.float32)
-        tensor[:, :, 0] = 0.5  # Elevation channel (mid-gray)
+        tensor = np.zeros((64, 64, 2), dtype=np.float32)
+        tensor[:, :, 0] = 0.5
         tensor[:, :, 1] = -1.0
-        tensor[1, 1, 1] = 0.0  # start_point at (1, 1)
-        tensor[2, 2, 1] = 1.0  # end_point at (2, 2)
-        path_pixels = [(1, 2)]  # Path pixel
+        tensor[10, 10, 1] = 0.0
+        tensor[30, 30, 1] = 1.0
+        path_pixels = [(10, col) for col in range(10, 31)] + [(row, 30) for row in range(11, 31)]
 
         image = gen.tensor_to_image(tensor, path_pixels=path_pixels)
 
-        # Check output shape and dtype
-        assert image.shape == (4, 4, 3)
+        assert image.shape == (64, 64, 3)
         assert image.dtype == np.uint8
-
-        # Basic checks: elevation colormap applied (non-empty), markers and path drawn, no red
-        assert image[0, 0].sum() > 0  # elevation colormap produced a non-black pixel
-        # Start marker at (1,1) should be visible (green channel is filled)
-        assert image[1, 1, 1] == 255
-        # Path at (1,2) should be yellow (B low, G high, R high)
-        assert (image[1, 2, 1] >= 200) and (image[1, 2, 2] >= 200) and (image[1, 2, 0] < 100)
-        # Red channel now used for the yellow path overlay
-        assert image[1, 2, 2] >= 200
+        assert image[0, 0].sum() > 0
+        np.testing.assert_array_equal(image[10, 10], [255, 255, 255])
+        np.testing.assert_array_equal(image[30, 30], [255, 255, 255])
+        np.testing.assert_array_equal(image[10, 20], [172, 103, 23])  # blue, BGR
+        np.testing.assert_array_equal(image[20, 30], [172, 103, 23])
+        np.testing.assert_array_equal(image[9, 20], [255, 255, 255])  # route halo
+        np.testing.assert_array_equal(image[20, 20], image[0, 0])  # ordered L, no closing diagonal
 
     @pytest.mark.unit
     @pytest.mark.generate
     def test_tensor_to_image_two_paths(self):
         """Test that tensor_to_image draws both primary and secondary paths and that sizes scale."""
-        # Small resolution (64) -> path thickness ~1
         tensor64 = np.zeros((64, 64, 3), dtype=np.float32)
         tensor64[:, :, 0] = 0.5
         tensor64[:, :, 1] = -1.0
-        tensor64[32, 32, 1] = 0.0
-        path64 = [(32, 30), (32, 31), (32, 32), (32, 33), (32, 34)]
-        img64 = gen.tensor_to_image(tensor64, path_pixels=path64, alt_path_pixels=None)
-        # Primary path is now yellow (B low, G high, R high)
-        primary64 = np.sum((img64[:, :, 1] >= 200) & (img64[:, :, 2] >= 200) & (img64[:, :, 0] < 100))
+        path64 = [(20, col) for col in range(15, 46)]
+        alt64 = [(40, col) for col in range(15, 46)]
+        img64 = gen.tensor_to_image(tensor64, path_pixels=path64, alt_path_pixels=alt64)
+        primary64 = np.sum(np.all(img64[:, 30] == [172, 103, 23], axis=1))
+        alternate64 = np.sum(np.all(img64[:, 30] == [24, 100, 213], axis=1))
 
         # Larger resolution (256) -> path thickness should increase
         tensor256 = np.zeros((256, 256, 3), dtype=np.float32)
         tensor256[:, :, 0] = 0.5
         tensor256[:, :, 1] = -1.0
-        tensor256[128, 128, 1] = 0.0
-        # Scale coordinates roughly by 4
-        path256 = [(128, 120), (128, 121), (128, 122), (128, 123), (128, 124)]
-        img256 = gen.tensor_to_image(tensor256, path_pixels=path256, alt_path_pixels=None)
-        primary256 = np.sum((img256[:, :, 1] >= 200) & (img256[:, :, 2] >= 200) & (img256[:, :, 0] < 100))
+        path256 = [(80, col) for col in range(60, 181)]
+        alt256 = [(160, col) for col in range(60, 181)]
+        img256 = gen.tensor_to_image(tensor256, path_pixels=path256, alt_path_pixels=alt256)
+        primary256 = np.sum(np.all(img256[:, 120] == [172, 103, 23], axis=1))
+        alternate256 = np.sum(np.all(img256[:, 120] == [24, 100, 213], axis=1))
 
-        assert primary64 > 0, "No primary (yellow) pixels found for small resolution path"
-        assert primary256 > primary64, "Primary path did not scale up for higher resolution"
+        assert primary64 > 0 and alternate64 > 0
+        assert primary256 > primary64, "Primary route thickness did not scale up"
+        assert alternate256 > alternate64, "Alternate route thickness did not scale up"
 
     @pytest.mark.unit
     @pytest.mark.generate
     def test_tensor_to_image_alt_path_overrides_primary(self):
-        """Alternate (with-obstacles) path should be green and override primary when overlapping."""
-        tensor = np.zeros((8, 8, 3), dtype=np.float32)
-        tensor[:, :, 0] = 0.5
-        tensor[:, :, 1] = -1.0
-        # Place both primary and alternate path at the same pixel
-        path_pixels = [(3, 3)]
-        alt_path_pixels = [(3, 3)]
-        img = gen.tensor_to_image(tensor, path_pixels=path_pixels, alt_path_pixels=alt_path_pixels)
-        # The pixel should be green (alt path drawn last on top of primary)
-        assert (img[3, 3, 1] == 255) and (img[3, 3, 2] < 100) and (img[3, 3, 0] < 100)
-
-    @pytest.mark.unit
-    @pytest.mark.generate
-    def test_marker_plus_shape_and_no_white(self):
-        """Ensure marker is drawn as a plus-sign (3x3 at base) and no white outline exists."""
+        """The orange alternate route is drawn above the blue primary route."""
         tensor = np.zeros((64, 64, 3), dtype=np.float32)
         tensor[:, :, 0] = 0.5
         tensor[:, :, 1] = -1.0
-        # Place start marker at center and end marker elsewhere
-        tensor[32, 32, 1] = 0.0
-        tensor[40, 40, 1] = 1.0
-        img = gen.tensor_to_image(tensor, path_pixels=None)
-
-        # Start marker (cyan): check center and cardinal neighbors have high B and G
-        sx, sy = 32, 32
-        neighbors = [(sx, sy), (sx - 1, sy), (sx + 1, sy), (sx, sy - 1), (sx, sy + 1)]
-        for y, x in neighbors:
-            assert (img[y, x, 0] >= 200) and (img[y, x, 1] >= 200) and (img[y, x, 2] < 100)
-
-        # End marker (blue): check central pixel has dominant B channel
-        ex, ey = 40, 40
-        assert (img[ex, ey, 0] >= 200) and (img[ex, ey, 0] > img[ex, ey, 1]) and (img[ex, ey, 0] > img[ex, ey, 2])
-
-        # Check diagonal neighbors near start are not cyan/green-dominant (plus shape only)
-        diagonals = [(sx - 1, sy - 1), (sx - 1, sy + 1), (sx + 1, sy - 1), (sx + 1, sy + 1)]
-        for y, x in diagonals:
-            assert not ((img[y, x, 0] >= 200) and (img[y, x, 1] >= 200))
-
-        # Ensure no white (255,255,255) in a small neighborhood around start marker
-        for y in range(sx - 2, sx + 3):
-            for x in range(sy - 2, sy + 3):
-                assert not (img[y, x, 0] == 255 and img[y, x, 1] == 255 and img[y, x, 2] == 255)
+        path_pixels = [(30, col) for col in range(15, 46)]
+        alt_path_pixels = list(path_pixels)
+        img = gen.tensor_to_image(tensor, path_pixels=path_pixels, alt_path_pixels=alt_path_pixels)
+        np.testing.assert_array_equal(img[30, 30], [24, 100, 213])
+        np.testing.assert_array_equal(img[29, 30], [255, 255, 255])
 
     @pytest.mark.unit
     @pytest.mark.generate
-    def test_tensor_to_image_with_obstacles_channel(self, tmp_path):
-        """Test tensor_to_image with obstacle channel and metadata paths."""
-        tensor = np.zeros((4, 4, 3), dtype=np.float32)
+    def test_marker_circle_and_star_are_white_with_dark_edges(self):
+        """Start circles and goal stars remain distinct and visible above routes."""
+        tensor = np.zeros((64, 64, 3), dtype=np.float32)
+        tensor[:, :, 0] = 0.5
+        tensor[:, :, 1] = -1.0
+        tensor[16, 16, 1] = 0.0
+        tensor[40, 40, 1] = 1.0
+        path = [(cell, cell) for cell in range(16, 41)]
+        img = gen.tensor_to_image(tensor, path_pixels=path)
+
+        np.testing.assert_array_equal(img[16, 16], [255, 255, 255])
+        np.testing.assert_array_equal(img[15, 15], [255, 255, 255])  # filled circle includes diagonal
+        np.testing.assert_array_equal(img[16, 19], [43, 35, 24])  # dark circle boundary
+        np.testing.assert_array_equal(img[40, 40], [255, 255, 255])
+        np.testing.assert_array_equal(img[36, 40], [43, 35, 24])  # star's upward point
+        np.testing.assert_array_equal(img[12, 16], img[0, 0])  # circle does not have that long point
+
+    @pytest.mark.unit
+    @pytest.mark.generate
+    def test_tensor_to_image_with_obstacles_channel(self):
+        """Obstacles retain charcoal fill and hatching independently of routes."""
+        tensor = np.zeros((64, 64, 3), dtype=np.float32)
         tensor[:, :, 0] = 0.25
         tensor[:, :, 1] = -1.0
-        tensor[0, 0, 1] = 0.0
-        tensor[1, 1, 2] = 1.0  # obstacle pixel
-
-        # Provide metadata example (not needed here since we pass path_pixels explicitly)
-        # md = {...}  # unused in this test
-        # Provide path pixels explicitly instead of passing metadata_path
-        path_pixels = [(2, 2)]
+        tensor[5, 5, 1] = 0.0
+        tensor[25:38, 25:38, 2] = 1.0
+        path_pixels = [(50, col) for col in range(15, 46)]
 
         image = gen.tensor_to_image(tensor, path_pixels=path_pixels)
-        # obstacle should show in red channel (255)
-        assert image[1, 1, 2] == 255
-        # path pixel should be yellow at (2,2)
-        assert (image[2, 2, 1] >= 200) and (image[2, 2, 2] >= 200) and (image[2, 2, 0] < 100)
+        np.testing.assert_array_equal(image[32, 32], [58, 56, 48])
+        np.testing.assert_array_equal(image[30, 29], [165, 170, 163])  # hatch within mask
+        np.testing.assert_array_equal(image[50, 30], [172, 103, 23])
+        np.testing.assert_array_equal(image[5, 5], [255, 255, 255])
+        np.testing.assert_array_equal(image[32, 45], image[0, 0])  # obstacle mask stays local
 
     @pytest.mark.unit
     @pytest.mark.generate
@@ -1320,8 +1298,8 @@ class TestTilesNeeded:
         # Use small TILE_SIZE_PX to force many tiles
         monkeypatch.setattr(gen, "TILE_SIZE_PX", 16)
 
-        # Create calibration file at outputs/calibrate/calibrate.json (project-relative)
-        calib_dir = Path("outputs") / "calibrate"
+        # This synthetic calibration belongs only to this test.
+        calib_dir = tmp_path / "calibrate"
         calib_dir.mkdir(parents=True, exist_ok=True)
         calibrate = {
             "global_min": 0.0,
@@ -1356,7 +1334,9 @@ class TestTilesNeeded:
         outputs_dir.mkdir()
 
         # Run generation sequentially to keep logs deterministic
-        gen.run_generate(str(outputs_dir), str(cfg_path), str(tiles_dir), num_cpus=0, disable_images=True, force=True)
+        gen.run_generate(str(outputs_dir), str(cfg_path), str(tiles_dir),
+                         calibration_filepath=str(calib_dir / "calibrate.json"),
+                         num_cpus=0, disable_images=True, force=True)
 
         # Check outputs summary and generated sample files
         summary_path = outputs_dir / "summary.json"
@@ -1489,10 +1469,16 @@ class TestAssembleCrop:
 class TestMetadataCache:
     @pytest.mark.unit
     @pytest.mark.generate
-    def test_tensor_to_image_reads_metadata_equivalent(self, tmp_path):
+    def test_tensor_to_image_reads_metadata_equivalent(self):
         """Ensure tensor_to_image behavior when metadata is provided externally (path pixels)."""
         md = {
-            "paths": {"without_obstacles": {"pixels": [{"i": 1, "j": 2}]}, "with_obstacles": {"pixels": []}},
+            "paths": {
+                "without_obstacles": {
+                    "pixels": [{"i": 15, "j": col} for col in range(20, 36)]
+                    + [{"i": row, "j": 35} for row in range(16, 31)]
+                },
+                "with_obstacles": {"pixels": []},
+            },
             "obstacles": {"enabled": False},
             "crop": {"min_elevation": 0.0, "max_elevation": 100.0},
         }
@@ -1500,7 +1486,10 @@ class TestMetadataCache:
         path_section = md.get("paths", {}).get("without_obstacles") or md.get("paths", {}).get("with_obstacles")
         path_pixels = [(p["i"], p["j"]) for p in path_section.get("pixels", [])]
 
-        tensor = np.zeros((4, 4, 2), dtype=np.float32)
+        tensor = np.zeros((64, 64, 2), dtype=np.float32)
+        tensor[:, :, 1] = -1
         img = gen.tensor_to_image(tensor, path_pixels=path_pixels)
-        # The path pixel at (1,2) should be yellow
-        assert (img[1, 2, 1] >= 200) and (img[1, 2, 2] >= 200) and (img[1, 2, 0] < 100)
+        np.testing.assert_array_equal(img[15, 25], [172, 103, 23])
+        np.testing.assert_array_equal(img[25, 35], [172, 103, 23])
+        np.testing.assert_array_equal(img[25, 15], img[0, 0])  # i/j fields were not exchanged
+        np.testing.assert_array_equal(img[22, 27], img[0, 0])  # no synthetic closing diagonal

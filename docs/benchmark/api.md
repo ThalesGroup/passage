@@ -15,6 +15,59 @@ canonical docstring view.
 
 ---
 
+## Ordinary-input requests — `passage_eval.protocol.contracts`
+
+Existing algorithms implement `plan(PlanRequest) -> PlanResult`. The request
+contains candidate-visible terrain, endpoints, graph and shared budget; reference
+labels stay evaluator-owned. See the
+[existing-algorithm guide](contributing-a-method.md) for runnable specifications.
+
+::: passage_eval.protocol.contracts.GraphSpec
+    options:
+      show_root_heading: true
+      show_source: false
+
+::: passage_eval.protocol.contracts.BudgetSpec
+    options:
+      show_root_heading: true
+      show_source: false
+
+::: passage_eval.protocol.contracts.PlanRequest
+    options:
+      show_root_heading: true
+      show_source: false
+
+::: passage_eval.protocol.contracts.PlanResult
+    options:
+      show_root_heading: true
+      show_source: false
+
+---
+
+## Complete requests and offline scores
+
+::: passage_eval.execution.runner.run_requests
+    options:
+      show_root_heading: true
+      show_source: false
+
+::: passage_eval.execution.scoring.score_run_artifact
+    options:
+      show_root_heading: true
+      show_source: false
+
+::: passage_eval.metrics.comparison.compare_artifacts
+    options:
+      show_root_heading: true
+      show_source: false
+
+::: passage_eval.metrics.comparison.paired_cluster_bootstrap
+    options:
+      show_root_heading: true
+      show_source: false
+
+---
+
 ## Top-level package
 
 ::: passage_eval

@@ -5,19 +5,21 @@ icon: material/clipboard-check-outline
 
 # Benchmark
 
-\textsc{Passage} is shipped with a self-contained, version-pinned
+**PASSAGE** is shipped with a self-contained, version-pinned
 **evaluation contract** that turns the dataset into a benchmark.
-Every primary metric, every statistical-discipline rule, every
-trustworthiness diagnostic, and every inference-footprint utility used
-in the \textsc{Passage} paper is implemented as a Python module under
+The decoded-path metrics, statistical utilities, trustworthiness diagnostics
+and complete-request workflow live under
 [`src/passage-eval`](https://github.com/ThalesGroup/passage/tree/main/src/passage-eval).
 That sub-package is what you should hook up to your planner — whether
 it is a dense-vision model, a graph-neural network, a
 reinforcement-learning policy, or a classical solver — to get a
-\textsc{Passage}-comparable score.
+score with identified inputs, procedure, references and metric contract.
+Historical paper values require their own authenticated producer artifacts.
 
 This section of the documentation is the single entry point for that
-process. It covers four orthogonal topics:
+process. Start with the existing-algorithm guide to run
+`conform → run → score → compare → report`; use the protocol and API pages to
+interpret the results.
 
 <div class="grid cards" markdown>
 
@@ -48,12 +50,41 @@ process. It covers four orthogonal topics:
 
     ---
 
-    A full worked example: from a trained planner's predictions to a
-    paper-comparable headline row, including the censored-penalty
-    rule, three-seed aggregation, the Holm–Bonferroni step, and the
-    reproducibility-sidecar emission.
+    The historical statistical API's worked mean-difference example:
+    pairing and failure coverage, three-seed aggregation, Holm–Bonferroni
+    correction and sidecar evidence. Current complete-request comparison
+    follows the existing-algorithm guide.
 
     [:octicons-arrow-right-24: Run a full evaluation](walkthrough.md)
+
+- :material-trophy-outline: **Leaderboard**
+
+    ---
+
+    Entries scored on PASSAGE v1.0, organised by resolution, cost model, host
+    and accelerator. The leaderboard has no entries yet; the paper results are
+    listed separately.
+
+    [:octicons-arrow-right-24: Open the leaderboard](leaderboard.md)
+
+- :material-account-plus-outline: **Harness an existing algorithm**
+
+    ---
+
+    Wrap ordinary inputs, freeze a specification, qualify references, run the
+    complete procedure, score persisted routes offline and report matched
+    comparisons. Includes a runnable external CPU fixture and component controls.
+
+    [:octicons-arrow-right-24: Evaluate an existing method](contributing-a-method.md)
+
+- :material-notebook-multiple: **Reproducible Notebooks**
+
+    ---
+
+    Three notebooks: a classical-planner walkthrough on released tasks, the
+    paper results and the leaderboard. Re-run with `make docs-prepare`.
+
+    [:octicons-arrow-right-24: Open the notebook track](notebooks/index.md)
 
 - :material-api: **API Reference**
 
@@ -82,11 +113,12 @@ independently.
 
 You should reach for `passage-eval` when:
 
-- You have predictions from a planner and need a **score that the
-  PASSAGE paper would accept**.
-- You want to compare two planners on the same test split and need
-  the **paired-bootstrap CI on the mean of paired differences** plus
-  family-wise multiple-testing correction.
+- You have a planner and need decoded-path scores under an identified
+  qualified task and procedure contract.
+- You want to compare planners on identical frozen tasks with paired geographic
+  block intervals, explicit failure denominators and joint domain support. The
+  historical protocol's mean-difference and multiple-testing utilities remain
+  separate from this current comparison workflow.
 - You want a **reproducibility sidecar** for every reported number so
   reviewers can map any score back to the exact dataset version,
   seeds, calibration decisions, and hardware stack that produced it.
@@ -122,7 +154,7 @@ evidence base.
 `passage-eval` is licensed under the project's [MIT
 License](https://github.com/ThalesGroup/passage/blob/main/LICENSE). The benchmark itself, however, is built on
 the **JAXA ALOS World 3D 30 m DSM** (AW3D30); any user of
-\textsc{Passage} or its derived artefacts must respect JAXA's
+**PASSAGE** or its derived artefacts must respect JAXA's
 licensing terms — see the [JAXA license notice](../index.md#jaxa-license-and-attribution)
 on the home page and `DATASET_LICENSE.md` in the repository root for
 the full text mirrored from the JAXA terms-of-use page.

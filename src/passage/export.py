@@ -23,6 +23,10 @@
 """Build PASSAGE release artifacts for compression, export, and upload stages."""
 
 import csv
+import hashlib
+import io
+import tempfile
+from collections import Counter
 import json
 import multiprocessing as mp
 import os
@@ -31,7 +35,8 @@ import shutil
 import subprocess
 import time
 from collections import deque
-from dataclasses import dataclass
+from concurrent.futures import Executor, ProcessPoolExecutor
+from dataclasses import dataclass, replace
 from functools import partial
 from pathlib import Path
 
@@ -45,7 +50,6 @@ from dotenv import load_dotenv
 from huggingface_hub import HfApi, login
 from loguru import logger
 from PIL import Image as PILImage
-from tqdm import tqdm
 
 from passage.utils import load_tensor
 from passage.visualization import tensor_to_image
@@ -70,10 +74,6 @@ EXPORT_ROOT_METADATA_FILES = (
     "CHANGELOG.md",
     "DATASET_LICENSE.md",
 )
-ANONYMOUS_CITATION_AUTHOR = {
-    "family-names": "Anonymous",
-    "given-names": "Authors",
-}
 GITATTRIBUTES_CONTENT = """\
 # Hugging Face LFS — managed by `passage export`. Edit by regenerating with --force-gitattributes.
 *.parquet filter=lfs diff=lfs merge=lfs -text
@@ -87,6 +87,7 @@ GITATTRIBUTES_CONTENT = """\
 """
 DEFAULT_SAMPLE_SIZE_WARN_MB = 512
 DEFAULT_PARQUET_SIZE_WARN_MB = 5_000  # HF hard cap is 50 GB; warn well before
+DEFAULT_EXPORT_MEMORY_BUDGET_BYTES = 8 * 1024**3
 
 
 @dataclass(frozen=True)
@@ -133,19 +134,27 @@ class ReleaseContext:
     split_names: tuple[str, ...] = DEFAULT_SPLIT_NAMES
 
 
-def parse_path_csv(csv_path: Path) -> list[list[int]]:
+def parse_path_csv(csv_path: Path, *, expected_sha256: str | None = None) -> list[list[int]]:
     """Parse a path .csv file with rows "x,y" (no header) and return [[row,col], ...]."""
 
     out: list[list[int]] = []
-    with csv_path.open(newline="") as fh:
+    content = csv_path.read_bytes()
+    if expected_sha256 is not None and hashlib.sha256(content).hexdigest() != expected_sha256:
+        raise ValueError(f"Release admitted artifact content hash mismatch: {csv_path}")
+    with io.StringIO(content.decode('utf-8'), newline='') as fh:
         reader = csv.reader(fh)
         for row in reader:
-            if len(row) < 2:
-                continue
+            if len(row) != 2:
+                raise ValueError(f"Malformed path CSV row in {csv_path}: expected exactly two coordinates")
             x = int(row[0].strip())
             y = int(row[1].strip())
             out.append([x, y])
     return out
+
+
+def _load_export_metadata(content: str) -> dict:
+    """Use the installed safe C parser, preserving SafeLoader types and fallback."""
+    return yaml.load(content, Loader=getattr(yaml, 'CSafeLoader', yaml.SafeLoader))
 
 
 def _save_png(image_path: Path, image_bgr) -> None:
@@ -186,7 +195,9 @@ def _ensure_preview_image_for_prepare(
     return tensor
 
 
-def _process_meta_for_prepare(resolution: int, sample: bool, solver_names: list[str], metadata_filepath: str) -> dict:
+def _process_meta_for_prepare(resolution: int, sample: bool, solver_names: list[str], metadata_filepath: str,
+                              *, preview_root: Path | None = None,
+                              verified_receipt_sha256: str | None = None) -> dict:
     """Process a single metadata file into a serializable dict for HF dataset rows."""
 
     metadata_filepath = Path(metadata_filepath)
@@ -199,14 +210,50 @@ def _process_meta_for_prepare(resolution: int, sample: bool, solver_names: list[
     if not tensor_filepath.exists():
         raise FileNotFoundError(f"Missing required tensor for export: {tensor_filepath}")
 
-    metadata = yaml.safe_load(metadata_filepath.read_text()) or {}
+    metadata_content = metadata_filepath.read_bytes()
+    metadata = _load_export_metadata(metadata_content.decode('utf-8')) or {}
+    if not isinstance(metadata, dict):
+        raise ValueError("Export metadata must be a mapping")
+    expected_identity = {"index": int(stem), "resolution": resolution, "split": split_dirpath.name}
+    if any(key in metadata and metadata[key] != value for key, value in expected_identity.items()):
+        raise ValueError(f"Export scene identity mismatch: {metadata_filepath}")
+    receipt = None
+    if metadata.get("dataset_version"):
+        from passage.successor_generation import validate_scene_receipt
+        if metadata.get("units") != "metres":
+            raise ValueError("Release export requires canonical metres units")
+        if verified_receipt_sha256 is None:
+            receipt = validate_scene_receipt(split_dirpath, int(stem))
+        else:
+            # Admission already validates all receipt contracts in a worker. Bind
+            # this load to that exact receipt, and hash the actual bytes used to
+            # build the row so a concurrent raw change cannot cross that boundary.
+            receipt_content = (split_dirpath / 'receipts' / f'{stem}.json').read_bytes()
+            if hashlib.sha256(receipt_content).hexdigest() != verified_receipt_sha256:
+                raise ValueError('Release admitted receipt content hash mismatch')
+            receipt = json.loads(receipt_content)
+            if hashlib.sha256(metadata_content).hexdigest() != receipt['artifacts']['metadata']['sha256']:
+                raise ValueError('Release admitted metadata content hash mismatch')
+        if receipt["scene_status"] != "complete":
+            raise ValueError("Only complete scene receipts can supply tensor rows")
+    elif verified_receipt_sha256 is not None:
+        raise ValueError('Release admitted metadata lacks dataset identity')
     tensor = None
+
+    tensor_content = tensor_filepath.read_bytes()
+    if verified_receipt_sha256 is not None and hashlib.sha256(tensor_content).hexdigest() != receipt['artifacts']['tensor']['sha256']:
+        raise ValueError('Release admitted tensor content hash mismatch')
 
     sample_dict = {
         "id": str(stem),
-        "tensor": tensor_filepath.read_bytes(),
+        "tensor": tensor_content,
         "metadata": metadata,
+        "metadata_json": json.dumps(metadata, sort_keys=True, default=str),
+        "scene_receipt": json.dumps(receipt, sort_keys=True) if receipt is not None else None,
     }
+    if sample and verified_receipt_sha256 is not None:
+        from passage.dataset import decode_scene_inputs
+        tensor = decode_scene_inputs(sample_dict, resolution=resolution, split=split_dirpath.name)['input_tensor']
 
     # Load paths dynamically for each solver and per-solver images (if sample)
     for solver_name in solver_names:
@@ -214,11 +261,21 @@ def _process_meta_for_prepare(resolution: int, sample: bool, solver_names: list[
         path_obstacles_filepath = (
             split_dirpath / "paths" / solver_name / "obstacles" / lat_dir / lon_dir / f"{stem}.csv"
         )
-        path_free = parse_path_csv(path_free_filepath) if path_free_filepath.exists() else []
-        path_obstacles = parse_path_csv(path_obstacles_filepath) if path_obstacles_filepath.exists() else []
+        for path_filepath in (path_free_filepath, path_obstacles_filepath):
+            if not path_filepath.is_file():
+                raise FileNotFoundError(f"Missing required path CSV for export: {path_filepath}")
+        hashes = receipt['artifacts'] if verified_receipt_sha256 is not None else {}
+        path_free = parse_path_csv(path_free_filepath, expected_sha256=hashes.get(f'path:{solver_name}:free', {}).get('sha256'))
+        path_obstacles = parse_path_csv(path_obstacles_filepath, expected_sha256=hashes.get(f'path:{solver_name}:obstacles', {}).get('sha256'))
+        for variant, path in (("free", path_free), ("obstacles", path_obstacles)):
+            stats = metadata.get("paths", {}).get(solver_name, {}).get(variant, {})
+            if not path and stats.get("status") not in ("infeasible", "failed"):
+                raise ValueError("An empty CSV requires an explicit terminal status")
+            if stats.get("status") in ("infeasible", "failed") and (path or stats.get("cost") is not None):
+                raise ValueError("Terminal route status requires empty path and null cost")
 
         # Per-solver image file (sample-only)
-        solver_image_filepath = split_dirpath / "images" / solver_name / lat_dir / lon_dir / f"{stem}.png"
+        solver_image_filepath = (preview_root or split_dirpath / "images") / solver_name / lat_dir / lon_dir / f"{stem}.png"
         if sample:
             if not solver_image_filepath.exists():
                 tensor = _ensure_preview_image_for_prepare(
@@ -235,7 +292,48 @@ def _process_meta_for_prepare(resolution: int, sample: bool, solver_names: list[
 
         sample_dict[f"path_{solver_name}_free"] = path_free
         sample_dict[f"path_{solver_name}_obstacles"] = path_obstacles
+    if receipt is not None:
+        _validate_canonical_export_row(sample_dict, resolution, split_dirpath.name, solver_names)
     return sample_dict
+
+
+def _validate_canonical_export_row(row: dict, resolution: int, split: str, solver_names: list[str]) -> None:
+    """Reconstruct authoritative terrain and recost independently of receipt hashes."""
+    from passage.dataset import decode_scene_inputs
+    from passage_eval.metrics.cost import path_cost
+    from passage_eval.metrics.reliability import path_status
+    from passage_eval.protocol.contracts import GraphSpec
+
+    inputs = decode_scene_inputs(row, resolution=resolution, split=split)
+    metadata = row["metadata"]
+    if set(metadata["solvers"]) != set(solver_names) or set(metadata["paths"]) != set(solver_names):
+        raise ValueError("Release export solver identity mismatch")
+    for solver in solver_names:
+        config = metadata["solvers"][solver]
+        graph = GraphSpec(**config["graph_spec"])
+        from passage_eval.metrics.cost import canonical_cost_model
+        if graph.cost_model != canonical_cost_model(config["cost_model"]) or graph.cost_weight != config["weight"]:
+            raise ValueError("Release export graph/objective mismatch")
+        for variant in ("free", "obstacles"):
+            stats = metadata["paths"][solver][variant]
+            path = row[f"path_{solver}_{variant}"]
+            if stats["length"] != len(path):
+                raise ValueError("Release export route length mismatch")
+            status = stats.get("status")
+            if status in ("infeasible", "failed"):
+                if path or stats.get("cost") is not None:
+                    raise ValueError("Terminal route status requires empty path and null cost")
+                continue
+            if status != "ok" or not path:
+                raise ValueError("Release export requires explicit valid route status")
+            obstacles = inputs["obstacles"] if variant == "obstacles" else np.zeros_like(inputs["obstacles"])
+            connected, violation, _ = path_status(path, start=inputs["start"], goal=inputs["goal"], obstacles=obstacles)
+            actual = path_cost(inputs["elevation"], path, weight=graph.cost_weight, cost_model=graph.cost_model)
+            if not connected or violation or not np.isfinite(actual):
+                raise ValueError("Release export route is illegal on decoded terrain")
+            stored = stats.get("cost")
+            if stored is None or not np.isclose(actual, stored, rtol=graph.rtol, atol=graph.atol):
+                raise ValueError("Release export canonical route cost mismatch")
 
 
 def _solver_feature() -> dict:
@@ -244,11 +342,17 @@ def _solver_feature() -> dict:
         "backend": Value("string"),
         "name": Value("string"),
         "diagonal_movement": Value("string"),
-        "weight": Value("float32"),
+        "weight": Value("float64"),
         "heuristic": Value("string"),
         "cost_model": Value("string"),
         "solver": Value("string"),
         "max_marker_retries": Value("int32"),
+        "graph_spec": {
+            "connectivity": Value("int32"), "diagonal_policy": Value("string"),
+            "pixel_size_m": Value("float64"), "obstacle_policy": Value("string"),
+            "coordinate_order": Value("string"), "cost_model": Value("string"),
+            "cost_weight": Value("float64"), "rtol": Value("float64"), "atol": Value("float64"),
+        },
     }
 
 
@@ -258,7 +362,8 @@ def _path_stats_feature() -> dict:
         "length": Value("int32"),
         "crosses_obstacles": Value("bool"),
         "considered_area": Value("int32"),
-        "cost": Value("float32"),
+        "cost": Value("float64"),
+        "status": Value("string"),
     }
 
 
@@ -268,7 +373,8 @@ def _path_stats_obstacles_feature() -> dict:
         "length": Value("int32"),
         "crosses_obstacles": Value("bool"),
         "considered_area": Value("int32"),
-        "cost": Value("float32"),
+        "cost": Value("float64"),
+        "status": Value("string"),
         "cost_diff_percent": Value("float32"),
     }
 
@@ -276,6 +382,8 @@ def _path_stats_obstacles_feature() -> dict:
 def _features(sample: bool, solver_names: list[str]) -> Features:
     features_dict = {
         "id": Value("string"),
+        "metadata_json": Value("string"),
+        "scene_receipt": Value("string"),
     }
 
     # Add per-solver image columns (sample-only) and dynamic path columns for each solver
@@ -304,12 +412,14 @@ def _features(sample: bool, solver_names: list[str]) -> Features:
     }
 
     features_dict["metadata"] = {
+        "dataset_version": Value("string"),
+        "units": Value("string"),
         "index": Value("int32"),
         "resolution": Value("int32"),
         "split": Value("string"),
         "calibration": {
-            "min": Value("float32"),
-            "max": Value("float32"),
+            "min": Value("float64"),
+            "max": Value("float64"),
         },
         "tile": {
             "source": {
@@ -377,6 +487,8 @@ def _features(sample: bool, solver_names: list[str]) -> Features:
         "provenance": {
             "generation_seed": Value("int64"),
             "sample_seed": Value("int64"),
+            "calibration_sha256": Value("string"),
+            "provenance_id": Value("string"),
         },
         "solvers": solvers_feature,
         "paths": paths_feature,
@@ -401,8 +513,23 @@ def _execute_notebook_with_papermill(
     output_notebook: Path,
     parameters: dict,
     cwd: Path | None = None,
+    cell_timeout: int | None = None,
+    job_timeout: int | None = None,
 ) -> bool:
     """Execute a notebook with papermill using uv, with fallback to papermill API."""
+
+    if cell_timeout is not None or job_timeout is not None:
+        from passage.notebook_export import execute_notebook
+
+        try:
+            execute_notebook(input_notebook, output_notebook, parameters,
+                             cwd=cwd or Path.cwd(), cell_timeout=cell_timeout or 300,
+                             job_timeout=job_timeout or 1800,
+                             offline=parameters.get("dataset_path") is not None)
+            return True
+        except (OSError, RuntimeError, TimeoutError) as exc:
+            logger.error(f"Notebook execution failed: {exc}")
+            return False
 
     cmd_base = [
         "uv",
@@ -447,6 +574,8 @@ def _execute_notebook_with_retries(
     cwd: Path | None = None,
     max_retries: int | None = 3,
     retry_delay: int = 5,
+    cell_timeout: int | None = None,
+    job_timeout: int | None = None,
 ) -> bool:
     attempt = 0
     notebook_name = input_notebook.name
@@ -455,7 +584,12 @@ def _execute_notebook_with_retries(
         resolution_info = f" (resolution={parameters.get('RESOLUTION')})" if "RESOLUTION" in parameters else ""
         logger.info(f"Executing notebook {notebook_name} (attempt {attempt}){resolution_info}")
         try:
-            success = _execute_notebook_with_papermill(input_notebook, output_notebook, parameters, cwd)
+            if cell_timeout is not None or job_timeout is not None:
+                success = _execute_notebook_with_papermill(
+                    input_notebook, output_notebook, parameters, cwd,
+                    cell_timeout=cell_timeout, job_timeout=job_timeout)
+            else:
+                success = _execute_notebook_with_papermill(input_notebook, output_notebook, parameters, cwd)
         except Exception as exc:  # pragma: no cover - papermill errors vary
             logger.warning(f"Notebook {notebook_name} failed (attempt {attempt}): {exc}")
             success = False
@@ -801,6 +935,7 @@ def _generate_huggingface_yaml_header(
                     "path": f"{config_name}/{split}/*",
                 }
             )
+        dataset_info_config["features"] = _features(sample, solver_names)._to_yaml_list()
         dataset_config["dataset_info"].append(dataset_info_config)
         dataset_config["configs"].append(configs_config)
     # configs_yaml: list[str] = []
@@ -905,94 +1040,18 @@ def _dataset_terms_url(repo_id: str) -> str:
     return f"{_dataset_repo_url(repo_id)}/blob/main/DATASET_LICENSE.md"
 
 
-def _anonymize_citation_cff(citation_text: str, repo_id: str) -> str:
-    dataset_url = _dataset_repo_url(repo_id)
-    version_match = re.search(r"^version:\s*(.+)$", citation_text, flags=re.MULTILINE)
-    date_match = re.search(r"^date-released:\s*(.+)$", citation_text, flags=re.MULTILINE)
-    year_match = re.search(r"^\s*year:\s*(.+)$", citation_text, flags=re.MULTILINE)
-
-    version = version_match.group(1).strip() if version_match else "0.1.0"
-    date_released = date_match.group(1).strip() if date_match else "2026-03-30"
-    year = year_match.group(1).strip() if year_match else "2026"
-
-    return "\n".join(
-        [
-            "cff-version: 1.2.0",
-            "title: PASSAGE",
-            "message: If you use PASSAGE, please cite the anonymous submission mirror and the accompanying dataset metadata.",
-            "type: software",
-            "authors:",
-            "  - family-names: Anonymous",
-            "    given-names: Authors",
-            f"version: {version}",
-            f"date-released: {date_released}",
-            "license: MIT",
-            f"repository-code: {dataset_url}",
-            f"url: {dataset_url}",
-            "keywords:",
-            "  - pathfinding",
-            "  - terrain-routing",
-            "  - benchmark",
-            "  - digital-elevation-model",
-            "  - dataset",
-            "preferred-citation:",
-            "  type: article",
-            '  title: "PASSAGE anonymous submission mirror"',
-            "  authors:",
-            "    - family-names: Anonymous",
-            "      given-names: Authors",
-            f"  year: {year}",
-            f"  url: {dataset_url}",
-            "",
-        ]
-    )
-
-
-def _customize_croissant(croissant_text: str, repo_id: str, anonymous: bool) -> str:
+def _customize_croissant(croissant_text: str, repo_id: str) -> str:
     croissant = json.loads(croissant_text)
     dataset_url = _dataset_repo_url(repo_id)
     croissant["@id"] = dataset_url
     croissant["url"] = dataset_url
     croissant["license"] = _dataset_terms_url(repo_id)
 
-    if anonymous:
-        croissant["creator"] = [
-            {
-                "@type": "sc:Person",
-                "name": "Anonymous Authors",
-            }
-        ]
-
     for distribution in croissant.get("distribution", []):
         if distribution.get("@id") == "hf-passage-tree":
             distribution["contentUrl"] = f"{dataset_url}/tree/main"
 
     return json.dumps(croissant, indent=2, ensure_ascii=False) + "\n"
-
-
-def _anonymize_datasheet(datasheet_text: str, repo_id: str) -> str:
-    dataset_url = _dataset_repo_url(repo_id)
-    replacements = {
-        "The dataset was created by Geoffrey Delhomme, François Trap, and Fateh Kaakai on behalf of Thales Group research. See `CITATION.cff` for full attribution. Maintenance is owned by the Thales Group open-source research SIG; community contact via GitHub Issues, Discussions, or `oss@thalesgroup.com`.":
-            "The dataset is released for double-blind review as an anonymous submission artifact. Attribution is intentionally withheld in this mirror and restored at camera-ready.",
-        "Internal research funding (Thales Group). No external grant is associated with this release.":
-            "Anonymous institutional research funding. No external grant is associated with this release.",
-        "Yes — the dataset is distributed publicly via Hugging Face (`https://huggingface.co/datasets/thalesgroup/passage`). For the NeurIPS 2026 anonymous submission, a reviewer-accessible anonymous mirror is provided and documented in the submission package.":
-            f"Yes — the dataset is distributed via Hugging Face (`{dataset_url}`). This mirror is configured for anonymous NeurIPS 2026 review.",
-        "- Dataset: distributed under `DATASET_LICENSE.md`, which documents the inherited JAXA ALOS AW3D30 obligations for the derived artifacts.":
-            "- Dataset: distributed under `DATASET_LICENSE.md`, which documents the inherited JAXA ALOS AW3D30 obligations for the derived artifacts.",
-        "Thales Group open-source and critical AI research contributors. Contact: `oss@thalesgroup.com`; issues and discussions on the GitHub repository.":
-            "Anonymous submission mirror maintained for peer review. Contact details are withheld until de-anonymisation.",
-        "GitHub Issues and Discussions at <https://github.com/ThalesGroup/passage>, or email `oss@thalesgroup.com`.":
-            "Contact details are intentionally withheld in the anonymous submission mirror.",
-        "- **Maintenance owner**: Thales Group open-source research SIG; issues/PRs on GitHub.":
-            "- **Maintenance owner**: anonymous submission mirror maintainers; de-anonymised ownership is restored at camera-ready.",
-    }
-
-    for source, target in replacements.items():
-        datasheet_text = datasheet_text.replace(source, target)
-
-    return datasheet_text.replace("https://huggingface.co/datasets/thalesgroup/passage", dataset_url)
 
 
 def _repo_root() -> Path:
@@ -1131,6 +1190,68 @@ def _collect_local_config_names(export_dirpath: Path) -> set[str]:
     return config_names
 
 
+def _read_existing_config_names(
+    export_dirpath: Path, repo_id: str, split_names: tuple[str, ...], solver_names: list[str]
+) -> set[str]:
+    """Read compatible card declarations; this does not verify remote uploads."""
+    readme_filepath = export_dirpath / "README.md"
+    if not readme_filepath.exists():
+        return set()
+
+    try:
+        lines = readme_filepath.read_text(encoding="utf-8").splitlines()
+        if not lines or lines[0] != "---":
+            raise ValueError("missing YAML frontmatter")
+        end = lines.index("---", 1)
+        metadata = yaml.safe_load("\n".join(lines[1:end]))
+        configs = metadata.get("configs") if isinstance(metadata, dict) else None
+        if not isinstance(configs, list) or not configs:
+            raise ValueError("configs must be a nonempty list")
+
+        config_names: set[str] = set()
+        for entry in configs:
+            name = entry.get("config_name") if isinstance(entry, dict) else None
+            parsed = _parse_config_name(name) if isinstance(name, str) else None
+            if parsed is None or parsed[0] <= 0 or _config_name(*parsed) != name or name in config_names:
+                raise ValueError(f"invalid or duplicate PASSAGE config name: {name!r}")
+            expected_files = [{"split": split, "path": f"{name}/{split}/*"} for split in split_names]
+            data_files = entry.get("data_files")
+            if (
+                not isinstance(data_files, list)
+                or len(data_files) != len(expected_files)
+                or any(data_files.count(expected) != 1 for expected in expected_files)
+            ):
+                raise ValueError(f"incompatible data_files for {name}")
+            config_names.add(name)
+
+        dataset_info = metadata.get("dataset_info")
+        if not isinstance(dataset_info, list) or len(dataset_info) != len(config_names):
+            raise ValueError("dataset_info must describe every retained config")
+        current_header = _generate_huggingface_yaml_header(repo_id, config_names, list(split_names), None, solver_names)
+        current_info = yaml.safe_load(current_header.split("---", 2)[1])["dataset_info"]
+        expected_features = {entry["config_name"]: entry["features"] for entry in current_info}
+        seen_info: set[str] = set()
+        for entry in dataset_info:
+            name = entry.get("config_name") if isinstance(entry, dict) else None
+            if not isinstance(name, str) or name not in config_names or name in seen_info:
+                raise ValueError(f"invalid or duplicate dataset_info config: {name!r}")
+            if entry.get("features") != expected_features[name]:
+                raise ValueError(f"retained feature schema differs from the current export schema for {name}")
+            seen_info.add(name)
+
+        # Generated cards have no dedicated repo-id field. Check their companion
+        # metadata before prepare_export rewrites it for the requested repository.
+        croissant_filepath = export_dirpath / "croissant.json"
+        if croissant_filepath.exists():
+            croissant = json.loads(croissant_filepath.read_text(encoding="utf-8"))
+            expected_url = _dataset_repo_url(repo_id)
+            if not isinstance(croissant, dict) or any(croissant.get(key) != expected_url for key in ("@id", "url")):
+                raise ValueError("existing Croissant repository identity differs from the requested repo_id")
+        return config_names
+    except (ValueError, yaml.YAMLError, UnicodeError) as exc:
+        raise ValueError(f"Cannot keep existing configs from {readme_filepath}: {exc}") from exc
+
+
 def _resolve_prepared_resolutions(
     export_dirpath: Path,
     dataset_path: Path,
@@ -1142,11 +1263,7 @@ def _resolve_prepared_resolutions(
     local_config_names = _collect_local_config_names(export_dirpath)
     if local_config_names:
         return sorted(
-            {
-                parsed[0]
-                for config_name in local_config_names
-                if (parsed := _parse_config_name(config_name)) is not None
-            }
+            {parsed[0] for config_name in local_config_names if (parsed := _parse_config_name(config_name)) is not None}
         )
 
     return _resolve_dataset_resolutions(dataset_path, None)
@@ -1318,18 +1435,17 @@ def _copy_calibration_assets(calibrate_path: Path, export_dirpath: Path, force: 
 
 
 def _copy_analysis_notebooks(notebooks_path: Path, export_dirpath: Path, force: bool = False) -> str:
-    notebooks_dir = export_dirpath / "notebooks"
-    if not force and _has_analysis_notebooks(notebooks_dir):
-        return "skip"
-    if force and notebooks_dir.exists():
-        shutil.rmtree(notebooks_dir)
-    notebooks_dir.mkdir(parents=True, exist_ok=True)
-    for notebook_filepath in notebooks_path.glob("*.ipynb"):
-        if notebook_filepath.name.startswith("_"):
-            logger.info(f"Skipping notebook {notebook_filepath.name} (starts with '_')")
-            continue
-        shutil.copy2(notebook_filepath.resolve(), (notebooks_dir / notebook_filepath.name).resolve())
-    return "run"
+    """Preserve the complete recursive source inventory, including templates."""
+    from passage.notebook_export import write_staged_bytes
+
+    changed = False
+    for notebook_filepath in sorted(notebooks_path.rglob("*.ipynb")):
+        destination = export_dirpath / "notebooks" / notebook_filepath.relative_to(notebooks_path)
+        content = notebook_filepath.read_bytes()
+        if force or not destination.exists() or destination.read_bytes() != content:
+            write_staged_bytes(destination, content)
+            changed = True
+    return "run" if changed else "skip"
 
 
 def _strip_notebook_outputs(notebook_path: Path) -> bool:
@@ -1357,7 +1473,9 @@ def _strip_notebook_outputs(notebook_path: Path) -> bool:
                 modified = True
 
     if modified:
-        nbformat.write(nb, str(notebook_path))
+        from passage.notebook_export import write_staged_bytes
+
+        write_staged_bytes(notebook_path, nbformat.writes(nb).encode())
     return modified
 
 
@@ -1369,7 +1487,9 @@ def _strip_analysis_notebook_outputs(export_dirpath: Path, force: bool = False) 
 
     stripped = 0
     scanned = 0
-    for notebook_filepath in sorted(notebooks_dir.glob("*.ipynb")):
+    for notebook_filepath in sorted(notebooks_dir.rglob("*.ipynb")):
+        if notebook_filepath.relative_to(notebooks_dir).parts[0] in {"paper", "vision"}:
+            continue
         scanned += 1
         before = notebook_filepath.stat().st_size
         if _strip_notebook_outputs(notebook_filepath):
@@ -1499,7 +1619,6 @@ def _write_root_metadata_file(content: str, dst: Path, force: bool) -> str:
 def _copy_release_metadata_idempotent(
     export_dirpath: Path,
     repo_id: str,
-    anonymous: bool,
     force: bool,
 ) -> dict[str, str]:
     """Copy/transform root metadata files, skipping any that already exist when not forced."""
@@ -1517,117 +1636,507 @@ def _copy_release_metadata_idempotent(
 
     croissant_text = (repo_root / "croissant.json").read_text(encoding="utf-8")
     statuses["croissant.json"] = _write_root_metadata_file(
-        _customize_croissant(croissant_text, repo_id=repo_id, anonymous=anonymous),
+        _customize_croissant(croissant_text, repo_id=repo_id),
         export_dirpath / "croissant.json",
         force,
     )
 
     datasheet_text = (repo_root / "DATASHEET.md").read_text(encoding="utf-8")
-    if anonymous:
-        datasheet_text = _anonymize_datasheet(datasheet_text, repo_id=repo_id)
-    else:
-        datasheet_text = datasheet_text.replace("https://huggingface.co/datasets/thalesgroup/passage", dataset_url)
+    datasheet_text = datasheet_text.replace("https://huggingface.co/datasets/thalesgroup/passage", dataset_url)
     statuses["DATASHEET.md"] = _write_root_metadata_file(datasheet_text, export_dirpath / "DATASHEET.md", force)
 
     citation_text = (repo_root / "CITATION.cff").read_text(encoding="utf-8")
-    if anonymous:
-        citation_text = _anonymize_citation_cff(citation_text, repo_id=repo_id)
     statuses["CITATION.cff"] = _write_root_metadata_file(citation_text, export_dirpath / "CITATION.cff", force)
 
     return statuses
 
 
-def _write_split_parquets(
-    context: ReleaseContext,
-    resolution: int,
-    sample: bool,
-    split: str,
-    cpus: int,
-) -> int:
-    config_name = _config_name(resolution, sample)
-    split_dir = context.dataset_path / str(resolution) / split
-    if not split_dir.exists():
-        return 0
+def _export_row_budget(resolution: int, requested: int) -> int:
+    """Bound materialized row groups by uncompressed tensor bytes, at least one scene."""
+    if requested <= 0:
+        raise ValueError("Export row/shard size must be positive")
+    from passage.dataset import DatasetSource
+    return min(requested, DatasetSource.batch_size_for(resolution, ["tensor"]),
+               max(1, (128 * 1024 * 1024) // (resolution * resolution * 12)))
 
-    metadata_root = split_dir / "metadata"
-    rows_max = context.sample_size if sample else None
-    logger.info(
-        f"Scanning metadata for {config_name}/{split}" + (f" (limit={rows_max})" if rows_max is not None else "")
-    )
-    metadata_filepaths, metadata_count = _iter_metadata_filepaths(metadata_root, limit=rows_max)
-    if metadata_count == 0:
-        logger.info(f"No metadata files for {config_name}/{split}; skipping")
-        return 0
 
-    chunk_size = context.chunk_sizes.get(resolution)
-    if chunk_size is None:
+def _file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for block in iter(lambda: stream.read(8 * 1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def _stream_scene_shards(context: ReleaseContext, resolution: int, sample: bool, split: str,
+                         metadata_paths: list[Path], output_path: Path, *, prefix: str = "data",
+                         cpus: int = 0, preview_root: Path | None = None,
+                         first_shard: int = 0, receipt_hashes: list[str] | None = None) -> list[dict]:
+    """Write bounded Arrow groups while preserving configured rows per physical shard."""
+    shard_size = context.chunk_sizes.get(resolution)
+    if shard_size is None:
         raise ValueError(f"Missing export.chunk_size entry for resolution {resolution}")
-
-    export_path = context.export_dirpath / config_name / split
-    export_path.mkdir(parents=True, exist_ok=True)
-    rows: list[dict] = []
-    num_chunk = 0
-    pool: mp.Pool | None = None
-
-    if cpus == 0:
-        logger.info(f"Running in sequential mode (no multiprocessing) for {config_name}/{split}")
-        iterable = map(partial(_process_meta_for_prepare, resolution, sample, context.solver_names), metadata_filepaths)
-    else:
-        pool_size = max(cpus - 1, 1)
-        worker_count = min(pool_size, metadata_count)
-        logger.info(f"Running metadata processing with {worker_count} worker processes")
+    batch_size = _export_row_budget(resolution, shard_size)
+    output_path.mkdir(parents=True, exist_ok=True)
+    pool = None
+    worker_count = min(max(cpus - 1, 1), len(metadata_paths), batch_size) if cpus else 0
+    processor = partial(_process_meta_for_prepare, resolution, sample, context.solver_names, preview_root=preview_root)
+    source = metadata_paths
+    if receipt_hashes is not None:
+        if len(receipt_hashes) != len(metadata_paths):
+            raise ValueError('Release admission receipt roster mismatch')
+        source = zip(metadata_paths, receipt_hashes)
+        processor = partial(_process_admitted_meta, resolution, sample, context.solver_names, preview_root=preview_root)
+    if worker_count:
         pool = mp.Pool(processes=worker_count)
-        max_inflight = max(worker_count * 2, worker_count + 2)
-        iterable = _bounded_ordered_imap(
-            pool,
-            partial(_process_meta_for_prepare, resolution, sample, context.solver_names),
-            metadata_filepaths,
-            max_inflight=max_inflight,
-        )
-
+        iterable = _bounded_ordered_imap(pool, processor, source, max_inflight=worker_count)
+    else:
+        iterable = map(processor, source)
+    shards, rows = [], []
+    writer = None
+    shard_rows = 0
+    shard_path = None
+    def flush():
+        nonlocal writer, shard_rows, shard_path, rows
+        if not rows:
+            return
+        table = Dataset.from_list(rows, features=_features(sample, context.solver_names)).data.table
+        if writer is None:
+            shard_path = output_path / f"{prefix}-{first_shard + len(shards):05d}.parquet"
+            writer = pq.ParquetWriter(shard_path, table.schema, compression="zstd",
+                                      compression_level=context.compression_level)
+        writer.write_table(table)
+        shard_rows += len(rows)
+        rows = []
+        if shard_rows == shard_size:
+            writer.close()
+            shards.append({"path": shard_path.name, "rows": shard_rows, "sha256": _file_sha256(shard_path),
+                           "size_bytes": shard_path.stat().st_size,
+                           "schema_sha256": hashlib.sha256(pq.read_schema(shard_path).serialize().to_pybytes()).hexdigest()})
+            writer = None
+            shard_rows = 0
     try:
-        for row in tqdm(
-            iterable,
-            total=metadata_count,
-            desc=f"Loading metadata for {config_name}/{split}",
-            unit="file",
-        ):
+        for row in iterable:
             rows.append(row)
-            if len(rows) >= chunk_size:
-                table = Dataset.from_list(rows, features=_features(sample, context.solver_names)).data.table
-                rows = []
-                parquet_filepath = export_path / f"data-{num_chunk:05d}.parquet"
-                logger.info(f"Writing chunk {num_chunk + 1} for {config_name}/{split}: {parquet_filepath}")
-                pq.write_table(
-                    table,
-                    parquet_filepath,
-                    compression="zstd",
-                    compression_level=context.compression_level,
-                )
-                del table
-                num_chunk += 1
+            if len(rows) >= min(batch_size, shard_size - shard_rows):
+                flush()
+        flush()
+        if writer is not None:
+            writer.close()
+            writer = None
+            shards.append({"path": shard_path.name, "rows": shard_rows, "sha256": _file_sha256(shard_path),
+                           "size_bytes": shard_path.stat().st_size,
+                           "schema_sha256": hashlib.sha256(pq.read_schema(shard_path).serialize().to_pybytes()).hexdigest()})
     except BaseException:
         if pool is not None:
             pool.terminate()
         raise
     finally:
+        if writer is not None:
+            writer.close()
         if pool is not None:
             pool.close()
             pool.join()
+    return shards
 
-    if rows:
-        table = Dataset.from_list(rows, features=_features(sample, context.solver_names)).data.table
-        parquet_filepath = export_path / f"data-{num_chunk:05d}.parquet"
-        logger.info(f"Writing final chunk for {config_name}/{split} with {len(rows)} rows: {parquet_filepath}")
-        pq.write_table(
-            table,
-            parquet_filepath,
-            compression="zstd",
-            compression_level=context.compression_level,
-        )
-        num_chunk += 1
 
-    return num_chunk
+def _process_admitted_meta(resolution: int, sample: bool, solver_names: list[str], admitted: tuple[Path, str],
+                           *, preview_root: Path | None = None) -> dict:
+    path, receipt_hash = admitted
+    return _process_meta_for_prepare(resolution, sample, solver_names, path,
+                                     preview_root=preview_root, verified_receipt_sha256=receipt_hash)
+
+
+def _bounded_executor_map(executor: Executor | None, function, jobs, *, max_inflight: int):
+    """Yield ordered compact results without an unbounded executor task/result queue."""
+    if executor is None:
+        yield from map(function, jobs)
+        return
+    iterator = iter(jobs)
+    pending = deque()
+    try:
+        for _ in range(max_inflight):
+            job = next(iterator, None)
+            if job is None:
+                break
+            pending.append(executor.submit(function, job))
+        while pending:
+            result = pending.popleft().result()
+            job = next(iterator, None)
+            if job is not None:
+                pending.append(executor.submit(function, job))
+            yield result
+    except BaseException:
+        # Cancellation must also stop the currently awaited future, which has
+        # already been popped from pending. Native work cannot cancel through a
+        # Future; stop and join every owned process before staging is removed.
+        from passage.successor_generation import _stop_executor
+        for future in pending:
+            future.cancel()
+        _stop_executor(executor, cancel=True)
+        raise
+    finally:
+        for future in pending:
+            future.cancel()
+
+
+def _admit_successor_scenes(job: tuple[Path, int, tuple[str, ...], list[int]]) -> list[dict]:
+    """Validate a bounded scene roster locally; return receipt records, never tensors."""
+    from passage.successor_generation import validate_scene_receipt
+    raw, resolution, split_names, indices = job
+    scenes = []
+    for index in indices:
+        found = [(split, raw / str(resolution) / split / 'receipts' / f'{index:010d}.json')
+                 for split in split_names if (raw / str(resolution) / split / 'receipts' / f'{index:010d}.json').is_file()]
+        if len(found) != 1:
+            raise ValueError(f'Requested scene {index} requires exactly one terminal receipt')
+        split, path = found[0]
+        before = _file_sha256(path)
+        receipt = validate_scene_receipt(path.parent.parent, index)
+        after = path.read_bytes()
+        if hashlib.sha256(after).hexdigest() != before or json.loads(after) != receipt:
+            raise ValueError('Release scene receipt changed during admission')
+        scenes.append({'index': index, 'split': split, 'receipt': receipt,
+                       'receipt_file_sha256': before,
+                       'receipt_semantic_sha256': hashlib.sha256(json.dumps(receipt, sort_keys=True,
+                           separators=(',', ':'), default=str).encode()).hexdigest()})
+    return scenes
+
+
+def _write_successor_shard(job: tuple) -> dict:
+    """Own one physical shard, its bounded row groups, compression and byte hashes."""
+    context, resolution, sample, split, paths, hashes, output, prefix, shard_number, previews = job
+    shards = _stream_scene_shards(context, resolution, sample, split, paths, output,
+        prefix=prefix, preview_root=previews, first_shard=shard_number, receipt_hashes=hashes)
+    if len(shards) != 1:
+        raise ValueError('Release physical shard job produced an invalid shard count')
+    return {**shards[0], 'samples': sample, 'split': split,
+            'path': (Path(_config_name(resolution, sample)) / split / shards[0]['path']).as_posix()}
+
+
+def _successor_export_workers(resolution: int, shard_size: int, executor: Executor | None,
+                              num_cpus: int, memory_budget_bytes: int) -> tuple[int, int]:
+    if isinstance(num_cpus, bool) or not isinstance(num_cpus, int) or num_cpus < 0:
+        raise ValueError('num_cpus must be a nonnegative integer (0 is serial)')
+    if isinstance(memory_budget_bytes, bool) or not isinstance(memory_budget_bytes, int) or memory_budget_bytes <= 0:
+        raise ValueError('Export memory budget must be a positive integer')
+    group_rows = _export_row_budget(resolution, shard_size)
+    # Compressed row payloads, Arrow conversion, decoded canonical terrain and
+    # Python metadata all exist in the producer, without crossing process IPC.
+    per_worker = group_rows * resolution**2 * 12 * 3 + resolution**2 * 96 + 64 * 1024**2
+    if memory_budget_bytes < per_worker:
+        raise ValueError('Export memory budget cannot contain one shard producer')
+    capacity = getattr(executor, '_max_workers', num_cpus or 1) if executor is not None else num_cpus or 1
+    requested = min(capacity, num_cpus) if num_cpus else capacity
+    return max(1, min(requested, memory_budget_bytes // per_worker)), per_worker
+
+
+def _write_split_parquets(context: ReleaseContext, resolution: int, sample: bool, split: str, cpus: int) -> int:
+    split_dir = context.dataset_path / str(resolution) / split
+    if not split_dir.exists():
+        return 0
+    metadata_paths, count = _iter_metadata_filepaths(split_dir / "metadata", context.sample_size if sample else None)
+    if not count:
+        return 0
+    output = context.export_dirpath / _config_name(resolution, sample) / split
+    output.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix=f".{split}-export-", dir=output.parent) as directory:
+        temporary = Path(directory)
+        shards = _stream_scene_shards(context, resolution, sample, split, metadata_paths, temporary, cpus=cpus)
+        manifest = {"schema_version": 1, "resolution": resolution, "split": split,
+                    "population": "samples" if sample else "core", "rows": count, "shards": shards,
+                    "config_sha256": _file_sha256(context.config_file)}
+        (temporary / "export-manifest.json").write_text(json.dumps(manifest, sort_keys=True, indent=2))
+        backup = output.with_name(f".{split}.previous")
+        if backup.exists():
+            raise ValueError(f"Previous export backup requires review: {backup}")
+        if output.exists():
+            os.replace(output, backup)
+        try:
+            os.replace(temporary, output)
+        except BaseException:
+            if backup.exists():
+                os.replace(backup, output)
+            raise
+        if backup.exists():
+            shutil.rmtree(backup)
+    return len(shards)
+
+
+
+def _successor_history_roster(scenes: list[dict], resolution: int) -> list[dict]:
+    records = []
+    for scene in scenes:
+        for item in scene['receipt'].get('attempt_history', []):
+            source = item['receipt']
+            if not re.fullmatch(rf"failed-attempts/{scene['index']:010d}/[0-9]{{4}}\.json", source):
+                raise ValueError('Release failure history path identity mismatch')
+            records.append({'path': f"{resolution}/{scene['split']}/{source}", 'source_path': source,
+                            'split': scene['split'], 'index': scene['index'], 'sha256': item['sha256']})
+    if len({item['path'] for item in records}) != len(records):
+        raise ValueError('Duplicate release failure history receipt')
+    return records
+
+
+def _verify_successor_history(root: Path, scenes: list[dict], resolution: int, records: list[dict]) -> None:
+    expected = _successor_history_roster(scenes, resolution)
+    keys = ('path', 'source_path', 'split', 'index', 'sha256')
+    if [{key: record.get(key) for key in keys} for record in records] != expected:
+        raise ValueError('Release failure history roster mismatch')
+    by_identity = {(scene['split'], scene['index']): scene['receipt'] for scene in scenes}
+    for record in records:
+        path = (root / record['path']).resolve()
+        if root not in path.parents or not path.is_file() or _file_sha256(path) != record['sha256']:
+            raise ValueError('Release failure history content hash mismatch')
+        if path.stat().st_size != record['size_bytes']:
+            raise ValueError('Release failure history size mismatch')
+        archived = json.loads(path.read_text())
+        current = by_identity[(record['split'], record['index'])]
+        history = current.get('attempt_history', [])
+        position = next(i for i, item in enumerate(history) if item['receipt'] == record['source_path'])
+        if (any(archived.get(key) != current.get(key) for key in
+                ('schema_version', 'dataset_version', 'index', 'split', 'resolution', 'provenance_id'))
+                or archived.get('scene_status') != 'failed' or archived.get('artifacts')
+                or len(archived.get('variants', {})) != 6
+                or any(v.get('status') != 'failed' for v in archived['variants'].values())
+                or archived.get('attempt_history', []) != history[:position]
+                or archived.get('infrastructure_attempt', 1) != history[position].get('attempt', 1)):
+            raise ValueError('Release failure history archived identity mismatch')
+
+
+def verify_successor_batch(export_root: str | Path, batch_id: str) -> dict:
+    """Verify committed shard bytes before an orchestrator removes raw transient scenes."""
+    root = Path(export_root).resolve()
+    if not re.fullmatch(r"[0-9]+-[0-9]+-[0-9]+", batch_id):
+        raise ValueError("Invalid release batch identity")
+    manifest_path = root / "release-receipts" / f"batch-{batch_id}.json"
+    manifest = json.loads(manifest_path.read_text())
+    if manifest.get("batch_id") != batch_id or manifest.get("schema_version") != "passage-export-batch-v1":
+        raise ValueError("Release batch manifest identity mismatch")
+    indices = manifest.get("scene_indices", [])
+    scenes = manifest.get("scenes", [])
+    if (not indices or indices != sorted(set(indices))
+            or [scene.get("index") for scene in scenes] != indices
+            or batch_id != f"{manifest.get('resolution')}-{indices[0]:010d}-{indices[-1]:010d}"):
+        raise ValueError("Release batch scene identity mismatch")
+    expected_core, expected_samples = Counter(), Counter()
+    expected_scene_statuses, expected_variant_statuses = Counter(), Counter()
+    for scene in scenes:
+        receipt = scene["receipt"]
+        if receipt.get("index") != scene["index"] or receipt.get("split") != scene["split"] or receipt.get("resolution") != manifest["resolution"]:
+            raise ValueError("Release batch receipt identity mismatch")
+        if receipt["scene_status"] == "complete":
+            expected_core[scene["split"]] += 1
+        expected_scene_statuses[f"{scene['split']}:{receipt['scene_status']}"] += 1
+        if len(receipt.get("variants", {})) != 6:
+            raise ValueError("Release batch variant denominator mismatch")
+        for variant in receipt["variants"].values():
+            expected_variant_statuses[f"{scene['split']}:{variant['status']}"] += 1
+    if (manifest.get("requested_scenes") != len(indices) or manifest.get("requested_variants") != 6 * len(indices)
+            or Counter(manifest.get("scene_status_counts", {})) != expected_scene_statuses
+            or Counter(manifest.get("variant_status_counts", {})) != expected_variant_statuses):
+        raise ValueError("Release batch terminal status denominator mismatch")
+    for split, ids in manifest["sample_ids"].items():
+        expected_samples[split] = len(ids)
+    actual_core, actual_samples = Counter(), Counter()
+    for record in manifest["files"]:
+        path = (root / record["path"]).resolve()
+        if root not in path.parents or not path.is_file() or _file_sha256(path) != record["sha256"]:
+            raise ValueError(f"Release batch content hash mismatch: {record['path']}")
+        with pq.ParquetFile(path) as parquet:
+            if parquet.metadata.num_rows != record["rows"]:
+                raise ValueError("Release batch row count mismatch")
+            if "schema_sha256" in record and hashlib.sha256(parquet.schema_arrow.serialize().to_pybytes()).hexdigest() != record["schema_sha256"]:
+                raise ValueError("Release batch schema identity mismatch")
+            (actual_samples if record["samples"] else actual_core)[record["split"]] += record["rows"]
+            if not record["samples"] and any(name.startswith("image_") for name in parquet.schema_arrow.names):
+                raise ValueError("Core release shard contains preview images")
+    if actual_core != expected_core or actual_samples != expected_samples:
+        raise ValueError("Release batch core/sample row denominator mismatch")
+    if len(manifest["scenes"]) != len(manifest["scene_indices"]):
+        raise ValueError("Release batch terminal denominator mismatch")
+    for scene in manifest["scenes"]:
+        receipt = scene["receipt"]
+        content = json.dumps(receipt, sort_keys=True, separators=(",", ":"), default=str).encode()
+        if hashlib.sha256(content).hexdigest() != scene["receipt_semantic_sha256"]:
+            raise ValueError("Release scene receipt content mismatch")
+    _verify_successor_history(root, scenes, manifest['resolution'], manifest.get('history_files', []))
+    return {**manifest, "manifest_sha256": _file_sha256(manifest_path), "raw_cleanup_safe": True}
+
+
+def export_successor_batch(context: ReleaseContext, resolution: int, scene_indices: list[int], *,
+                           batch_id: str | None = None, executor: Executor | None = None,
+                           num_cpus: int = 0,
+                           memory_budget_bytes: int = DEFAULT_EXPORT_MEMORY_BUDGET_BYTES) -> dict:
+    """Commit one bounded ascending global-index batch with replay and cleanup evidence.
+
+    ``context.dataset_path`` is the raw batch root (containing resolution/split);
+    ``context.export_dirpath`` is the separate release root. Every
+    requested index needs exactly one validated complete or terminal receipt.
+    The returned receipt retains all raw scene receipts and verified shard hashes.
+    No source scene is deleted. Preview selection accumulates across batches.
+    A supplied executor belongs to the generation session and remains reusable
+    after success. On failure its workers are stopped and joined before staging
+    cleanup. Without one, ``num_cpus=0`` preserves serial execution; a positive
+    count owns a pool for this call. The memory budget caps concurrent producer
+    workspaces independently of the executor's generation capacity.
+    """
+    if not scene_indices or any(isinstance(i, bool) or not isinstance(i, int) or i < 0 for i in scene_indices):
+        raise ValueError("Release scene indices must be a nonempty roster of nonnegative integers")
+    if scene_indices != sorted(set(scene_indices)):
+        raise ValueError("Release scene indices must be unique and ascending")
+    if resolution not in (64, 128, 256, 512, 1024, 2048, 4096):
+        raise ValueError("Unsupported release resolution")
+    shard_size = context.chunk_sizes.get(resolution)
+    if shard_size is None:
+        raise ValueError(f'Missing export.chunk_size entry for resolution {resolution}')
+    worker_count, worker_bytes = _successor_export_workers(resolution, shard_size, executor,
+                                                          num_cpus, memory_budget_bytes)
+    if executor is None and num_cpus:
+        with ProcessPoolExecutor(max_workers=worker_count, mp_context=mp.get_context('spawn')) as owned_executor:
+            return export_successor_batch(context, resolution, scene_indices, batch_id=batch_id,
+                executor=owned_executor, num_cpus=num_cpus, memory_budget_bytes=memory_budget_bytes)
+    expected_batch_id = f"{resolution}-{scene_indices[0]:010d}-{scene_indices[-1]:010d}"
+    if batch_id is not None and batch_id != expected_batch_id:
+        raise ValueError("Batch identity must match resolution and global index bounds")
+    batch_id = expected_batch_id
+    root = context.export_dirpath.resolve()
+    raw = context.dataset_path.resolve()
+    if root == raw or raw in root.parents or root in raw.parents:
+        raise ValueError("Raw batch and release must be separate trees")
+    config_hash = _file_sha256(context.config_file)
+    calibration_hash = _file_sha256(context.calibration_file)
+    package_root = Path(__file__).parent.parent
+    code_hashes = {p.relative_to(package_root).as_posix(): _file_sha256(p)
+                   for directory in (package_root / "passage", package_root / "passage-eval")
+                   for p in directory.rglob("*.py")}
+    for path in (package_root.parent / "pyproject.toml", package_root.parent / "uv.lock"):
+        if path.is_file():
+            code_hashes[path.name] = _file_sha256(path)
+    manifest_path = root / "release-receipts" / f"batch-{batch_id}.json"
+    if manifest_path.is_file():
+        previous = verify_successor_batch(root, batch_id)
+        if (previous["scene_indices"] != scene_indices or previous["config_sha256"] != config_hash
+                or previous["calibration_sha256"] != calibration_hash or previous["producer_code_sha256"] != code_hashes):
+            raise ValueError("Release batch resume provenance mismatch")
+        _advance_successor_export_state(root, previous)
+        return previous
+    root.mkdir(parents=True, exist_ok=True)
+    sample_ids = {split: [] for split in context.split_names}
+    previous_manifests = {}
+    state_path = root / "release-receipts" / f"state-{resolution}.json"
+    if state_path.is_file():
+        state = json.loads(state_path.read_text())
+        previous_path = root / "release-receipts" / state["last_manifest"]
+        if _file_sha256(previous_path) != state["last_manifest_sha256"]:
+            raise ValueError("Release continuation manifest content mismatch")
+        if (state["config_sha256"] != config_hash or state["calibration_sha256"] != calibration_hash
+                or state["producer_code_sha256"] != code_hashes):
+            raise ValueError("Release provenance changed between batches")
+        if state["last_index"] >= scene_indices[0]:
+            raise ValueError("Release batches must advance global indices without overlap")
+        previous_manifests[state["last_manifest"]] = state["last_manifest_sha256"]
+        sample_ids.update(state["sample_ids_total"])
+    elif any((root / "release-receipts").glob(f"batch-{resolution}-*.json")):
+        raise ValueError("Release continuation state missing; resume the last committed batch first")
+    if not state_path.is_file():
+        for sample in (False, True):
+            config_path = root / _config_name(resolution, sample)
+            existing = [p for p in config_path.glob("*/*.parquet") if not p.name.startswith(f"data-{batch_id}-")]
+            if existing:
+                raise ValueError("Release export refuses untracked or mixed-revision Parquet shards")
+    scenes, grouped = [], {split: [] for split in context.split_names}
+    denominator, variants = Counter(), Counter()
+    provenance_ids = set()
+    expected_variants = {f"{solver}:{variant}" for solver in context.solver_names for variant in ("free", "obstacles")}
+    admission_jobs = ((raw, resolution, context.split_names, scene_indices[start:start + 128])
+                      for start in range(0, len(scene_indices), 128))
+    for admitted in _bounded_executor_map(executor, _admit_successor_scenes, admission_jobs, max_inflight=worker_count):
+        for scene in admitted:
+            split, receipt = scene['split'], scene['receipt']
+            if receipt.get("resolution") != resolution or receipt.get("split") != split or not receipt.get("provenance_id"):
+                raise ValueError("Release scene receipt identity or provenance mismatch")
+            if receipt['scene_status'] == 'complete' and receipt.get('calibration_sha256') != calibration_hash:
+                raise ValueError('Release scene calibration identity mismatch')
+            if set(receipt["variants"]) != expected_variants:
+                raise ValueError("Release terminal variant solver identity mismatch")
+            provenance_ids.add(receipt["provenance_id"])
+            if len(provenance_ids) != 1:
+                raise ValueError("Release batch contains mixed generation provenance")
+            if state_path.is_file() and receipt["provenance_id"] != state["generation_provenance_id"]:
+                raise ValueError("Release generation provenance changed between batches")
+            denominator[f"{split}:{receipt['scene_status']}"] += 1
+            for variant in receipt["variants"].values():
+                variants[f"{split}:{variant['status']}"] += 1
+            scenes.append(scene)
+            if receipt["scene_status"] == "complete":
+                metadata_path = raw / str(resolution) / split / receipt["artifacts"]["metadata"]["path"]
+                grouped[split].append((metadata_path, scene['receipt_file_sha256']))
+    files, new_samples = [], {split: [] for split in context.split_names}
+    history_files = _successor_history_roster(scenes, resolution)
+    with tempfile.TemporaryDirectory(prefix=f".batch-{batch_id}-", dir=root) as temporary:
+        temporary_root = Path(temporary)
+        for record in history_files:
+            source = raw / str(resolution) / record['split'] / record['source_path']
+            destination = temporary_root / record['path']
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(source, destination)
+            record['size_bytes'] = destination.stat().st_size
+        _verify_successor_history(temporary_root, scenes, resolution, history_files)
+        def shard_jobs():
+            for split, paths in grouped.items():
+                remaining = max(0, min(context.sample_size, 64) - len(sample_ids[split]))
+                for sample, selected in ((False, paths), (True, paths[:remaining])):
+                    if sample:
+                        new_samples[split] = [path.stem for path, _ in selected]
+                    for start in range(0, len(selected), shard_size):
+                        roster = selected[start:start + shard_size]
+                        relative = Path(_config_name(resolution, sample)) / split
+                        yield (context, resolution, sample, split, [path for path, _ in roster],
+                               [digest for _, digest in roster], temporary_root / relative,
+                               f'data-{batch_id}', start // shard_size, temporary_root / 'previews' / split)
+        files.extend(_bounded_executor_map(executor, _write_successor_shard, shard_jobs(), max_inflight=worker_count))
+        # On interruption an uncommitted deterministic shard is replaced on retry.
+        for record in files + history_files:
+            destination = root / record["path"]
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            os.replace(temporary_root / record["path"], destination)
+    manifest = {"schema_version": "passage-export-batch-v1", "batch_id": batch_id,
+                "resolution": resolution, "scene_indices": scene_indices, "scenes": scenes,
+                "scene_status_counts": dict(denominator), "variant_status_counts": dict(variants),
+                "requested_scenes": len(scene_indices), "requested_variants": len(scene_indices) * len(context.solver_names) * 2,
+                "files": files, "history_files": history_files, "sample_ids": new_samples,
+                "sample_ids_total": {split: sample_ids[split] + new_samples[split] for split in context.split_names},
+                "sample_size_per_split": min(context.sample_size, 64),
+                "config_sha256": config_hash, "calibration_sha256": calibration_hash,
+                "generation_provenance_id": next(iter(provenance_ids)),
+                "producer_code_sha256": code_hashes, "previous_manifest_sha256": previous_manifests}
+    manifest['execution'] = {'producer_max_inflight': worker_count,
+                             'producer_workspace_estimate_bytes': worker_bytes,
+                             'memory_budget_bytes': memory_budget_bytes,
+                             'row_group_rows': _export_row_budget(resolution, shard_size)}
+    from passage.notebook_export import write_staged_bytes
+    write_staged_bytes(manifest_path, (json.dumps(manifest, sort_keys=True, indent=2, default=str) + "\n").encode())
+    verified = verify_successor_batch(root, batch_id)
+    _advance_successor_export_state(root, verified)
+    return verified
+
+
+def _advance_successor_export_state(root: Path, manifest: dict) -> None:
+    """Keep bounded continuation state; complete batch manifests remain the evidence ledger."""
+    path = root / "release-receipts" / f"state-{manifest['resolution']}.json"
+    if path.is_file():
+        state = json.loads(path.read_text())
+        if state["last_index"] >= manifest["scene_indices"][-1]:
+            return
+    state = {"schema_version": "passage-export-state-v1", "resolution": manifest["resolution"],
+             "last_index": manifest["scene_indices"][-1],
+             "last_manifest": f"batch-{manifest['batch_id']}.json",
+             "last_manifest_sha256": manifest["manifest_sha256"],
+             "sample_ids_total": manifest["sample_ids_total"],
+             **{key: manifest[key] for key in ("config_sha256", "calibration_sha256", "producer_code_sha256", "generation_provenance_id")}}
+    from passage.notebook_export import write_staged_bytes
+    write_staged_bytes(path, (json.dumps(state, sort_keys=True, indent=2) + "\n").encode())
 
 
 def _write_export_readme(
@@ -1682,9 +2191,7 @@ def _upload_export_dir(
                 logger.error(f"Upload failed after {attempt} attempts: {exc}")
                 raise
             sleep_for = min(base_delay * (2 ** (attempt - 1)), max_delay)
-            logger.warning(
-                f"Upload timed out (attempt {attempt}/{max_retries}); retrying in {sleep_for}s: {exc}"
-            )
+            logger.warning(f"Upload timed out (attempt {attempt}/{max_retries}); retrying in {sleep_for}s: {exc}")
             time.sleep(sleep_for)
 
 
@@ -1722,27 +2229,43 @@ def compress_release(
         context.export_dirpath.mkdir(parents=True, exist_ok=True)
 
         selected_resolutions = _resolve_dataset_resolutions(context.dataset_path, resolutions)
-        _cleanup_incremental_export_dirs(context.export_dirpath, selected_resolutions)
 
         cpus = _normalize_cpus(num_cpus)
         produced_config_names: set[str] = set()
-        for resolution in selected_resolutions:
-            for sample in [True, False]:
-                wrote_any_split = False
-                for split in context.split_names:
-                    num_chunks = _write_split_parquets(context, resolution, sample, split, cpus)
-                    wrote_any_split = wrote_any_split or num_chunks > 0
-                if wrote_any_split:
-                    produced_config_names.add(_config_name(resolution, sample))
+        with tempfile.TemporaryDirectory(prefix=".compression-", dir=context.export_dirpath) as directory:
+            temporary_context = replace(context, export_dirpath=Path(directory))
+            for resolution in selected_resolutions:
+                for sample in [True, False]:
+                    wrote_any_split = False
+                    for split in context.split_names:
+                        num_chunks = _write_split_parquets(temporary_context, resolution, sample, split, cpus)
+                        wrote_any_split = wrote_any_split or num_chunks > 0
+                    if wrote_any_split:
+                        produced_config_names.add(_config_name(resolution, sample))
+            if not produced_config_names:
+                raise FileNotFoundError(f"No metadata files found for selected resolutions under {context.dataset_path}")
+            backups, committed = {}, []
+            try:
+                for config_name in _sort_config_names(produced_config_names):
+                    destination = context.export_dirpath / config_name
+                    backup = context.export_dirpath / f".{config_name}.previous"
+                    if backup.exists():
+                        raise ValueError(f"Previous compression backup requires review: {backup}")
+                    if destination.exists():
+                        os.replace(destination, backup)
+                        backups[destination] = backup
+                    os.replace(Path(directory) / config_name, destination)
+                    committed.append(destination)
+            except BaseException:
+                for destination in committed:
+                    shutil.rmtree(destination)
+                for destination, backup in backups.items():
+                    os.replace(backup, destination)
+                raise
+            for backup in backups.values():
+                shutil.rmtree(backup)
 
-        if not produced_config_names:
-            raise FileNotFoundError(
-                f"No metadata files found for selected resolutions under {context.dataset_path}"
-            )
-
-        logger.info(
-            "Prepared parquet configs: " + ", ".join(_sort_config_names(produced_config_names))
-        )
+        logger.info("Prepared parquet configs: " + ", ".join(_sort_config_names(produced_config_names)))
         return True
     except (FileNotFoundError, ValueError) as exc:
         logger.error(str(exc))
@@ -1758,20 +2281,27 @@ def prepare_export(
     export_dirpath: str | Path | None = None,
     resolutions: list[int] | None = None,
     repo_id: str | None = None,
-    anonymous: bool = False,
     execute_notebooks: bool = True,
     max_notebook_retries: int | None = 3,
     notebook_retry_delay: int = 5,
     num_cpus: int | None = None,
     steps: ExportSteps | None = None,
+    keep_existing_configs: bool = False,
+    notebook_cell_timeout: int = 300,
+    notebook_job_timeout: int = 1800,
+    dataset_revision: str | None = None,
+    result_root: str | Path | None = None,
 ) -> bool:
     """Prepare the export directory for upload.
 
     Idempotent by default: each step inspects the current export directory and skips work
     that already produced its expected artifact. Use ``ExportSteps.force_*`` flags (or the
-    master ``force_all``) to redo a specific step. Notebook execution per resolution is the
-    most expensive step and is skipped automatically when a valid ``dataset.ipynb`` already
-    exists for that config.
+    master ``force_all``) to redo a specific step. Notebook execution covers all four templates at each selected resolution. Outputs
+    are reused only when their input/source/config identities and execution evidence match.
+
+    ``keep_existing_configs`` also retains compatible declarations from the existing
+    root README. Retain that card only after verifying earlier remote uploads; this
+    option does not contact the repository or verify that those Parquets exist remotely.
     """
 
     steps = steps or ExportSteps()
@@ -1793,7 +2323,16 @@ def prepare_export(
 
         repo_id_resolved = repo_id or DEFAULT_REPO_ID
         export_dir = context.export_dirpath
+        existing_config_names = (
+            _read_existing_config_names(export_dir, repo_id_resolved, context.split_names, context.solver_names)
+            if keep_existing_configs
+            else set()
+        )
         export_dir.mkdir(parents=True, exist_ok=True)
+        successor = any((export_dir / 'release-receipts').glob('batch-*.json')) or (
+            export_dir / 'release-receipts/release-verification.json').is_file()
+        if successor and not execute_notebooks:
+            raise ValueError('Release publication requires executed publication notebooks')
         logger.info(f"Preparing export at {export_dir}")
         logger.info(f"Selected resolutions: {selected_resolutions}")
 
@@ -1815,14 +2354,12 @@ def prepare_export(
         if steps.skip_strip_outputs:
             logger.info("[4/9] strip notebook outputs (disabled)")
         else:
-            stripped, scanned = _strip_analysis_notebook_outputs(
-                export_dir, force=steps.force("force_strip_outputs")
-            )
+            stripped, scanned = _strip_analysis_notebook_outputs(export_dir, force=steps.force("force_strip_outputs"))
             logger.info(f"[4/9] strip notebook outputs ({stripped}/{scanned} touched)")
 
         # Step 5 — root metadata (LICENSE, croissant, datasheet, citation, ...)
-        statuses = _copy_release_metadata_idempotent(
-            export_dir, repo_id_resolved, anonymous=anonymous, force=steps.force("force_metadata")
+        statuses = {} if successor else _copy_release_metadata_idempotent(
+            export_dir, repo_id_resolved, force=steps.force("force_metadata")
         )
         refreshed = [name for name, s in statuses.items() if s == "run"]
         skipped = [name for name, s in statuses.items() if s == "skip"]
@@ -1832,45 +2369,49 @@ def prepare_export(
             + (f" (skipped: {', '.join(skipped)})" if skipped else "")
         )
 
-        # Step 6 — per-resolution dataset.ipynb (executed). The most expensive step.
-        cpus = _normalize_cpus(num_cpus)
-        retries = None if max_notebook_retries == 0 else max_notebook_retries
+        # Step 6 — complete matrix with identities and execution receipts.
+        from passage.notebook_export import prepare_snapshot_notebooks, validate_publication_notebooks
+
+        if max_notebook_retries is None or max_notebook_retries <= 0:
+            raise ValueError("Publication notebook retries must be finite and positive")
+
+        def execute_publication(input_path, output_path, parameters, **options):
+            if not _execute_notebook_with_retries(
+                input_path, output_path, parameters,
+                cwd=options["cwd"], max_retries=max_notebook_retries,
+                retry_delay=notebook_retry_delay,
+                cell_timeout=options["cell_timeout"], job_timeout=options["job_timeout"],
+            ):
+                raise RuntimeError(f"Notebook execution failed: {input_path.name}")
+
+        notebook_manifest = prepare_snapshot_notebooks(
+            export_dir, export_dir,
+            notebooks_dirpath=context.notebooks_path,
+            resolutions=selected_resolutions,
+            repo_id=repo_id_resolved,
+            revision=dataset_revision,
+            execute=execute_notebooks,
+            cell_timeout=notebook_cell_timeout,
+            job_timeout=notebook_job_timeout,
+            config_filepath=context.config_file,
+            result_root=result_root,
+            force=steps.force("force_notebooks"),
+            parameters={
+                "MAX_WORKERS": _normalize_cpus(num_cpus),
+                "CONFIG_FILEPATH": str(context.config_file),
+                "CALIBRATE_FILEPATH": str(context.calibration_file),
+            },
+            _allow_prepared_root=True,
+            executor=execute_publication,
+        )
         if execute_notebooks:
-            executed = 0
-            reused = 0
-            force_notebooks = steps.force("force_notebooks")
-            for resolution in selected_resolutions:
-                config_name = _config_name(resolution, False)
-                output_notebook = export_dir / config_name / "dataset.ipynb"
-                output_notebook.parent.mkdir(parents=True, exist_ok=True)
-
-                if not force_notebooks and _is_valid_executed_notebook(output_notebook):
-                    logger.info(f"  {config_name}/dataset.ipynb already executed (skipped)")
-                    reused += 1
-                    continue
-
-                logger.info(f"  {config_name}/dataset.ipynb executing (force={force_notebooks})...")
-                parameters = {
-                    "RESOLUTION": resolution,
-                    "DATASET_DIRPATH": str(context.dataset_path),
-                    "CONFIG_FILEPATH": str(context.config_file),
-                    "CALIBRATE_FILEPATH": str(context.calibration_file),
-                    "MAX_WORKERS": cpus or 8,
-                }
-                ok = _execute_notebook_with_retries(
-                    context.dataset_notebook,
-                    output_notebook,
-                    parameters,
-                    cwd=context.notebooks_path,
-                    max_retries=retries,
-                    retry_delay=notebook_retry_delay,
-                )
-                if not ok:
-                    raise RuntimeError(f"Failed to execute notebook for resolution {resolution}")
-                executed += 1
-            logger.info(f"[6/9] per-resolution notebooks ({executed} executed, {reused} reused)")
-        else:
-            logger.info("[6/9] per-resolution notebooks (execution disabled)")
+            notebook_manifest["publication_admission"] = validate_publication_notebooks(
+                notebook_manifest, export_dir, resolutions=selected_resolutions)
+            from passage.notebook_export import MANIFEST_NAME, write_staged_bytes
+            write_staged_bytes(export_dir / MANIFEST_NAME,
+                (json.dumps(notebook_manifest, sort_keys=True, indent=2, default=str) + "\n").encode())
+        executed = sum(e["execution"]["status"] == "executed" for e in notebook_manifest["notebooks"])
+        logger.info(f"[6/9] notebook matrix ({executed} executed, complete source inventory copied)")
 
         # Step 7 — README (depends on prepared configs and per-resolution notebook layout)
         prepared_config_names = _collect_local_config_names(export_dir)
@@ -1878,9 +2419,14 @@ def prepare_export(
             raise FileNotFoundError(
                 f"No prepared parquet configs found under {export_dir}. Run `passage compress` first."
             )
-        status = _write_export_readme(
-            context, repo_id_resolved, prepared_config_names, force=steps.force("force_readme")
-        )
+        prepared_config_names |= existing_config_names
+        if successor:
+            from passage.successor_publication import write_successor_publication_metadata
+            write_successor_publication_metadata(context, repo_id=repo_id_resolved)
+            status = 'run'
+        else:
+            status = _write_export_readme(
+                context, repo_id_resolved, prepared_config_names, force=steps.force("force_readme"))
         logger.info(f"[7/9] README.md {'(refreshed)' if status == 'run' else '(unchanged, skipped)'}")
 
         # Step 8 — .gitattributes (LFS rules)
@@ -1903,8 +2449,7 @@ def prepare_export(
                     + ", ".join(p.relative_to(export_dir).as_posix() for p in oversized[:3])
                 )
             logger.info(
-                f"[9/9] compression audit ({total} parquet files, "
-                f"{len(non_zstd)} non-ZSTD, {len(oversized)} oversized)"
+                f"[9/9] compression audit ({total} parquet files, {len(non_zstd)} non-ZSTD, {len(oversized)} oversized)"
             )
         else:
             logger.info("[9/9] compression audit (disabled)")
@@ -1912,26 +2457,31 @@ def prepare_export(
         oversized_samples = _report_sample_sizes(export_dir, steps.sample_size_warn_mb)
         if oversized_samples:
             for name, size in oversized_samples:
-                warnings.append(f"sample variant {name} is {size / (1024 * 1024):.1f} MB (>{steps.sample_size_warn_mb} MB)")
+                warnings.append(
+                    f"sample variant {name} is {size / (1024 * 1024):.1f} MB (>{steps.sample_size_warn_mb} MB)"
+                )
 
         if not steps.skip_validate_croissant:
             ok, msg = _validate_croissant(export_dir / "croissant.json")
             (logger.info if ok else logger.warning)(f"  croissant validation: {msg}")
             if not ok:
-                warnings.append(f"croissant validation failed: {msg}")
+                raise ValueError(f"croissant validation failed: {msg}")
 
         if not steps.skip_validate_readme:
             expected_configs = set(prepared_config_names)
             ok, msg = _validate_readme_card(export_dir / "README.md", expected_configs)
             (logger.info if ok else logger.warning)(f"  README YAML validation: {msg}")
             if not ok:
-                warnings.append(f"README YAML validation failed: {msg}")
+                raise ValueError(f"README YAML validation failed: {msg}")
 
         if warnings:
             logger.warning("Export prepared with warnings:")
             for w in warnings:
                 logger.warning(f"  - {w}")
         logger.info(f"Prepared export directory at {export_dir}")
+        if successor:
+            from passage.successor_publication import verify_successor_publication_metadata
+            verify_successor_publication_metadata(export_dir)
         return True
     except (FileNotFoundError, RuntimeError, ValueError) as exc:
         logger.error(str(exc))
@@ -1973,9 +2523,7 @@ def upload_export(
             selected_config_names = _selected_config_names(sorted(set(resolutions)))
             missing_config_names = sorted(selected_config_names - local_config_names)
             if missing_config_names:
-                raise FileNotFoundError(
-                    "Missing prepared configs for upload: " + ", ".join(missing_config_names)
-                )
+                raise FileNotFoundError("Missing prepared configs for upload: " + ", ".join(missing_config_names))
             upload_allow_patterns = _build_incremental_upload_patterns(selected_config_names)
 
         resolved_token = token or _load_hf_token(
@@ -2013,7 +2561,6 @@ def export_and_upload(
     config_filepath: str | Path = "config/config.yaml",
     resolutions: list[int] | None = None,
     repo_id: str | None = None,
-    anonymous: bool = False,
     execute_notebooks: bool = True,
     max_notebook_retries: int | None = 3,
     notebook_retry_delay: int = 5,
@@ -2060,7 +2607,6 @@ def export_and_upload(
         export_dirpath=export_dirpath,
         resolutions=resolutions,
         repo_id=resolved_repo_id,
-        anonymous=anonymous,
         execute_notebooks=execute_notebooks,
         max_notebook_retries=max_notebook_retries,
         notebook_retry_delay=notebook_retry_delay,

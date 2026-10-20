@@ -48,7 +48,13 @@ def test_num_samples_mapping_per_resolution(monkeypatch, tmp_path):
 
     # Run generation sequentially (num_cpus=0) and force regeneration
     gen.run_generate(
-        str(outputs_dir), str(cfg_path), str(tmp_path / "tiles"), num_cpus=0, disable_images=True, force=True
+        str(outputs_dir),
+        str(cfg_path),
+        str(tmp_path / "tiles"),
+        calibration_filepath=str(calib_dir / "calibrate.json"),
+        num_cpus=0,
+        disable_images=True,
+        force=True,
     )
 
     # Check per-resolution summaries

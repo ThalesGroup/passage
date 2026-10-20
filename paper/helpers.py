@@ -11,6 +11,14 @@
 #
 # The above copyright notice and this permission notice shall be included in all
 # copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
 
 """Shared helpers for the PASSAGE dataset-side paper workspace.
 
@@ -129,7 +137,7 @@ def load_tile(tile_id: str, resolution: int):
     np.ndarray | None
         A ``(resolution, resolution, 3)`` ``float32`` array with
         ``(elevation, markers, obstacles)`` channels, or ``None`` if the
-        real loader / data share is not available in this environment.
+        real loader / data share is not mounted in this environment.
     """
     np = _require_numpy()
     try:

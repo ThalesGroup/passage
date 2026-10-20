@@ -1,0 +1,22 @@
+{
+  "cost_model": "elevation",
+  "family": "dense_regression",
+  "method_name": "reg-repvit_m1_bellman_vbridge",
+  "metrics": {
+    "cost_regret_geomean": -0.005681173970860542,
+    "cost_regret_mean": -0.003925414566210797,
+    "cost_regret_median": 0.0010182744184580575,
+    "cost_regret_p90": 0.02062286531672912,
+    "cost_regret_p95": 0.03818132268636191,
+    "n_regret_nan": 3,
+    "n_regret_valid": 1021,
+    "n_samples": 1024,
+    "obstacle_cells_traversed_per_path": NaN,
+    "obstacle_violation_rate": NaN,
+    "path_assd": 0.02270106975573637,
+    "path_hausdorff_p95": 0.057646998388498134,
+    "success_rate": 0.9970703125
+  },
+  "resolution": 256,
+  "seed": 3407
+}
