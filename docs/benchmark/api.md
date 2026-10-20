@@ -9,8 +9,8 @@ Auto-generated documentation for every public symbol exported by the
 [`passage-eval`](https://github.com/ThalesGroup/passage/tree/main/src/passage-eval)
 sub-package. The narrative usage guide lives at the
 [`passage-eval` package page](passage-eval.md); the formal protocol
-sits at [Evaluation protocol](protocol.md); a complete worked example
-is at [End-to-end walkthrough](walkthrough.md). This page is the
+sits at [Evaluation protocol](protocol.md); the paper's paired statistics
+are at [Paired statistics (paper)](walkthrough.md). This page is the
 canonical docstring view.
 
 ---
@@ -19,8 +19,8 @@ canonical docstring view.
 
 Existing algorithms implement `plan(PlanRequest) -> PlanResult`. The request
 contains candidate-visible terrain, endpoints, graph and shared budget; reference
-labels stay evaluator-owned. See the
-[existing-algorithm guide](contributing-a-method.md) for runnable specifications.
+labels stay evaluator-owned. See
+[Evaluate your planner](contributing-a-method.md) for runnable specifications.
 
 ::: passage_eval.protocol.contracts.GraphSpec
     options:
@@ -81,8 +81,8 @@ labels stay evaluator-owned. See the
 
 ## Primary metrics — `passage_eval.metrics`
 
-Six headline decoded-path metrics under the Holm--Bonferroni umbrella
-in §5.2 of the PASSAGE paper.
+The paper's six headline decoded-path metrics, tested together under the
+Holm–Bonferroni correction.
 
 ::: passage_eval.metrics.regret
     options:
@@ -117,7 +117,7 @@ in §5.2 of the PASSAGE paper.
 ## Statistical discipline — `passage_eval.protocol`
 
 Pre-registered seed set, paired-bootstrap CI on the mean of paired
-differences, three-seed pooled aggregation, Holm--Bonferroni step-down
+differences, three-seed pooled aggregation, Holm–Bonferroni step-down
 correction, and the family-wise decision rule.
 
 ::: passage_eval.protocol.discipline
@@ -129,9 +129,10 @@ correction, and the family-wise decision rule.
 
 ---
 
-## Trustworthiness diagnostics — `passage_eval.diagnostics`
+## Decoder-readiness diagnostics — `passage_eval.diagnostics`
 
-Family-specific decoder-readiness checks. **Never headline.**
+Checks that a predicted path mask or cost-to-go field is ready for its
+decoder. They are diagnostics, **never headline metrics**.
 
 ::: passage_eval.diagnostics
     options:
@@ -142,11 +143,26 @@ Family-specific decoder-readiness checks. **Never headline.**
 
 ---
 
+## Trustworthiness axes — `passage_eval.trustworthiness`
+
+Stability across training seeds, geographic generalization, behavior at the
+edge of the operational design domain (ODD), and latency relative to the exact
+A$^{\star}$ oracle on the same device. Each function returns one
+`TrustworthinessAxis` record.
+
+::: passage_eval.trustworthiness
+    options:
+      show_root_heading: true
+      members_order: source
+      show_source: false
+      filters: ["!^_"]
+
+---
+
 ## Deployment footprint — `passage_eval.deployment`
 
-Wall-clock latency, decoder timing, end-to-end percentiles, FLOPs +
-parameter count, A$^{\star}$-expansions ratio, and decoder-recovery
-rate.
+Wall-clock latency, decoder timing, end-to-end percentiles, parameter
+count, A$^{\star}$-expansions ratio, and decoder-recovery rate.
 
 ::: passage_eval.deployment
     options:
@@ -159,7 +175,7 @@ rate.
 
 ## Reproducibility sidecar — `passage_eval.sidecar`
 
-Manifest writer + deterministic calibration-decisions hash so every
+Manifest writer and deterministic calibration-decisions hash so every
 reported number can be mapped back to its dataset version, seeds,
 calibration decisions, hardware stack, batch size, dtype, and
 determinism flag.

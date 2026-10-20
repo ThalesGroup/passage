@@ -10,7 +10,7 @@ Times the canonical A* planner of `passage-eval` with the practices that make a 
 
 !!! info "Source notebook"
 
-    `notebooks/astar_inference_timing.ipynb` — re-execute with `make docs-prepare` after editing.
+    `notebooks/astar_inference_timing.ipynb` — re-execute with `make docs-prepare-all` after editing.
 
 <iframe
     src="../../../gen/notebooks/astar_inference_timing.html"

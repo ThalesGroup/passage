@@ -10,7 +10,7 @@ Obstacle masks from least to most covered, drawn coverage against its target, an
 
 !!! info "Source notebook"
 
-    `notebooks/obstacles.ipynb` — re-execute with `make docs-prepare` after editing.
+    `notebooks/obstacles.ipynb` — re-execute with `make docs-prepare-all` after editing.
 
 <iframe
     src="../../../gen/notebooks/obstacles.html"

@@ -4,38 +4,30 @@ title: Testing Strategy
 
 # Testing Strategy
 
-PASSAGE maintains a comprehensive test suite with **23 test files**, targeting **80%+ code coverage**. Tests cover unit logic, integration workflows, CLI behavior, and edge cases.
+PASSAGE has **65 test files**: 44 in `tests/` for the `passage` package and 21 in `tests/passage_eval/` for the evaluator. Together they run **860 tests**. Coverage is measured on both packages, with a gate at **80 %**. The tests cover unit logic, integration workflows, CLI behavior and edge cases.
 
 ---
 
 ## Test Organization
 
-```
-tests/
-├── conftest.py                          # Shared fixtures
-├── test_calibrate.py                    # Calibrate unit tests
-├── test_calibrate_integration.py        # Calibrate end-to-end
-├── test_calibrate_no_overwrite.py       # Overwrite protection
-├── test_cli.py                          # CLI argument parsing
-├── test_config.py                       # Config loading & validation
-├── test_download.py                     # Download orchestration
-├── test_download_extract.py             # ZIP extraction logic
-├── test_download_tile.py                # Single tile download
-├── test_execute_notebook_uv_run.py      # Notebook execution
-├── test_export_retries.py               # Export retry logic
-├── test_generate.py                     # Generation pipeline
-├── test_generate_costmodels.py          # Cost model correctness
-├── test_generate_helpers.py             # Generation utilities
-├── test_large_resolution.py             # Multi-tile assembly
-├── test_no_images.py                    # --no-images flag
-├── test_num_samples_per_resolution.py   # Per-resolution sample counts
-├── test_obstacle_generation.py          # Obstacle mask creation
-├── test_obstacles_distribution.py       # Shape distribution stats
-├── test_obstacles.py                    # Superellipse correctness
-├── test_prepare_hf.py                   # HF export preparation
-├── test_prepare_images_parquet.py       # Image in Parquet tests
-└── test_prepare_notebook_retry.py       # Notebook retry edge cases
-```
+Shared fixtures live in `tests/conftest.py` and `tests/passage_eval/conftest.py`.
+
+| Area | Test files in `tests/` |
+|------|------------------------|
+| CLI | `test_cli.py`, `test_analysis_cli.py` |
+| Configuration | `test_config.py`, `test_num_samples_per_resolution.py` |
+| Download | `test_download.py`, `test_download_extract.py`, `test_download_integrity.py`, `test_download_tile.py` |
+| Calibration | `test_calibrate.py`, `test_calibrate_integration.py`, `test_calibrate_no_overwrite.py`, `test_calibrate_provenance.py` |
+| Generation | `test_generate.py`, `test_generate_costmodels.py`, `test_generate_helpers.py`, `test_large_resolution.py`, `test_no_images.py`, and one file for the release generator |
+| Obstacles | `test_obstacles.py`, `test_obstacle_generation.py`, `test_obstacles_distribution.py` |
+| Solvers | `test_pathfinding_utils.py`, `test_reference.py` |
+| Export and publication | `test_export_keep_configs.py`, `test_export_retries.py`, `test_prepare_hf.py`, `test_prepare_images_parquet.py`, `test_prepare_notebook_retry.py`, and two files for the release export and its publication metadata |
+| Full rebuild | `test_regenerate.py` |
+| Dataset access, audit and qualification | `test_dataset_source.py`, `test_audit.py`, `test_authentication.py`, `test_qualification.py`, `test_qualification_runner.py`, `test_qualification_reports.py` |
+| Notebooks | `test_execute_notebook_uv_run.py`, `test_notebook_export.py`, `test_notebook_reports.py`, `test_notebook_templates.py` |
+| Plots | `test_plotting.py`, `test_visualization.py`, `test_trajectory_style.py` |
+
+The evaluator tests in `tests/passage_eval/` cover its contracts, metrics (`test_regret.py`, `test_geometric.py`, `test_reliability.py`), statistics, execution and timing, results format, CLI and the paper contract (`test_paper_contract.py`).
 
 ---
 
@@ -46,21 +38,26 @@ From `pyproject.toml`:
 ```toml
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = ["-v", "--html=outputs/tests/report.html", "--self-contained-html", "--import-mode=importlib"]
 markers = [
-    "unit: Unit tests",
-    "integration: Integration tests",
-    "download: Tests requiring network access",
-    "calibrate: Calibration tests",
-    "generate: Generation tests"
+  "unit: Unit tests (fast, isolated)",
+  "integration: Integration tests (may require external resources)",
+  "download: Tests for download module",
+  "calibrate: Tests for calibrate module",
+  "generate: Tests for generate module"
 ]
 
 [tool.coverage.run]
-source = ["src/passage"]
+source = ["src/passage", "src/passage-eval"]
 branch = true
+omit = ["*/tests/*"]
 
 [tool.coverage.report]
 fail_under = 80
+show_missing = true
 ```
+
+Every run also writes an HTML report to `outputs/tests/report.html`.
 
 ---
 
@@ -78,51 +75,46 @@ fail_under = 80
 
 === "Specific markers"
     ```bash
-    # Unit tests only
+    # Tests marked as unit tests only
     uv run pytest -m unit
 
-    # Skip network-dependent tests
+    # Skip the tests of the download module
     uv run pytest -m "not download"
     ```
 
+    Markers are set on part of the suite only, so `-m unit` runs a subset.
+
 === "Parallel execution"
     ```bash
-    # Run with 4 workers (requires pytest-xdist)
+    # Run with 4 workers (pytest-xdist is in the dev dependency group)
     uv run pytest -n 4
     ```
+
+`make test` runs `uv run pytest --cov`, then restores `outputs/calibrate/calibrate.json` from its backup, if one exists.
 
 ---
 
 ## Test Fixtures
 
-The `conftest.py` provides shared fixtures:
+`tests/conftest.py` provides shared fixtures:
 
 | Fixture | Description |
 |---------|-------------|
-| Mock tile statistics | Simulated `calibrate.json` data |
-| Mock calibration data | Pre-computed global min/max |
-| Sample configuration | Minimal `config.yaml` for testing |
-| Temporary directories | Isolated output paths for test safety |
+| `mock_tile_stats_df`, `mock_calibration_data` | Simulated tile statistics and calibration data |
+| `calibrate_json_file`, `config_yaml_file` | A `calibrate.json` and a minimal `config.yaml` written under `tmp_path` |
+| `mock_tiles_dir` | An empty tiles directory |
+| `valid_sample_files`, `partial_sample_files` | Complete and incomplete generated scenes, for resume tests |
 
-!!! note "Test safety"
-    When `PYTEST_CURRENT_TEST` is set (automatically by pytest), output-producing modules redirect to temporary directories rather than the real `outputs/` folder.
+`tests/passage_eval/conftest.py` provides `release_row`, a small row in the released format, and two matching `Scene` objects.
+
+!!! note "Test outputs"
+    The code writes to the paths it is given. Tests must pass temporary paths, normally through pytest's `tmp_path` fixture; nothing redirects outputs automatically.
 
 ---
 
-## Coverage Targets
+## Coverage Gate
 
-| Module | Coverage target | Notes |
-|--------|:--------------:|-------|
-| `utils.py` | 95%+ | Small, well-defined functions |
-| `obstacles.py` | 95%+ | Pure math, easy to test |
-| `calibrate.py` | 90%+ | Mocked I/O |
-| `download.py` | 80%+ | Network mocking needed |
-| `generate.py` | 80%+ | Complex, many code paths |
-| `pathfinding_utils.py` | 80%+ | Multiple backends |
-| `export.py` | 75%+ | Heavy I/O, HF API mocking |
-| `visualization.py` | 70%+ | Visual output, harder to assert |
-
-The project-wide **minimum threshold is 80%** branch coverage. CI fails if coverage drops below this level.
+Coverage is measured with branches on `src/passage` and `src/passage-eval`. The project-wide **minimum is 80 %** (`fail_under = 80`): a run with `--cov` fails below this level.
 
 ---
 
@@ -134,13 +126,13 @@ The project-wide **minimum threshold is 80%** branch coverage. CI fails if cover
 
 ```bash
 # Lint check
-uv run ruff check src/
+uv run ruff check src/ tests/
 
 # Auto-fix
-uv run ruff check src/ --fix
+uv run ruff check src/ tests/ --fix
 
 # Format
-uv run ruff format src/
+uv run ruff format src/ tests/
 ```
 
 Configuration in `pyproject.toml`:
@@ -149,17 +141,19 @@ Configuration in `pyproject.toml`:
 [tool.ruff]
 line-length = 120
 indent-width = 4
+show-fixes = true
 ```
 
 ### Pre-commit Hooks
 
 Configured in `.pre-commit-config.yaml`:
 
-- Trailing whitespace removal
+- Trailing whitespace removal (Markdown excluded)
 - End-of-file fixer
 - YAML validation
-- `uv.lock` sync check
-- Ruff lint + format
+- `uv.lock` update when `pyproject.toml` changes
+- Ruff lint (with `--fix`) and format
+- TOML key sorting
 
 ```bash
 # Install hooks
@@ -173,10 +167,10 @@ uv run pre-commit run --all-files
 
 ## CI Integration
 
-Tests run automatically on every push and pull request via GitHub Actions. See the [CI/CD workflow](https://github.com/ThalesGroup/passage/blob/main/.github/workflows/ci.yml) for details.
+Tests run on GitHub Actions for every push and pull request to `main`. See the [CI workflow](https://github.com/ThalesGroup/passage/blob/main/.github/workflows/ci.yml) for details.
 
 The CI pipeline:
 
-1. **Lint** — `ruff check` + `ruff format --check`
-2. **Test** — `pytest` with coverage reporting
-3. **Coverage gate** — fail if below 80%
+1. **Lint** — `ruff check` and `ruff format --check` on `src/` and `tests/`
+2. **Test** — `pytest` with coverage, on Python 3.11 and 3.12
+3. **Coverage gate** — the run fails if coverage drops below 80 %

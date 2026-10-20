@@ -122,9 +122,9 @@ BENCHMARK_NOTEBOOKS: Sequence[NotebookSpec] = (
         intro=(
             "Reads the per-task results of the two paper finalists released "
             "under `src/passage-eval/results/paper-results/`. These are the "
-            "historical results of the original study, reported as obtained: "
-            "they were not recomputed on the published dataset and are not "
-            "leaderboard entries."
+            "historical results of the original study, reported as obtained; "
+            "not re-run on the released dataset. They are not leaderboard "
+            "entries."
         ),
         required=True,
     ),
@@ -280,6 +280,7 @@ def _export_html(nb: nbformat.NotebookNode, out_path: Path) -> None:
 def _wrapper_md(spec: NotebookSpec, *, executed: bool, message: str) -> str:
     rel_html = f"../../../gen/notebooks/{spec.stem}.html"
     rel_source = f"notebooks/{spec.source.parent.name}/{spec.source.name}" if spec.source.parent.name != "notebooks" else f"notebooks/{spec.source.name}"
+    rerun = "make docs-prepare" if spec.execute_by_default else "make docs-prepare-all"
     body = f"""---
 title: "{spec.title}"
 hide:
@@ -292,16 +293,16 @@ hide:
 
 !!! info "Source notebook"
 
-    `{rel_source}` — re-execute with `make docs-prepare` after editing.
+    `{rel_source}` — re-execute with `{rerun}` after editing.
 """
     if not executed:
         body += f"""
 !!! warning "This notebook was rendered without executing"
 
-    `make docs-prepare` could not execute the source notebook on this
+    `{rerun}` could not execute the source notebook on this
     checkout ({message}). The HTML below shows the most recent stored
     outputs, which may be stale or empty. Re-run the notebook locally
-    after fetching the data it needs (e.g.\\ `make download && make
+    after fetching the data it needs (for example `make download && make
     calibrate`) to refresh.
 """
     body += f"""
@@ -337,11 +338,10 @@ def _index_md(specs: Sequence[NotebookSpec], section: str) -> str:
         "local dataset copy is rendered unexecuted and flagged."
         if section == "benchmark"
         else
-        "Top-level demo and analysis notebooks for the data-generation "
-        "side. Each notebook is best-effort executed during "
-        "`make docs-prepare`; notebooks that need a downloaded dataset "
-        "fall back to their last stored outputs and are flagged with a "
-        "warning admonition."
+        "Demo and analysis notebooks for the data-generation side. "
+        "`make docs-prepare` executes the light ones; `make docs-prepare-all` "
+        "also executes those that need a local dataset copy. A notebook "
+        "that could not run shows its last stored outputs under a warning."
     )
     return f"""---
 title: "Notebooks"

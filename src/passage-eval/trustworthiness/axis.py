@@ -14,8 +14,8 @@ from typing import Any
 class TrustworthinessAxis:
     """One row of the trustworthiness sub-table.
 
-    ``value`` is the headline scalar (e.g. CV for stability, paired
-    delta for geographic / ODD-edge, speed-up factor for efficiency).
+    ``value`` is the headline scalar (e.g. CV for stability, difference
+    of means for geographic / ODD-edge, speed-up factor for efficiency).
     ``flag`` is a Boolean trip indicator: ``True`` means the axis
     *fires* (the planner is unstable, generalises poorly, collapses at
     the boundary, or is slower than the oracle). Threshold semantics

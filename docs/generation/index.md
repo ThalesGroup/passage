@@ -5,7 +5,7 @@ icon: material/chart-timeline-variant
 
 # Generation Process
 
-This section provides a **deep technical dive** into how PASSAGE generates pathfinding samples — from the mathematical foundations of sampling and cost models to the algorithmic details of obstacle placement and solver execution.
+This section provides a **deep technical dive** into how PASSAGE generates its scenes, from the sampling of each scene and the cost models to obstacle placement and the exact reference solver. It describes the generator that built **PASSAGE v1.0**: what `passage generate` runs with the shipped `config/config.yaml`.
 
 ---
 
@@ -14,46 +14,46 @@ This section provides a **deep technical dive** into how PASSAGE generates pathf
 ```mermaid
 flowchart TD
     subgraph Input
-        T[JAXA Tiles<br>30 m/px GeoTIFF]
-        C[Calibration<br>global min/max]
-        K[Config<br>solvers, obstacles]
+        T["JAXA AW3D30 tiles<br>1°×1°, 3600×3600 cells of 30 m"]
+        C["Calibration<br>global min/max: −430.0 / 8767.0 m"]
+        K["Config<br>splits, objectives, obstacles"]
     end
 
     subgraph Sampling
-        S1["1. Draw target elevation<br>uniformly in [e_min, e_max]"]
-        S2[2. Select matching tile]
-        S3[3. Extract random crop]
-        S4[4. Place start/end markers]
+        S1["1. Draw a center tile<br>among the split's candidates"]
+        S2["2. Draw a target elevation;<br>nearest cell = start"]
+        S3["3. Place the R×R crop around the start<br>(split, guard ring, nodata, range checks)"]
+        S4["4. Draw the goal<br>among the other cells"]
     end
 
     subgraph Obstacles
-        O1[5. Generate superellipse mask]
-        O2[6. Validate coverage ≤ 30%]
+        O1["5. Superellipse mask<br>coverage ≤ target ≤ 30 %, markers kept free"]
     end
 
     subgraph Solving
-        P1[7. Solve on free terrain]
-        P2[8. Apply obstacle penalty]
-        P3[9. Solve with obstacles]
+        P1["6. Write the float32 tensor<br>and metadata"]
+        P2["7. Exact float64 A* reference:<br>3 objectives × free / obstacles blocked"]
     end
 
     subgraph Output
-        OUT[10. Encode tensor + metadata<br>Write to disk]
+        OUT["8. Write routes and the scene receipt"]
     end
 
     T --> S1
-    C --> S1
+    C --> S2
     K --> S1
     S1 --> S2 --> S3 --> S4
-    S4 --> O1 --> O2
-    O2 --> P1 --> P2 --> P3
-    P3 --> OUT
+    S4 --> O1
+    O1 --> P1 --> P2
+    P2 --> OUT
 
     style S1 fill:#1565C0,color:#fff
     style O1 fill:#D32F2F,color:#fff
-    style P1 fill:#2E7D32,color:#fff
+    style P2 fill:#2E7D32,color:#fff
     style OUT fill:#42A5F5,color:#fff
 ```
+
+Each scene yields six route variants. A variant is either an exact optimal route or a proved no-path (`infeasible`), never an approximation.
 
 ---
 
@@ -63,27 +63,27 @@ flowchart TD
 
 <div class="feature-card" markdown>
 ### [:material-dice-multiple: Sampling Procedure](sampling.md)
-The 6-step process for generating each sample — from elevation targeting to normalization, with full mathematical detail.
+How each scene is drawn: center tile, start cell, crop, goal and normalization, plus the geographic split rules (test-only South America hold-out, 5°×5° blocks, one-tile guard ring).
 </div>
 
 <div class="feature-card" markdown>
 ### [:material-scale-balance: Cost Models](cost-models.md)
-Five distinct edge-weight functions that model different navigation priorities — elevation, distance, slope, energy, and absolute.
+Five crop-relative step-cost functions. PASSAGE v1.0 uses three of them: `elevation`, `slope_uphill` and `energy`.
 </div>
 
 <div class="feature-card" markdown>
 ### [:material-shape: Obstacle Generation](obstacles.md)
-Superellipse-based procedural obstacles with configurable shape distributions, rotation, and coverage control.
+Superellipse obstacles with random shape, size and rotation, covering up to 30 % of the crop. Obstacle cells are blocked.
 </div>
 
 <div class="feature-card" markdown>
 ### [:material-graph: Solvers & Heuristics](solvers.md)
-Three solver backends (NetworkX, pathfinding, Numba-JIT grid), A\* and Dijkstra algorithms, and three admissible heuristics.
+The exact float64 A\* reference solver that labels v1.0, and three alternative backends (NetworkX, pathfinding, Numba grid) not used by the release.
 </div>
 
 <div class="feature-card" markdown>
-### [:material-notebook: Interactive Notebooks](notebooks.md)
-Explore the dataset visually through Jupyter notebooks — cost model comparisons, obstacle distributions, and solver analysis.
+### [:material-notebook: Interactive Notebooks](notebooks/index.md)
+Explore released scenes in Jupyter notebooks: the three objectives, obstacle masks and detours, and exact re-solves of the stored labels.
 </div>
 
 </div>

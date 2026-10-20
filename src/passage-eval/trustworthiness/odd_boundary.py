@@ -24,15 +24,14 @@ def odd_boundary_delta(
     higher_is_better: bool = False,
 ) -> TrustworthinessAxis:
     """Difference between the top-quantile (boundary) slice and the
-    full-split mean of a primary metric (§5.4 / App. K, axis "ODDe").
+    full-split mean of a primary metric (axis "ODDe").
 
     ``stratifier_per_sample`` carries one of the four declared per-sample
     ODD axes (obstacle coverage, super-ellipse exponent, elevation
     band, start-goal distance). Samples whose stratifier sits in the
     top ``top_quantile`` are designated the "boundary" slice. The axis
     value is
-
-        $\\Delta = \\mathrm{mean}(\\text{boundary}) - \\mathrm{mean}(\\text{full})$.
+    $\\Delta = \\mathrm{mean}(\\text{boundary}) - \\mathrm{mean}(\\text{full})$.
 
     For smaller-is-better metrics, a positive $\\Delta$ means the
     planner *worsens* at the envelope edge — the axis fires.

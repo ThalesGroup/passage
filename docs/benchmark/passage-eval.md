@@ -11,23 +11,36 @@ icon: material/package-variant-closed
 
 `passage_eval` loads released scenes, scores decoded paths under their analytic
 terrain task, and preserves the evidence needed for statistical comparison. It
-ships in the root `passage` distribution. This guide uses actual public APIs;
-[the protocol](protocol.md) records the paper definitions and known inconsistencies.
+ships in the root `passage` distribution, version `1.0.0`. This guide uses the
+public API; [the protocol](protocol.md) gives the metric definitions and how the
+evaluator reads the paper.
 
-For measuring an existing algorithm, start with
-[the complete candidate guide](contributing-a-method.md). Its CLI separates
-`conform`, `run`, offline `score`, matched `compare` and `report`, and retains
-every timed route. The convenience planner/statistical APIs below also serve
-historical analysis; their use alone does not create a qualified complete-request
-artifact or authenticate paper values.
+To evaluate your own planner, start with
+[Evaluate your planner](contributing-a-method.md). Its CLI separates `conform`,
+`run`, offline `score`, matched `compare` and `report`, and keeps every timed
+route. The Python functions below are lighter: they score paths and run the
+paper's paired statistics, but they do not produce the timed results on
+qualified references that the CLI workflow produces. The paper's learned-model
+results are historical results of the original study, reported as obtained;
+not re-run on the released dataset.
 
 ## 1. Install and load a frozen subset
 
+From the repository root:
+
 ```bash
-uv sync --frozen --group dev
-# Or from the repository root:
-pip install -e .
+uv sync --frozen            # installs passage and passage_eval
+# or: pip install -e .
+uv run --frozen python -c "import passage_eval; print(passage_eval.__version__)"  # 1.0.0
 ```
+
+Add `--extra torch` to `uv sync` (or `pip install -e ".[torch]"`) to time
+PyTorch planners on a GPU. The evaluator tests live in `tests/passage_eval`;
+run them with `uv run --frozen pytest tests/passage_eval -q` (`uv sync`
+installs the `dev` group, which holds pytest, by default).
+
+Remote loading needs a pinned 40-character dataset commit. The example below
+uses the verified PASSAGE v1.0 upload:
 
 ```python
 from passage_eval.io.dataset import load_val_scenes
@@ -35,15 +48,15 @@ from passage_eval.io.dataset import load_val_scenes
 scenes = load_val_scenes(
     resolution=64, cost_model="elevation", split="validation", n_samples=8,
     dataset_repo="thalesgroup/passage",
-    dataset_revision="REPLACE_WITH_DATASET_COMMIT",
+    dataset_revision="65f1e4f0a37d8a7b476ddf02d48fe542542924ea",
 )
-# Local alternative: dataset_path="/path/to/export"
+# Local alternative: dataset_path="<root>/export"
 ```
 
 The loader validates compressed tensors, calibration, released solver parameters,
 and oracle paths. It does not silently fall back to generated data. Sample count
 is a prefix cap. The three input channels are elevation, start/goal markers, and
-obstacles; reconstructed `Scene.elevation` is in metres.
+obstacles; reconstructed `Scene.elevation` is in meters.
 
 ## 2. Score a planner
 
@@ -62,8 +75,9 @@ geometry uses valid paths. New arrays include `sample_id`, `regret`, `assd`, `h9
 `oracle_costs`, and `metric_contract`.
 
 ASSD divides symmetric nearest-waypoint distance by oracle waypoint count.
-Hausdorff p95 uses raw pixels. Historical arrays use different units; scoring them
-requires explicit `allow_legacy=True`, which is for historical analysis only.
+Hausdorff p95 uses raw pixels. Arrays without a metric-contract label, such as
+the released paper results, use the original study's units; scoring them
+requires an explicit `allow_legacy=True`.
 
 ```python
 import numpy as np
@@ -101,21 +115,22 @@ Apply `holm_bonferroni` to the declared family and call
 `decide_pairwise(records, holm=adjusted)`. A full Pareto claim requires every
 metric to favor the same method; wins with unconfirmed metrics are a trade-off.
 
-The [walkthrough](walkthrough.md) gives the complete paired mean-difference
-example. These historical functions estimate paired mean differences. The
-qualified `compare` CLI separately produces geographic-block intervals for its
-reported statistics and marks missing block information. Choose the estimand and
+[Paired statistics (paper)](walkthrough.md) gives the complete paired
+mean-difference example. These functions estimate paired mean differences, as
+in the paper. The `passage-eval compare` command instead produces
+geographic-block intervals for its reported statistics and marks missing block
+information. Choose the estimand and
 resampling unit before inspecting results.
 
 ## 4. Deployment and diagnostics
 
 Public timing entry points are `benchmark_forward`, `benchmark_decoder`, and
 `benchmark_end_to_end`; each returns a `BenchmarkRecord` with percentile latency
-and runtime information. The qualified CLI times ordinary-input preparation,
+and runtime information. The CLI workflow times ordinary-input preparation,
 inference/search, decoding, repair/fallback, device completion, route snapshot,
 legality and physical recosting. It scores the persisted routes offline.
-Constructor/model-loading time remains separate; cold means the first complete
-request after construction.
+Constructor/model-loading time remains separate; the cold series is the first
+pass over the tasks after construction.
 Device labels are declarations, and candidates configure their actual runtime.
 
 Public decoder diagnostics include `boundary_f_score`,
@@ -127,13 +142,14 @@ appropriate measured inputs; they do not infer missing studies from a single run
 
 ## 5. Sidecars and result storage
 
-`Submission` and `submit` write metric rows and optional evidence. The qualified
-workflow writes a run manifest, terminal request records, numeric route arrays and
-reference qualifications. Offline scoring adds per-sample arrays, metrics and
-content-bound score receipts. `bench` additionally writes a compatible submission
-and `ReproducibilitySidecar`. Calibration declarations
+`Submission` and `submit` write metric rows and optional evidence. By default,
+a `Submission` records the local host name and user name; remove them before
+you share results. The CLI workflow writes a run manifest, terminal request
+records, numeric route arrays and reference qualifications. Offline scoring adds
+per-sample arrays, metrics and content-bound score receipts. `bench`
+additionally writes a `Submission` record and a `ReproducibilitySidecar`. Calibration declarations
 are hashed with `compute_calibration_decisions_hash`. See
-[contributing a method](contributing-a-method.md) for checkpoint mapping, pinned
+[Evaluate your planner](contributing-a-method.md) for checkpoint mapping, pinned
 data, device provenance, and artifact paths.
 
 A results root rejects mixed metric contracts. Keep results produced under

@@ -160,7 +160,7 @@ def download_tile(args: tuple[int, int, str | None]) -> tuple[int, int, str, boo
 
     ``extracted`` means every DSM member passed CRC/size verification and was
     published atomically as an individual file. Failures and HTTP absence remain
-    distinct in the archive receipt; the historical five-field return is kept.
+    distinct in the archive receipt; the function returns five fields.
     """
     lat, lon, raw_dir_str = args
     url = _archive_url(lat, lon)
@@ -339,8 +339,8 @@ def run_download(
 ) -> None:
     """Download the world grid or explicitly refresh selected 5-degree archives.
 
-    Resume validates hashed receipts. Legacy CSV successes remain
-    ``legacy_unverified`` without being redownloaded automatically. Explicit
+    Resume validates hashed receipts. CSV records without a hashed receipt
+    remain ``legacy_unverified`` without being redownloaded automatically. Explicit
     ``archive_pairs`` retries only those archives, preserving other records
     and tiles. Use ``resume=False`` to force refresh even verified archives.
     Unverified or failed records never count as complete coverage.

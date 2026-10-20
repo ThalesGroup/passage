@@ -117,7 +117,7 @@ def sample_n_from_config(obstacles_cfg: dict, rng: np.random.Generator) -> float
       - 'log_uniform'  : uniform in log-space between n_min and n_max
       - 'beta'         : beta distribution (a,b) scaled to [n_min, n_max]
 
-    Backward compatibility: if the nested `shape.n` structure is missing, fall back to
+    If the nested `shape.n` structure is missing, the function reads
     `obstacles_cfg['n_min']`, `obstacles_cfg['n_max']`, and `obstacles_cfg['n_distribution']`.
     """
     shape_cfg = obstacles_cfg.get("shape", {}) or {}
@@ -173,7 +173,6 @@ def sample_n_from_config(obstacles_cfg: dict, rng: np.random.Generator) -> float
 def sample_angle_from_config(rng: np.random.Generator) -> float:
     """Return an angle in radians uniformly sampled from [0, 2*pi).
 
-    Note: Per recent config changes there is no configuration for angles;
-    angles are always sampled uniformly in radians.
+    Angles are not configurable; they are always sampled uniformly in radians.
     """
     return float(rng.uniform(0.0, 2 * np.pi))

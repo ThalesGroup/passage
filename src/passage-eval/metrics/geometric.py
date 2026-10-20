@@ -30,8 +30,8 @@ Headline:
 
 Diagnostic:
     path_iou_diagnostic : raw mask-overlap of the rasterised decoded
-                       path against the rasterised oracle path. Kept for
-                       App. B / App. C reporting; never headline.
+                       path against the rasterised oracle path. Kept as
+                       a diagnostic; never headline.
 
 Per-sample ASSD is normalised by the oracle waypoint count so the
 metric is commensurate across the seven PASSAGE resolutions
@@ -106,7 +106,7 @@ def path_hausdorff_p95(
     *,
     percentile: float = 95.0,
 ) -> np.ndarray:
-    """Per-sample symmetric percentile-Hausdorff in pixels (§4.1, App. B)."""
+    """Per-sample symmetric percentile-Hausdorff in pixels."""
     if len(predicted_paths) != len(oracle_paths):
         raise ValueError(f"Batch length mismatch: {len(predicted_paths)} vs {len(oracle_paths)}.")
     if not (0.0 <= percentile <= 100.0):

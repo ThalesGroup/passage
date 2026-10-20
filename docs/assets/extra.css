@@ -889,3 +889,32 @@ html {
 .md-typeset .leaderboard-footer {
   text-align: center;
 }
+
+/* ---------------------------------------------------------------------------
+   Header: code repository and Hugging Face dataset side by side
+   --------------------------------------------------------------------------- */
+@media screen and (min-width: 60em) {
+  .md-header__source {
+    display: flex;
+    gap: 1rem;
+    width: auto;
+    max-width: 26rem;
+  }
+  .md-header__source .md-source {
+    flex: 0 1 auto;
+  }
+}
+.md-nav__source .md-source--huggingface {
+  border-top: 0.05rem solid var(--md-default-fg-color--lightest);
+}
+
+/* NeurIPS announcement bar */
+.passage-announce {
+  text-align: center;
+  font-size: 0.72rem;
+  line-height: 1.5;
+}
+.passage-announce a {
+  color: inherit;
+  text-decoration: underline;
+}

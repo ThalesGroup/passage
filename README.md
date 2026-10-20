@@ -254,8 +254,8 @@ oracle-guided decoding stays a labelled diagnostic. A learned-versus-exact row
 alone does not isolate the prediction's contribution.
 
 `bench --spec outputs/my-method.yaml` remains a convenience entry point that uses
-this workflow and writes a compatible leaderboard row. Keep each measurement
-campaign in its own results root. See the [complete candidate guide](docs/benchmark/contributing-a-method.md)
+this workflow and writes a `Submission` record. Keep each measurement
+campaign in its own results root. See [Evaluate your planner](docs/benchmark/contributing-a-method.md)
 for a CPU example, manifest fields, budget counters and report interpretation.
 
 ### CPU example from a clean checkout
@@ -282,16 +282,16 @@ The paper reports two dense-vision finalists at 256² under `elevation`:
 `convnextv2_atto+BCE` segmentation and `repvit_m1+Bellman, V_bridge` regression,
 compared with the analytic A* oracle. Their per-task results are released under
 [`src/passage-eval/results/paper-results/`](src/passage-eval/results/paper-results/README.md).
-These are the historical results of the original study, reported as obtained;
-they were not recomputed on the published dataset. Their training and deployment
-artifacts belong to the companion model repositories. See the
-[paper alignment record](docs/benchmark/protocol.md#1-reference-paper-and-alignment).
+These are historical results of the original study, reported as obtained; not
+re-run on the released dataset. The [evaluation protocol](docs/benchmark/protocol.md)
+explains how `passage-eval` implements the paper's task and metrics.
 
 The [leaderboard](docs/benchmark/leaderboard.md)
-(`src/passage-eval/results/leaderboard.csv`) has no entries yet. Its first
-entries will be the same two finalists, retrained on PASSAGE v1.0 at every paper
-resolution. Their decoders, frozen parameters and weights per input resolution
-are tracked in [Leaderboard candidates](docs/benchmark/candidates.md).
+(`src/passage-eval/results/leaderboard.csv`) has no entries yet, and no
+learned-model result on PASSAGE v1.0 is published yet. Its first entries will be
+the same two finalists, retrained on PASSAGE v1.0 and scored once on the test
+split with `passage-eval`; their weights, decoders and frozen parameters will be
+published with their entries (see [First entries](docs/benchmark/candidates.md)).
 
 ## 🗺️ Visual Summary
 
@@ -435,7 +435,7 @@ pip install -e ".[dev]"
 | 3 | `uv run --frozen passage generate` | Create multi-resolution tensors, metadata, paths and previews |
 | 4 | `uv run --frozen passage compress` | Write full and preview Parquet configurations |
 | 5 | `uv run --frozen passage export` | Prepare local metadata and execute the four analysis notebooks per selected resolution |
-| 6 | `uv run --frozen passage upload` | Publish a prepared export to Hugging Face when explicitly requested |
+| 6 | `uv run --frozen passage upload --repo-id <user>/<dataset>` | Publish a prepared export to Hugging Face when explicitly requested |
 
 `uv run --frozen passage regenerate` orchestrates bounded generation, verified
 Parquet export and scratch cleanup. The
@@ -460,7 +460,7 @@ Repository-root release metadata is tracked in [`CITATION.cff`](CITATION.cff), [
 ### 🔬 Data qualification trace
 
 Follow the [data qualification guide](docs/DATA_QUALIFICATION.md) from official terrain inventory and frozen calibration through transactional generation, verified export, cohort qualification and final release gates.
-PASSAGE owns the data evidence and consumer rosters; training traces belong to the companion vision repository.
+PASSAGE holds the data evidence and the supervision rosters that training code consumes.
 
 ### 🔄 Sequential full dataset generation and structural analysis
 
@@ -495,13 +495,12 @@ graph and recorded with explicit terminal statuses. The source-cell split policy
 and the label contract are recorded in the release receipts. Freeze and qualify
 the task roster before training or headline evaluation.
 
-Publication is a separate action. Set the destination once before an explicitly
-requested upload; regeneration does not publish to the Hub:
+Publication is a separate action, and regeneration never publishes to the Hub.
+Name the destination repository explicitly when an upload is requested:
 
 ```bash
-export HF_USER_NAME=thalesgroup
-export HF_REPO_NAME=passage
-# uv run --frozen passage upload --export-dirpath outputs/release/dataset
+# Publish only when explicitly requested, to a repository you name:
+# uv run --frozen passage upload --export-dirpath outputs/release/dataset --repo-id <user>/<dataset>
 ```
 
 ---
@@ -533,7 +532,7 @@ obstacles:
   enabled: true
   ratio_max: 0.30
   shape:
-    n: { distribution: log_uniform, min: 1.0, max: 80.0 }
+    n: { min: 1.0, max: 80.0, distribution: { type: log_uniform } }
 solvers:
   - name: astar_elevation
     backend: grid
@@ -572,10 +571,6 @@ The four underscore templates export as `dataset.ipynb`, `display.ipynb`,
 `metrics.ipynb` and `passage_eval_metrics.ipynb` at each of the seven resolutions.
 Use a declared local snapshot or explicit pinned Hugging Face inputs. Executed
 outputs and their producing identities are recorded in the export manifest.
-
-The companion vision paper notebooks consume experiment-result CSVs and artifact
-manifests. Reproducing their figures also requires the trained checkpoints,
-configured decoders, per-task metrics and measured timing records.
 
 ---
 
@@ -640,7 +635,8 @@ uv run pre-commit run --all-files
 
 ## 📝 Citation
 
-PASSAGE appears as a poster in the NeurIPS 2026 Evaluations and Datasets Track.
+PASSAGE is accepted as a poster at the 40th Conference on Neural Information
+Processing Systems (NeurIPS 2026), Track on Evaluations and Datasets.
 Citation metadata is available in [`CITATION.cff`](CITATION.cff). If you prefer
 BibTeX, use the entry below, and also name the dataset version you used
 (PASSAGE v1.0):
@@ -649,11 +645,15 @@ BibTeX, use the entry below, and also name the dataset version you used
 @inproceedings{delhomme2026passage,
   title     = {{PASSAGE}: A Real-Terrain Benchmark for Trustworthy Constrained Path Planning},
   author    = {Delhomme, Geoffrey and Trap, Fran{\c{c}}ois and Kaakai, Fateh},
-  booktitle = {Advances in Neural Information Processing Systems (NeurIPS), Evaluations and Datasets Track},
+  booktitle = {Advances in Neural Information Processing Systems (NeurIPS), Track on Evaluations and Datasets},
   year      = {2026},
   url       = {https://github.com/ThalesGroup/passage}
 }
 ```
+
+The NeurIPS 2026 proceedings are not published yet. This entry will be completed
+with the proceedings details (volume, pages and paper URL) once they are
+available; the title, authors, venue and year will not change.
 
 ---
 

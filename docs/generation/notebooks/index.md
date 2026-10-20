@@ -5,7 +5,7 @@ icon: material/notebook-multiple
 
 # Dataset / solver notebooks
 
-Top-level demo and analysis notebooks for the data-generation side. Each notebook is best-effort executed during `make docs-prepare`; notebooks that need a downloaded dataset fall back to their last stored outputs and are flagged with a warning admonition.
+Demo and analysis notebooks for the data-generation side. `make docs-prepare` executes the light ones; `make docs-prepare-all` also executes those that need a local dataset copy. A notebook that could not run shows its last stored outputs under a warning.
 
 <div class="grid cards" markdown>
 

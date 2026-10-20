@@ -16,10 +16,9 @@ same records under different export timestamps: for a given method and seed,
 their files are byte-identical. The `thor-gpu` folder name is the accelerator
 label attached to these runs.
 
-These are the historical results of the original study, reported as obtained.
-They were not recomputed on the published dataset, they are not leaderboard
-entries, and their geometry values follow the study's normalization (see the
+These are historical results of the original study, reported as obtained; not
+re-run on the released dataset. They are not leaderboard entries, and their geometry values follow the study's normalization (see the
 [alignment record](../../../../docs/benchmark/protocol.md#1-reference-paper-and-alignment)).
 The leaderboard (`../leaderboard.csv`) starts empty; its first entries will be
 the same two finalists retrained on PASSAGE v1.0 (see
-[Leaderboard candidates](../../../../docs/benchmark/candidates.md)).
+[First entries](../../../../docs/benchmark/candidates.md)).

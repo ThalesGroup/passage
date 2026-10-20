@@ -10,7 +10,7 @@ What the `elevation`, `slope_uphill` and `energy` objectives reward on one scene
 
 !!! info "Source notebook"
 
-    `notebooks/costmodel.ipynb` — re-execute with `make docs-prepare` after editing.
+    `notebooks/costmodel.ipynb` — re-execute with `make docs-prepare-all` after editing.
 
 <iframe
     src="../../../gen/notebooks/costmodel.html"

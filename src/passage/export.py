@@ -135,7 +135,7 @@ class ReleaseContext:
 
 
 def parse_path_csv(csv_path: Path, *, expected_sha256: str | None = None) -> list[list[int]]:
-    """Parse a path .csv file with rows "x,y" (no header) and return [[row,col], ...]."""
+    """Parse a path .csv file with rows "row,col" (no header) and return [[row, col], ...]."""
 
     out: list[list[int]] = []
     content = csv_path.read_bytes()

@@ -22,11 +22,11 @@ def stability_cv(
     cv_threshold: float = 0.25,
 ) -> TrustworthinessAxis:
     """Coefficient of variation $\\sigma / \\mu$ of the per-seed
-    ``cost_regret_p90`` (§5.4 / App. K, axis "Stab").
+    ``cost_regret_p90`` (axis "Stab").
 
     A planner whose three-seed CR-p90 has a CV above ``cv_threshold``
-    is flagged as training-unstable. The PASSAGE paper uses
-    ``cv_threshold = 0.25``.
+    is flagged as training-unstable. The default ``cv_threshold`` is
+    0.25.
     """
     arr = np.asarray(list(cost_regret_p90_per_seed), dtype=np.float64)
     arr = arr[np.isfinite(arr)]

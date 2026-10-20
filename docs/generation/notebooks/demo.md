@@ -10,7 +10,7 @@ The shortest path from the dataset to a training example: load one released scen
 
 !!! info "Source notebook"
 
-    `notebooks/demo.ipynb` — re-execute with `make docs-prepare` after editing.
+    `notebooks/demo.ipynb` — re-execute with `make docs-prepare-all` after editing.
 
 <iframe
     src="../../../gen/notebooks/demo.html"

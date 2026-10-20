@@ -42,7 +42,7 @@ def encode_tensor_blob(arr: np.ndarray, level: int = TENSOR_COMPRESSION_LEVEL) -
 
     Args:
         arr: Numpy array to encode.
-        level: Zstd compression level (1-22, default 3).
+        level: Zstd compression level (1-22, default `TENSOR_COMPRESSION_LEVEL` = 12).
 
     Returns:
         Compressed bytes blob.
@@ -74,7 +74,7 @@ def save_tensor(tensor: np.ndarray, path: Path, level: int = TENSOR_COMPRESSION_
     Args:
         tensor: Numpy array to save.
         path: File path (should end with .npy.zst).
-        level: Zstd compression level (default 3).
+        level: Zstd compression level (default `TENSOR_COMPRESSION_LEVEL` = 12).
     """
     path = Path(path)
     blob = encode_tensor_blob(tensor, level=level)

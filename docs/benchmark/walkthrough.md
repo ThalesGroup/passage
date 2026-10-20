@@ -1,26 +1,30 @@
 ---
-title: End-to-End Walkthrough
+title: Paired statistics (paper)
 icon: material/rocket-launch
 ---
 
-# End-to-end walkthrough
+# Paired statistics (paper)
 
 | Author | Date | Version |
 |---|---|---|
 | Geoffrey Delhomme | 2026-10-20 | 1.0 |
 
-This walkthrough preserves the historical statistical API's three-seed paired
-mean-difference comparison. Training, calibration, and test execution precede the
-analysis. It checks pairing before bootstrap and reports geometry coverage;
-[the protocol](protocol.md) explains why a CLI row alone is not a paper headline.
-For current complete-request execution, geographic-block uncertainty and matched
-artifact reporting, use the
-[existing-algorithm workflow](contributing-a-method.md). Its metric contract and
-resampling procedure are distinct from this historical example.
+This page applies the paper's statistical comparison to two planners. Each
+planner has three trained checkpoints (seeds 1234, 2026 and 3407), and both
+were scored on the same test tasks. The example checks that the two result
+sets pair up task by task, bootstraps the mean of the paired differences for
+each metric, pools the three seeds, applies the Holm–Bonferroni correction and
+reads the decision: Pareto-dominant, trade-off or indistinguishable. Use it to
+run the paper's mean-difference analysis on your own results;
+[the protocol](protocol.md) explains why one CLI row alone is not a paper
+headline. To evaluate a planner and compare it with others, use
+[Evaluate your planner](contributing-a-method.md) instead: its `compare` command
+uses a different estimator, with intervals that resample whole geographic
+blocks.
 
 ## 1. Freeze and run the candidates
 
-Install from the root with `uv sync --frozen --group dev`. For each candidate, declare
+Install from the root with `uv sync --frozen`. For each candidate, declare
 three trained checkpoints in `inference_kwargs_by_seed`, pin the dataset commit,
 freeze decoder decisions on calibration, and run its test spec once:
 

@@ -1,9 +1,9 @@
 ---
-title: Harness an existing algorithm
+title: Evaluate your planner
 icon: material/account-plus-outline
 ---
 
-# Harness an existing algorithm
+# Evaluate your planner
 
 | Author | Date | Version |
 |---|---|---|
@@ -13,8 +13,10 @@ The evaluator measures the complete procedure that emits a route, then scores th
 same persisted route against an independently qualified reference. This guide
 covers wrapping an existing classical, graph, policy or vision algorithm,
 freezing its inputs and budgets, and producing a matched comparison report.
-The [protocol](protocol.md) preserves the historical paper definitions and
-distinguishes the qualified workflow from historical results.
+The [protocol](protocol.md) gives the metric definitions and how the evaluator
+reads the paper. The [Benchmark overview](index.md) defines the terms used
+here: ordinary input, complete request, qualified reference, cohort and
+censored cost.
 
 > **Evidence boundary**
 >
@@ -22,15 +24,11 @@ distinguishes the qualified workflow from historical results.
 > performance nor accelerator speed. Training and device measurements produce
 > their own identified artifacts.
 
-> **Proposed leaderboard: three participant steps**
+> **Official entries**
 >
-> Adapt your complete procedure with `Candidate.plan(request)`, check it on public
-> examples, then submit one immutable candidate package. The proposed short
-> manifest names the Python entry point, supported Python minor version, dependency
-> lock, weights and license. Organizers build the isolated environment, authenticate
-> artifacts and calculate official scores. Hardware profiling is a separate option.
-> The single-command check/submission service is not implemented yet. Sections
-> below document the current manual evaluator workflow.
+> The leaderboard submission service is not deployed yet. This guide covers
+> local evaluation: the commands below produce local results, not official
+> leaderboard entries.
 
 ## 1. Implement the complete procedure
 
@@ -88,20 +86,21 @@ The timer covers candidate-input preparation, inference, decoding, repair,
 fallback, device completion synchronization, route snapshot, legality and physical
 recosting. Device work completes before route snapshot and recosting. Persistence and
 reference/geometry scoring follow outside it. Model construction is excluded;
-the `cold` series means the first request after construction. Warmup and warm
-outputs are retained and scored separately.
+the `cold` series is the first pass over the tasks after construction. Warmup and
+warm outputs are retained and scored separately.
 
 > **Deadline semantics**
 >
-> Python adapters use cooperative cancellation. A late return is a timeout even
-> when it contains a legal route; its failed-attempt and drain times are retained.
-> The harness waits for safe completion and retains resource owners. It does not
-> forcibly preempt an arbitrary blocked Python or device call.
+> The runner cannot stop a Python or device call in the middle: the planner must
+> check `request.remaining_wall_ms()` and stop itself (cooperative cancellation).
+> The runner waits for each call to return before it starts the next request. A
+> late return is a timeout even when it contains a legal route; the time spent
+> before and after the deadline is recorded.
 
 ## 2. Freeze inputs, references and budgets
 
 `uv run --frozen passage-eval init-spec --out outputs/method.yaml` writes a starter spec.
-For a task specification on a local copy of PASSAGE v1.0, use the following as a starting point.
+For a task specification on a local export of PASSAGE v1.0, use the following as a starting point.
 This requires an existing exported dataset and sufficient reference-solve budget:
 
 ```yaml
@@ -133,15 +132,15 @@ The local root must contain core `<N>x<N>/<split>/*.parquet` shards. An absent
 local root fails; it never triggers a remote fallback. Remote access requires an
 explicit repository and immutable 40-character commit SHA. `_samples` configs
 are previews, not the training or evaluation population. Local revision metadata
-alone does not authenticate file contents.
+alone does not verify file contents.
 
 Freeze the sample roster and declare its split role before execution: development
 for choosing algorithms, calibration for decoder/budget selection, validation for
 declared intermediate checks and test for the final frozen pass. The cap selects
 a deterministic prefix, not a random population sample. Keep source identity,
 scene tensor/graph identity, geographic cluster assignments and exact-reference
-qualification receipts with the cohort. Cohorts drawn from different data have
-different scientific identities, even when their scene counts match.
+qualification receipts with the cohort. Cohorts drawn from different data are
+different cohorts, even when their scene counts match.
 
 The default reference policy requires legal stored routes, stored-cost agreement
 and independently solved optimality under the recorded tolerance. Admission
@@ -149,7 +148,7 @@ fails for an invalid or censored reference rather than penalizing the candidate.
 For a deliberately new reference cohort, select
 `reference_policy: independent_analytic_reference` and provide
 `reference_cohort_id`. This recomputes exact references while retaining source
-label defects; it changes the evidence cohort and does not repair training labels.
+label defects; it creates a different cohort and does not repair training labels.
 
 For learned methods, declare actual checkpoint files through `inference_kwargs`
 or `inference_kwargs_by_seed`; missing files fail admission and their hashes are
@@ -163,8 +162,7 @@ and reference identities. Include non-entry helpers and native runtime dependenc
 using `runtime_bundle_manifest`, a JSON file with schema
 `passage-runtime-bundle-v1` and a nonempty `files` list of `{path, sha256}` entries.
 Paths resolve relative to the manifest; checksums must match readable files.
-Record calibration decisions, hardware/runtime and actual precision. Reseeding
-inference neither retrains a model nor establishes deterministic behavior.
+Record calibration decisions, hardware/runtime and actual precision.
 
 ## 3. Run, rescore and compare
 
@@ -177,8 +175,9 @@ uv run --frozen passage-eval report --compare outputs/comparison.json --output o
 ```
 
 Create `run-b` with a second frozen method specification on the same tasks before
-comparing. `bench --spec outputs/method.yaml` remains a convenience entry point using the
-same measured-route workflow and writing a compatible leaderboard submission.
+comparing. `bench --spec outputs/method.yaml` is a convenience entry point: it uses the
+same measured-route workflow and writes a `Submission` record and a sidecar to its
+results folder.
 
 The conformance receipt identifies CPU checks for ordinary-input isolation,
 terminal failure penalties, absolute deadlines, accumulated stage work and
@@ -267,13 +266,14 @@ execution performs a full four-split metadata census and bounded classical
 checks. For a clearly labelled smoke run, add `--census-limit 4`,
 `--classical-budget 1` and `--max-expansions 128`.
 
-Analysis exports four notebooks per resolution, all source notebooks including
-nested ones, four global dataset-paper studies and eight global vision study
-reports. Leading underscores remain on source templates only. Missing learned
-results remain `not_run`; the 256² learned paper section remains required.
+Analysis exports four notebooks per resolution (`dataset`, `display`, `metrics`
+and `passage_eval_metrics`), a copy of every source notebook under `notebooks/`,
+and the five dataset studies of `paper/notebooks/`, exported to
+`notebooks/paper/`. The exported per-resolution notebooks drop the leading
+underscore of their source templates (`_dataset.ipynb` becomes `dataset.ipynb`).
 
-This command prepares notebooks in separate staging. Its manifest distinguishes
-notebook readiness from Parquet staging and scientific admission. Executed cells,
+This command prepares notebooks in separate staging. Its manifest records
+notebook readiness, Parquet staging and publication admission separately. Executed cells,
 report/figure outputs and producing identities are checked before reuse. Snapshot
 staging uses read-only hardlinks or reflinks when available and fails rather than
 silently copying the full dataset; an ordinary copy requires explicit API opt-in

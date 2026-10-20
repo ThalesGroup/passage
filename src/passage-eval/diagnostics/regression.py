@@ -164,9 +164,9 @@ def local_ordinal_concordance(
     """Fraction of neighbour pairs with non-trivial oracle margin where the
     predicted field ranks them the same as the oracle.
 
-    A scale-invariant ordering check: complements MAE — MAE-good /
-    ordinal-bad is exactly the failure mode the regression primer warns
-    about.
+    A scale-invariant ordering check that complements MAE: a field can
+    have a low MAE and still rank neighbouring cells in the wrong order,
+    which misleads a descent decoder.
     """
     pred = np.asarray(predicted_field, dtype=np.float64)
     orac = np.asarray(oracle_field, dtype=np.float64)

@@ -22,7 +22,7 @@
 
 """Statistical-discipline primitives for the PASSAGE evaluation protocol.
 
-The PASSAGE paper (App. J, "Cross-Family Evaluation Protocol") declares
+The cross-family evaluation protocol of the PASSAGE paper declares
 that every headline number is
 
   (i) a function of the *decoded path* (Rule 1: common anchor),
@@ -30,7 +30,7 @@ that every headline number is
       (``PRIMARY_METRICS``),
 (iii) aggregated over the seeds ``DEFAULT_SEEDS = (1234, 2026, 3407)``,
  (iv) tested via a paired bootstrap on the mean of paired differences,
-  (v) corrected across the primary-metric family by Holm--Bonferroni at
+  (v) corrected across the primary-metric family by Holm–Bonferroni at
       family-wise alpha = 0.05, and
  (vi) reduced to a categorical pairwise decision: Pareto-dominant /
       Trade-off / Indistinguishable.
@@ -53,12 +53,12 @@ import numpy as np
 # Pre-registered constants
 # ---------------------------------------------------------------------------
 
-#: Default seeds the PASSAGE paper pre-registers (App. J, §Statistical Discipline).
+#: Default seeds the PASSAGE paper pre-registers.
 DEFAULT_SEEDS: tuple[int, int, int] = (1234, 2026, 3407)
 
 
 class MetricFamily(str, Enum):
-    """Three primary-metric families declared in §5.2 of the paper."""
+    """Three primary-metric families declared by the paper."""
 
     REGRET = "regret"
     GEOMETRIC = "geometric"
@@ -93,11 +93,10 @@ def apply_censored_penalty(
 ) -> np.ndarray:
     """Return predicted costs with a $K \\gg c^{\\star}$ penalty on failed decodes.
 
-    §5.2 of the paper defines a censored penalty $c^{\\text{pred}}_i = K$
+    The paper defines a censored penalty $c^{\\text{pred}}_i = K$
     "on a decode that fails to connect $s$ to $g$ or that crosses an
     obstacle". The canonical PASSAGE penalty value is
-    ``K = k_factor * oracle_cost`` with ``k_factor = 1e6``, matching the
-    obstacle-traversal cost the dataset itself uses.
+    ``K = k_factor * oracle_cost`` with ``k_factor = 1e6``.
 
     Parameters
     ----------
@@ -233,9 +232,9 @@ def paired_bootstrap_delta(
 ) -> BootstrapDelta | tuple[BootstrapDelta, np.ndarray]:
     """Paired bootstrap on $\\Delta = T(\\hat{m}_A - \\hat{m}_B)$.
 
-    Pairs are anchored on the same sample index (Rule of §5.3 - "the
-    pairing cancels sample-difficulty variance because both methods are
-    evaluated on the same indices"). Each resample picks ``n`` indices
+    Pairs are anchored on the same sample index: the pairing cancels
+    sample-difficulty variance because both methods are evaluated on the
+    same indices. Each resample picks ``n`` indices
     *with replacement* and recomputes ``statistic`` on the per-sample
     differences.
 
@@ -253,7 +252,7 @@ def paired_bootstrap_delta(
         Bootstrap parameters; ``alpha = 0.05`` is the paper's default.
     return_draws : bool
         If ``True`` also return the ``(n_bootstrap,)`` draw vector for
-        downstream Holm--Bonferroni p-value computation.
+        downstream Holm–Bonferroni p-value computation.
     """
     a = np.asarray(per_sample_a, dtype=np.float64)
     b = np.asarray(per_sample_b, dtype=np.float64)
@@ -314,7 +313,7 @@ def multiseed_paired_bootstrap(
 
     Each seed contributes ``n_bootstrap_per_seed`` resamples on its own
     paired arrays; the composite CI is the central interval over the
-    pooled draws (App. J §"Three-seed aggregation"). The point estimate
+    pooled draws (the paper's three-seed aggregation). The point estimate
     is the across-seed mean of per-seed point estimates.
 
     Inputs may be a dict ``{seed: (N_seed,) array}`` or a list aligned
@@ -392,7 +391,7 @@ def multiseed_paired_bootstrap(
 
 @dataclass(frozen=True)
 class HolmBonferroniResult:
-    """Per-test outcome of a Holm--Bonferroni correction over a metric family."""
+    """Per-test outcome of a Holm–Bonferroni correction over a metric family."""
 
     metric: str
     p_value: float
@@ -405,7 +404,7 @@ def holm_bonferroni(
     *,
     alpha: float = 0.05,
 ) -> dict[str, HolmBonferroniResult]:
-    """Holm--Bonferroni step-down correction on a family of two-sided p-values.
+    """Holm–Bonferroni step-down correction on a family of two-sided p-values.
 
     Implements the standard step-down procedure: order p-values
     ascending, and reject at step $k$ iff $p_{(k)} \\leq \\alpha / (m - k + 1)$
@@ -457,7 +456,7 @@ def holm_bonferroni(
 
 
 class PairwiseDecision(str, Enum):
-    """Three possible overall outcomes (App. J §Decision Rules)."""
+    """Three possible overall outcomes of the paper's decision rule."""
 
     PARETO_DOMINANT_A = "pareto_dominant_a"
     PARETO_DOMINANT_B = "pareto_dominant_b"

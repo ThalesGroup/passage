@@ -47,7 +47,7 @@ def per_sample_metrics(
     starts: Sequence[tuple[int, int]] | None = None,
     goals: Sequence[tuple[int, int]] | None = None,
 ) -> dict[str, np.ndarray]:
-    """Validated per-sample evidence; censored costs retain failed decodes (§4.1)."""
+    """Validated per-sample evidence; censored costs retain failed decodes."""
     n = len(predicted_paths)
     if not (n == len(oracle_paths) == len(predicted_costs) == len(oracle_costs)):
         raise ValueError("Mismatched batch lengths across paths/costs.")

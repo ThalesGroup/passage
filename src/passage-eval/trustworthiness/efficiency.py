@@ -21,11 +21,10 @@ def oracle_relative_efficiency(
     speedup_threshold: float = 1.0,
 ) -> TrustworthinessAxis:
     """Same-device latency ratio between planner and A$^{\\star}$ oracle
-    (§5.4 / App. K, axis "Eff").
+    (axis "Eff").
 
     The axis value is the *speed-up*
-
-        $\\mathrm{speedup} = T_{\\text{oracle}} / T_{\\text{planner}}$.
+    $\\mathrm{speedup} = T_{\\text{oracle}} / T_{\\text{planner}}$.
 
     A speed-up below ``speedup_threshold = 1.0`` means the planner is
     slower than the oracle that produced its labels — the axis fires.

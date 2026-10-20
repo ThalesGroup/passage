@@ -2,7 +2,7 @@
 
 !!! info "Entries to come"
 
-    The leaderboard has no entries yet. Its first entries will be the two
-    dense-vision finalists of the paper, retrained on PASSAGE v1.0 and scored
-    with `passage-eval`. Their state is tracked in
-    [Leaderboard candidates](../benchmark/candidates.md).
+    The leaderboard has no entries yet. Its first entries will be the paper's
+    two dense-vision finalists, retrained on PASSAGE v1.0 and scored once on
+    the test split with `passage-eval`; see
+    [First entries](../benchmark/candidates.md).

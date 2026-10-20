@@ -4,208 +4,244 @@ title: Data Format
 
 # Data Format
 
-This page describes the data formats used throughout PASSAGE — from raw GeoTIFF tiles to the final compressed Parquet shards on Hugging Face.
+This page describes the data formats used throughout PASSAGE, from the files the generator writes to the compressed Parquet shards on Hugging Face. The [dataset card](../dataset/index.md) is the reference for the released columns.
 
 ---
 
 ## Tensor Format
 
-The core data structure is a **3-channel tensor** of shape $(R, R, 3)$ where $R$ is the resolution:
+Each scene is stored as a **3-channel tensor** of shape $(R, R, 3)$, where $R$ is the resolution:
 
 | Channel | Name | Dtype | Range | Description |
 |:-------:|------|-------|-------|-------------|
-| 0 | Elevation | `float32` | $[0, 1]$ | Normalized elevation ($\bar{e}$) |
+| 0 | Elevation | `float32` | $[0, 1]$ | Elevation normalized with the global calibration range ($\bar{e}$) |
 | 1 | Markers | `float32` | $\{-1, 0, 1\}$ | Background / start / goal |
-| 2 | Obstacles | `float32` | $\{0, 1\}$ | Obstacle binary mask |
+| 2 | Obstacles | `float32` | $\{0, 1\}$ | Obstacle mask (1 = blocked cell) |
 
 ### Compression
 
-Tensors are stored as compressed NumPy arrays:
+A tensor blob holds the **raw bytes** of the array, compressed with Zstandard:
 
-1. Tensor is serialized to NumPy `.npy` format (in memory)
-2. The bytes are compressed with **Zstandard** at level 12
-3. Saved with the `.npy.zst` extension
+1. The array is laid out in C order (row-major) as little-endian float32 values.
+2. The bytes are compressed with **Zstandard** at level 12.
+3. The generator saves the blob with the `.npy.zst` suffix; in Parquet it is the `tensor` column.
+
+The blob has **no NumPy `.npy` header**, so `np.load` cannot read it. Decode it with `np.frombuffer` and reshape it:
 
 ```python
-# Encoding (internal)
-blob = zstd.compress(numpy_bytes, level=12)
+import numpy as np
+import zstandard
 
-# Decoding (user-facing)
+# Encoding (what passage.utils.encode_tensor_blob does)
+blob = zstandard.ZstdCompressor(level=12).compress(np.ascontiguousarray(tensor).tobytes())
+
+# Decoding
+x = np.frombuffer(zstandard.ZstdDecompressor().decompress(blob), dtype="<f4").reshape(R, R, 3)
+
+# The same with the package helper
 from passage.utils import decode_tensor_blob
-tensor = decode_tensor_blob(blob, shape=(256, 256, 3), dtype="float32")
+x = decode_tensor_blob(blob, shape=(R, R, 3))
 ```
 
-!!! info "Compression ratio"
-    Typical compression ratios are **3–8×** depending on terrain complexity. A 256×256×3 float32 tensor (~768 KB raw) typically compresses to ~100–250 KB.
+To get elevations in meters, use the calibration range stored in the metadata: `x[..., 0] * (max - min) + min`. PASSAGE v1.0 uses `min = -430.0` and `max = 8767.0`.
 
 ---
 
 ## Metadata Format
 
-Each sample includes a YAML metadata file with full provenance:
+Each scene has a YAML metadata file. The skeleton below shows its keys; `<…>` marks a value that changes from scene to scene.
 
 ```yaml
-tile:
-  lat: 45
-  lon: 5
-  filename: N45E005_AVE_DSM.tif
-crop:
-  row_start: 1200
-  col_start: 800
-  height: 256
-  width: 256
-markers:
-  start:
-    row: 42
-    col: 187
-  end:
-    row: 230
-    col: 15
+index: <int>                     # scene index; the Parquet `id` is this index, zero-padded to 10 digits
+resolution: <int>
+split: <train | calibration | validation | test>
+dataset_version: <…>             # the value of generation.dataset_version in config/config.yaml
+units: metres
 calibration:
-  global_min: -415.0
-  global_max: 8848.0
+  min: -430.0                    # global calibration range, in meters
+  max: 8767.0
+markers:
+  start_point: {i: <row>, j: <col>}
+  end_point: {i: <row>, j: <col>}
+tile:
+  source: {lat: <int>, lon: <int>}    # center tile, named by its south-west corner
+  used: [<source window>, …]          # one window per tile the crop overlaps
+  overlapping: [<source window>, …]
+crop:
+  top_left: {lat: <float>, lon: <float>}
+  bottom_right: {lat: <float>, lon: <float>}
+  center: {lat: <float>, lon: <float>}
 obstacles:
   enabled: true
-  count: 7
-  coverage_ratio: 0.23
+  ratio_target: <float>          # target coverage t
+  ratio_actual: <float>          # final coverage, at most t
+provenance:
+  generation_seed: 42
+  sample_seed: <int>
+  provenance_id: <sha256>
+  calibration_sha256: <sha256>
+  source_windows: [<source window>, …]
 solvers:
-  - name: astar_elevation
-    backend: grid
-    algorithm: astar
+  astar_elevation:
+    name: astar_elevation
     cost_model: elevation
-    weight: 5878.0
-    heuristic: euclidean
-    time_free: 0.0123
-    time_obstacles: 0.0156
-    cost_free: 45231.7
-    cost_obstacles: 52187.3
+    weight: 62.4
+    # … the other keys of this solvers entry in config/config.yaml …
+    graph_spec:
+      connectivity: 8
+      diagonal_policy: destination_only
+      obstacle_policy: blocked
+      pixel_size_m: 30.0
+      coordinate_order: row_col
+      cost_model: elevation
+      cost_weight: 62.4
+      rtol: 1.0e-07
+      atol: 1.0e-06
+    reference_engine: passage.reference.solve_reference
+    arithmetic_precision: float64
+  astar_energy: {…}              # cost_model: energy, weight: 1125.3
+  astar_slope: {…}               # cost_model: slope_uphill, weight: 8886.2
+paths:
+  astar_elevation:
+    free:
+      status: <ok | infeasible>
+      cost: <float or null>
+      length: <int>              # number of cells in the route
+      expansions: <int>          # cells expanded by the reference search
+      considered_area: <int>
+      reference_status: <exact | no_path>
+      graph_id: <sha256>
+      crosses_obstacles: false
+    obstacles: {…}               # same keys, obstacles blocked
+  astar_energy: {…}
+  astar_slope: {…}
 ```
+
+A **source window** records the tile (`lat`, `lon`, file `name`, `sha256`), the rows and columns read from it, and where they go in the crop.
 
 ---
 
 ## Path CSV Format
 
-Each solver produces two CSV files per sample — one for obstacle-free terrain, one with obstacles:
-
-```
-path_astar_elevation_free.csv
-path_astar_elevation_obstacles.csv
-```
-
-Format: one point per line, `x,y` coordinates (column, row):
+Each solver produces two route files per scene: one on free terrain and one with obstacles blocked. Each line holds one cell as a `row,col` pair, from the start to the goal, with no header:
 
 ```csv
-187,42
-186,43
-185,44
+44,160
+45,159
+46,158
 ...
-15,230
 ```
+
+A variant with the status `infeasible` has an empty file. The generator writes the files to `paths/<solver>/free/…` and `paths/<solver>/obstacles/…` (see [File Naming Conventions](#file-naming-conventions)).
 
 ---
 
 ## Parquet Schema
 
-During export, samples are packaged into **Apache Parquet** files with Hugging Face `Features` typing:
+During export, scenes are packaged into **Apache Parquet** shards with Hugging Face `Features` typing. The columns are those of the dataset card's [Columns](../dataset/index.md#columns) table:
 
-```
-Root
-├── tensor              bytes           # zstd-compressed (R,R,3) numpy array
-├── metadata
-│   ├── tile
-│   │   ├── lat         int32
-│   │   ├── lon         int32
-│   │   └── filename    string
-│   ├── crop
-│   │   ├── row_start   int32
-│   │   ├── col_start   int32
-│   │   ├── height      int32
-│   │   └── width       int32
-│   ├── markers
-│   │   ├── start       {row: int32, col: int32}
-│   │   └── end         {row: int32, col: int32}
-│   ├── obstacles
-│   │   ├── enabled     bool
-│   │   ├── count       int32
-│   │   └── coverage    float32
-│   └── solvers[]
-│       ├── name        string
-│       ├── backend     string
-│       ├── algorithm   string
-│       ├── cost_model  string
-│       ├── weight      float64
-│       ├── heuristic   string
-│       ├── time_free   float64
-│       └── time_obs    float64
-├── path_<solver>_free       string     # CSV-encoded path
-├── path_<solver>_obstacles  string     # CSV-encoded path
-└── image                    bytes      # (Optional) PNG image
-```
+| Column | Type | Content |
+| --- | --- | --- |
+| `id` | string | Scene index, zero-padded; unique within a configuration and split |
+| `tensor` | bytes | Zstd-compressed float32 array $(R, R, 3)$: normalized elevation, markers, obstacles |
+| `metadata` | struct | Split, calibration, source tiles, crop, markers, obstacles, seeds, solver parameters, and per-variant status and cost |
+| `metadata_json` | string | Complete metadata as JSON text |
+| `scene_receipt` | string | JSON receipt: seeds, source windows and hashes, attempts, terminal records |
+| `path_<solver>_free` | list of [row, col] | Reference route on free terrain |
+| `path_<solver>_obstacles` | list of [row, col] | Reference route with obstacles blocked |
+| `image_<solver>` | image | Rendered preview, `_samples` configurations only |
+
+`<solver>` is `astar_elevation`, `astar_energy` or `astar_slope` (the `slope_uphill` objective). A route is an empty list when its status in `metadata.paths.<solver>.<free|obstacles>.status` is `infeasible`.
+
+The `metadata` struct has a fixed schema. Fields that the v1.0 generator does not write are null there; `metadata_json` holds the complete metadata.
 
 ### Parquet Configuration
 
-| Resolution | Chunk size (rows/file) | Compression |
-|-----------|:----------------------:|:-----------:|
-| 64 | 2,048 | zstd |
-| 128 | 512 | zstd |
-| 256 | 128 | zstd |
-| 512 | 64 | zstd |
-| 1024 | 32 | zstd |
-| 2048 | 8 | zstd |
-| 4096 | 4 | zstd |
+Shards are compressed with zstd at level 12 (`export.compression_level`). The maximum number of rows per shard is set by `export.chunk_size` in `config/config.yaml`:
 
-Chunk sizes decrease with resolution to keep individual Parquet files at manageable sizes.
+| Resolution | Rows per shard (max) |
+|-----------|:----------------------:|
+| 64 | 20,000 |
+| 128 | 10,000 |
+| 256 | 2,500 |
+| 512 | 1,500 |
+| 1024 | 250 |
+| 2048 | 75 |
+| 4096 | 25 |
+
+Shard sizes decrease with resolution to keep each Parquet file at a manageable size.
 
 ---
 
 ## File Naming Conventions
 
-### Sample directories
+### Generator output
 
+With the shipped configuration, `passage generate` writes one directory per resolution and split under its output root (`--outputs-dirpath`, shown as `<root>`). `<R>` is the resolution (for example `256`), `<index>` is the scene index on 10 digits, and `<lat>/<lon>` names the center tile, for example `N061/E081`:
+
+```text
+<root>/
+├── generation_manifest.json               # provenance of the run
+├── generation-input-snapshot/             # copies of the configuration, calibration and hold-out mask
+├── generation-source-snapshot/            # copy of the generating source code
+└── <R>/
+    ├── roster.json                        # frozen split of every scene index
+    ├── summary.json                       # outcome counts of the last run
+    └── <split>/
+        ├── tensors/<lat>/<lon>/<index>.npy.zst
+        ├── metadata/<lat>/<lon>/<index>.yaml
+        ├── paths/<solver>/<free|obstacles>/<lat>/<lon>/<index>.csv
+        └── receipts/<index>.json          # written last; marks the scene as complete
 ```
-outputs/dataset/{resolution}/{split}/{sample_id:06d}/
-```
-
-Example: `outputs/dataset/256/train/000042/`
-
-### Sample files
 
 | File | Description |
 |------|-------------|
-| `tensor.npy.zst` | Compressed 3-channel tensor |
-| `metadata.yaml` | Full sample metadata |
-| `sample.png` | Visualization image (optional) |
-| `path_{solver}_free.csv` | Path on free terrain |
-| `path_{solver}_obstacles.csv` | Path with obstacles |
+| `<index>.npy.zst` | Compressed 3-channel tensor |
+| `<index>.yaml` | Full scene metadata |
+| `<index>.csv` | One reference route, one `row,col` pair per line |
+| `<index>.json` | Scene receipt: seeds, attempts, source windows and the hash of every file of the scene |
+
+The generator writes no preview images. The Parquet export renders them for the `_samples` configurations.
 
 ### Export structure
 
+The main entries of the exported tree, as published on the Hub:
+
+```text
+<R>x<R>/<split>/data-*.parquet           core scenes, no images (7 configurations)
+<R>x<R>_samples/<split>/data-*.parquet   64 preview rows per split, with images (7 configurations)
+<R>x<R>/*.ipynb                          executed analysis notebooks for that resolution
+calibration/calibrate.json               elevation range and authenticated tile inventory
+release-receipts/                        generation, verification and publication receipts
 ```
-outputs/export/{resolution}x{resolution}/
-├── {split}/
-│   ├── 0000000000.parquet
-│   ├── 0000000001.parquet
-│   └── ...
-└── dataset.ipynb   # Executed per-resolution notebook
-```
+
+The published shards were written by `passage regenerate`, which generates and exports the scenes in batches. Their names follow `data-<R>-<first>-<last>-<shard>.parquet`, where `<first>` and `<last>` are the first and last scene indices of the batch (10 digits) and `<shard>` numbers the shards of that batch (5 digits). `passage compress` instead numbers the shards of each split from zero: `data-<shard>.parquet`.
 
 ---
 
-## HuggingFace Dataset Configs
+## Hugging Face Dataset Configs
 
-Each resolution has two HF configs:
+Each resolution has two Hugging Face configurations:
 
 | Config | Content |
 |--------|---------|
-| `{R}x{R}` | Full dataset at resolution $R$ |
-| `{R}x{R}_samples` | Subset of 64 samples per split for quick exploration |
+| `<R>x<R>` | All scenes at resolution $R$, without images |
+| `<R>x<R>_samples` | 64 preview rows per split, with rendered images; they repeat scenes of the core configuration |
 
-Default config: `1024x1024_samples`
+The default configuration is `1024x1024_samples`. Core configurations are large (57 GB at 256×256, 533 GB at 4096×4096), so pin the verified revision and stream them:
 
 ```python
-# Load full dataset at 256×256
-ds = load_dataset("thalesgroup/passage", name="256x256")
+from datasets import load_dataset
 
-# Load quick sample
-ds = load_dataset("thalesgroup/passage", name="256x256_samples")
+REVISION = "65f1e4f0a37d8a7b476ddf02d48fe542542924ea"  # verified PASSAGE v1.0 upload
+
+# Preview rows: small, 64 per split, with rendered images.
+rows = load_dataset("thalesgroup/passage", "256x256_samples",
+                    split="validation", revision=REVISION)
+
+# Core configuration: stream it instead of downloading it whole.
+core = load_dataset("thalesgroup/passage", "256x256", split="train",
+                    streaming=True, revision=REVISION)
+for row in core.take(4):
+    print(row["id"], row["metadata"]["split"])
 ```

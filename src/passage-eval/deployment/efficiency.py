@@ -37,7 +37,7 @@ def astar_expansions_ratio(
 ) -> dict[str, float]:
     """expansions(decoded planner on V_hat) / expansions(plain A* on true cost).
 
-    Reported as median + p90 + geomean per the v2 metric set. ``< 1``
+    Reported as median, p90 and geometric mean. ``< 1``
     means the surrogate accelerates A*; ``≈ 1`` means no acceleration;
     ``> 1`` means the surrogate adds search effort.
     """

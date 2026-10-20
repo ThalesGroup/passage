@@ -23,14 +23,15 @@
 """Deployment-footprint utilities.
 
 Two submodules:
-* ``throughput``  : wall-clock benchmarking of the bare neural network
-                    forward pass, the canonical decoder, and the
-                    end-to-end pipeline (forward + decoder).
-* ``efficiency`` : surrogate-acceleration metrics (A*-expansions ratio
-                    and decoder-recovery rate).
 
-Reported alongside the primary-metric family but not under the same
-Holm--Bonferroni umbrella (cf. App. J Rule 7 of `main.tex`).
+* ``throughput``: wall-clock benchmarking of the bare neural network
+  forward pass, the canonical decoder, and the end-to-end pipeline
+  (forward + decoder).
+* ``efficiency``: surrogate-acceleration metrics (A*-expansions ratio
+  and decoder-recovery rate).
+
+These figures are reported next to the primary metrics but are not part
+of the Holm–Bonferroni family.
 """
 
 from passage_eval.deployment.efficiency import (

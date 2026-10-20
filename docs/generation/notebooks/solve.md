@@ -10,7 +10,7 @@ Solves stored labels again with the exact float64 A* reference, compares costs a
 
 !!! info "Source notebook"
 
-    `notebooks/solve.ipynb` — re-execute with `make docs-prepare` after editing.
+    `notebooks/solve.ipynb` — re-execute with `make docs-prepare-all` after editing.
 
 <iframe
     src="../../../gen/notebooks/solve.html"

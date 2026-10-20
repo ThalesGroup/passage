@@ -5,7 +5,7 @@ icon: material/shield-check
 
 # Project Policies
 
-This page embeds root-level governance and security documents to avoid duplicated copies in `docs/`.
+This page shows the project's security policy, contribution guide, code of conduct and notice. Each is read from its file at the root of the repository, so only one copy exists.
 
 ---
 
