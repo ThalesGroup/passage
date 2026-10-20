@@ -5,15 +5,15 @@ icon: material/notebook-multiple
 
 # Benchmark notebooks
 
-Three notebooks cover the `passage-eval` side: a classical-planner walkthrough on released tasks, the paper results and the leaderboard. `make docs-prepare` executes them and exports standalone HTML files embedded below; a notebook that needs a local dataset copy is rendered unexecuted and flagged.
+Four notebooks cover the `passage-eval` side: an evaluator walkthrough, the paper results, the classical baselines and the results format. `make docs-prepare` executes them and exports standalone HTML files embedded below; a notebook that needs a local dataset copy is rendered unexecuted and flagged.
 
 <div class="grid cards" markdown>
 
-- :material-notebook-outline: **A* walkthrough**
+- :material-notebook-outline: **Evaluator walkthrough**
 
     ---
 
-    Reads one released task from a local copy of PASSAGE v1.0, renders its stored routes and runs a bounded exact-reference diagnostic with the classical planner. It needs the local dataset copy declared by `dataset_path`; without it, the page shows the notebook unexecuted.
+    Writes a planner in a few lines, scores it next to the exact A* planner on one released task, reads each of the six primary metrics, then scores both on a small validation sample. It needs the local dataset copy declared by `dataset_path`; without it, the page shows the notebook unexecuted.
 
     [:octicons-arrow-right-24: Open the notebook](./01-astar-walkthrough.md)
 
@@ -25,11 +25,19 @@ Three notebooks cover the `passage-eval` side: a classical-planner walkthrough o
 
     [:octicons-arrow-right-24: Open the notebook](./02-paper-results.md)
 
-- :material-notebook-outline: **Leaderboard**
+- :material-notebook-outline: **Classical baselines**
 
     ---
 
-    Reads the released leaderboard. It has no entries yet: the first entries will be the two paper finalists retrained on PASSAGE v1.0 and scored with `passage-eval`.
+    Scores the three classical planners shipped with `passage-eval` (exact A*, greedy, random walk) on 64 validation tasks for each objective, with a distribution-free interval for each median regret. Reference points for reading the metrics, not benchmark results. Needs the local dataset copy.
+
+    [:octicons-arrow-right-24: Open the notebook](./02-score-released-baselines.md)
+
+- :material-notebook-outline: **Results format**
+
+    ---
+
+    Scores two classical planners, records them as `Submission` records in a temporary results folder and reads the table back: benchmark cell, six metrics, data revision and code version, without host or user names. Needs the local dataset copy.
 
     [:octicons-arrow-right-24: Open the notebook](./03-leaderboard.md)
 

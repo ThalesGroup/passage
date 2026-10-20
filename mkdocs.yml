@@ -226,11 +226,11 @@ nav:
               - "Overview": generation/notebooks.md
               - "Executed runs":
                   - "Index": generation/notebooks/index.md
-                  - "Demo (load + visualise)": generation/notebooks/demo.md
-                  - "Obstacle generation": generation/notebooks/obstacles.md
-                  - "Cost model comparison": generation/notebooks/costmodel.md
-                  - "Solver comparison": generation/notebooks/solve.md
-                  - "A* inference timing": generation/notebooks/astar-inference-timing.md
+                  - "Getting started": generation/notebooks/demo.md
+                  - "Obstacles": generation/notebooks/obstacles.md
+                  - "The three objectives": generation/notebooks/costmodel.md
+                  - "Exact re-solve": generation/notebooks/solve.md
+                  - "Timing a planner": generation/notebooks/astar-inference-timing.md
   - "Benchmark":
       - "Overview": benchmark/index.md
       - "Evaluation Protocol": benchmark/protocol.md
@@ -240,9 +240,10 @@ nav:
       - "Submit a candidate": benchmark/contributing-a-method.md
       - "Reproducible Notebooks":
           - "Overview": benchmark/notebooks/index.md
-          - "A* walkthrough": benchmark/notebooks/01-astar-walkthrough.md
+          - "Evaluator walkthrough": benchmark/notebooks/01-astar-walkthrough.md
           - "Paper results": benchmark/notebooks/02-paper-results.md
-          - "Leaderboard": benchmark/notebooks/03-leaderboard.md
+          - "Classical baselines": benchmark/notebooks/02-score-released-baselines.md
+          - "Results format": benchmark/notebooks/03-leaderboard.md
       - "End-to-End Walkthrough": benchmark/walkthrough.md
       - "API Reference": benchmark/api.md
   - "Code Architecture":

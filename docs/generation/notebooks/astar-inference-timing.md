@@ -1,24 +1,16 @@
 ---
-title: "A* inference-timing benchmark"
+title: "Timing a planner fairly"
 hide:
   - toc
 ---
 
-# A* inference-timing benchmark
+# Timing a planner fairly
 
-Reference deployment-side benchmark for the A* oracle implementation used as the dataset's labelling solver.
+Times the canonical A* planner of `passage-eval` with the practices that make a timing meaningful: warm-up, repetitions, percentiles and a stated machine.
 
 !!! info "Source notebook"
 
     `notebooks/astar_inference_timing.ipynb` — re-execute with `make docs-prepare` after editing.
-
-!!! warning "This notebook was rendered without executing"
-
-    `make docs-prepare` could not execute the source notebook on this
-    checkout (execution skipped (opt-in (run with --all or `make docs-prepare-all`))). The HTML below shows the most recent stored
-    outputs, which may be stale or empty. Re-run the notebook locally
-    after fetching the data it needs (e.g.\ `make download && make
-    calibrate`) to refresh.
 
 <iframe
     src="../../../gen/notebooks/astar_inference_timing.html"

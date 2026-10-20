@@ -367,22 +367,21 @@ def test_portable_notebook_missing_prerequisites(tmp_path):
     notebook = json.loads(notebook_path.read_text())
     namespace = {}
     for cell in notebook['cells']:
-        if cell['cell_type'] != 'code':
+        tags = set(cell.get('metadata', {}).get('tags', []))
+        # The receipt checks read the published data; the bundle section needs only its own inputs.
+        if cell['cell_type'] != 'code' or not tags & {'parameters', 'setup', 'qualification-bundle'}:
             continue
-        code = ''.join(cell['source'])
-        if 'parameters' in cell.get('metadata', {}).get('tags', []):
-            exec(compile(code, str(notebook_path), 'exec'), namespace)
+        exec(compile(''.join(cell['source']), str(notebook_path), 'exec'), namespace)
+        if 'parameters' in tags:
             namespace.update(project_path=str(notebook_path.parents[2]), output_dir=str(tmp_path / 'notebook'),
                              qualification_root=str(tmp_path / 'missing'))
-        else:
-            exec(compile(code, str(notebook_path), 'exec'), namespace)
-    assert namespace['report']['status'] == 'not_run'
-    assert all(value == 'not_run' for value in namespace['section_statuses'].values())
-    report = namespace['report']
-    reported_hash = report['binding'].pop('report_sha256')
-    assert reported_hash == hashlib.sha256(canonical(report)).hexdigest()
-    assert {Path(p).suffix for p in report['figures']} == {'.pdf', '.png'}
-    assert (tmp_path / 'notebook/dataset_qualification-256.json').is_file()
+    bundle = namespace['bundle']
+    assert bundle['status'] == 'not_run'
+    assert all(value == 'not_run' for value in namespace['bundle_sections'].values())
+    reported_hash = bundle['binding'].pop('report_sha256')
+    assert reported_hash == hashlib.sha256(canonical(bundle)).hexdigest()
+    assert {Path(p).suffix for p in bundle['figures']} == {'.pdf', '.png'}
+    assert (tmp_path / 'notebook/dataset_qualification-bundle.json').is_file()
 
 
 def rectangle_denominator_fixture(root):

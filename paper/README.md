@@ -156,16 +156,21 @@ jupyter lab paper/notebooks/
 
 Then run, in any order:
 
-- `dataset_qualification.ipynb` — consumes the explicit qualification bundle and
-  reports authenticated files, census coverage, route findings and unknown support.
-- `dataset_statistics.ipynb` — produces split-count tables and a
-  geographic-coverage figure under `figures/`.
-- `obstacles_showcase.ipynb` — produces an obstacle-envelope gallery
-  under `figures/`.
-- `solver_runtime_scaling.ipynb` — produces the cross-backend solver
-  scaling plot and CSV.
-- `cost_model_path_divergence.ipynb` — produces the cost-model path
-  divergence panel and CSV (Fig. 3 / Table~`tab:cost-model-examples`).
+- `dataset_qualification.ipynb` — checks the release receipts against the
+  published files (split counts, roster hashes and line counts, outcome totals);
+  with `qualification_root` set, its last section renders the qualification
+  bundle: authenticated files, census coverage, route findings and unknown support.
+- `dataset_statistics.ipynb` — scenes per resolution and split, route outcomes per
+  resolution, and route length and recorded search effort across resolutions.
+- `obstacles_showcase.ipynb` — one validation scene per resolution where the
+  obstacles move the route, with its coverage and detour.
+- `solver_runtime_scaling.ipynb` — recorded search effort and measured warm A*
+  solve time across the seven resolutions.
+- `cost_model_path_divergence.ipynb` — the six-route board of one scene and the
+  distance between the optima of two objectives at every resolution.
+
+Each notebook saves its figures (PNG and PDF) and a JSON record of its numbers
+under `output_dir`.
 
 Missing data or result bundles produce explicit prerequisite status. Pending
 panels and stub manifests do not satisfy scientific evidence gates.
@@ -177,7 +182,7 @@ panels and stub manifests do not satisfy scientific evidence gates.
   declaring MLCommons 1.1 and RAI terms; final semantic validation and publication
   of the updated local metadata remain separate release checks).
 - Paper source: [`../../paper/neurips/main.tex`](../../paper/neurips/main.tex).
-- Developer walkthroughs (unchanged, not paper-facing):
+- Developer walkthroughs (not paper-facing):
   [`../notebooks/solve.ipynb`](../notebooks/solve.ipynb),
   [`../notebooks/costmodel.ipynb`](../notebooks/costmodel.ipynb),
   [`../notebooks/obstacles.ipynb`](../notebooks/obstacles.ipynb).

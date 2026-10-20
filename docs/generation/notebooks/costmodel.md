@@ -1,24 +1,16 @@
 ---
-title: "Cost model comparison"
+title: "The three routing objectives"
 hide:
   - toc
 ---
 
-# Cost model comparison
+# The three routing objectives
 
-Compare all five PASSAGE cost models — `distance`, `elevation`, `absolute_elevation`, `slope_uphill`, `energy` — on the same terrain crop, side-by-side. Includes the weight calibration explanation.
+What the `elevation`, `slope_uphill` and `energy` objectives reward on one scene, their elevation profiles, and the extra cost of a route optimised for the wrong objective.
 
 !!! info "Source notebook"
 
     `notebooks/costmodel.ipynb` — re-execute with `make docs-prepare` after editing.
-
-!!! warning "This notebook was rendered without executing"
-
-    `make docs-prepare` could not execute the source notebook on this
-    checkout (execution skipped (opt-in (run with --all or `make docs-prepare-all`))). The HTML below shows the most recent stored
-    outputs, which may be stale or empty. Re-run the notebook locally
-    after fetching the data it needs (e.g.\ `make download && make
-    calibrate`) to refresh.
 
 <iframe
     src="../../../gen/notebooks/costmodel.html"

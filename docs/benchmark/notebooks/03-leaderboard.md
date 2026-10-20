@@ -1,12 +1,12 @@
 ---
-title: "Leaderboard"
+title: "Recording results in the passage-eval format"
 hide:
   - toc
 ---
 
-# Leaderboard
+# Recording results in the passage-eval format
 
-Reads the released leaderboard. It has no entries yet: the first entries will be the two paper finalists retrained on PASSAGE v1.0 and scored with `passage-eval`.
+Scores two classical planners, records them as `Submission` records in a temporary results folder and reads the table back: benchmark cell, six metrics, data revision and code version, without host or user names. Needs the local dataset copy.
 
 !!! info "Source notebook"
 

@@ -17,7 +17,8 @@ def test_source_parameters_precede_imports_and_reports_have_no_launch_cells(sour
     parameters = ast.parse("".join(code[0]["source"]))
     assert not any(isinstance(n, (ast.Import, ast.ImportFrom, ast.Call)) for n in ast.walk(parameters))
     names = {n.targets[0].id for n in parameters.body if isinstance(n, ast.Assign)}
-    assert {"resolution", "dataset_path", "dataset_repo", "dataset_revision", "output_dir", "result_root"} <= names
+    assert {"dataset_path", "dataset_repo", "dataset_revision", "output_dir"} <= names
+    assert names & {"resolution", "resolutions", "board_resolution"}
     for cell in code:
         # CPython 3.12 feature_version does not reject every PEP 701 f-string.
         assert 'f"{report["' not in "".join(cell["source"])
