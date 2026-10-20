@@ -3,25 +3,16 @@
 
   Copyright (c) 2026 THALES
 
-  Header sources: the code repository (theme default) and the dataset on the
-  Hugging Face Hub, configured under extra.huggingface in mkdocs.yml.
+  Header links, icons only and styled alike: the code repository and the
+  dataset on the Hugging Face Hub (extra.huggingface in mkdocs.yml).
 -#}
-<a href="{{ config.repo_url }}" title="{{ lang.t('source') }}" class="md-source" data-md-component="source">
-  <div class="md-source__icon md-icon">
-    {% set icon = config.theme.icon.repo or "fontawesome/brands/git-alt" %}
-    {% include ".icons/" ~ icon ~ ".svg" %}
-  </div>
-  <div class="md-source__repository">
-    {{ config.repo_name }}
-  </div>
-</a>
-{% if config.extra.huggingface %}
-<a href="{{ config.extra.huggingface.link }}" title="{{ config.extra.huggingface.title }}" class="md-source md-source--huggingface">
-  <div class="md-source__icon md-icon">
-    {% include ".icons/simple/huggingface.svg" %}
-  </div>
-  <div class="md-source__repository">
-    {{ config.extra.huggingface.name }}
-  </div>
-</a>
-{% endif %}
+<div class="pg-sources">
+  <a href="{{ config.repo_url }}" class="pg-source" title="Code on GitHub" aria-label="Code on GitHub">
+    <span class="md-icon">{% include ".icons/fontawesome/brands/github.svg" %}</span>
+  </a>
+  {% if config.extra.huggingface %}
+  <a href="{{ config.extra.huggingface.link }}" class="pg-source" title="{{ config.extra.huggingface.title }}" aria-label="{{ config.extra.huggingface.title }}">
+    <span class="md-icon">{% include ".icons/simple/huggingface.svg" %}</span>
+  </a>
+  {% endif %}
+</div>

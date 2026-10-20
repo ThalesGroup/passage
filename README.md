@@ -1,13 +1,13 @@
-<!-- PASSAGE README — renders on both GitHub and Hugging Face -->
+<!-- PASSAGE code repository README. The title, tagline, executive summary, key facts and citation match the Hugging Face dataset card. -->
 
 <p align="center">
-  <img src="assets/banner.png" alt="PASSAGE — Path Solving Dataset & Generator" width="100%"/>
+  <img src="assets/banner.png" alt="PASSAGE banner: real terrain with planned routes" width="100%"/>
 </p>
 
-<h1 align="center">🌍 PASSAGE — Real-Terrain Benchmark & Generator</h1>
+<h1 align="center">🌍 PASSAGE: real-terrain benchmark for constrained path planning</h1>
 
 <p align="center">
-  <strong>Trustworthiness-oriented real-terrain benchmark and generation pipeline for pathfinding and surrogate modeling.</strong>
+  <strong>Real terrain, exact reference routes: 4.4 million scenes and 26.4 million route variants for constrained path planning and surrogate modelling.</strong>
 </p>
 
 <!-- Badges -->
@@ -16,7 +16,8 @@
   <a href="https://github.com/ThalesGroup/passage/actions/workflows/docs.yml"><img src="https://img.shields.io/github/actions/workflow/status/ThalesGroup/passage/docs.yml?label=docs&logo=materialformkdocs&logoColor=white" alt="Docs"></a>
   <a href="https://www.python.org/"><img src="https://img.shields.io/badge/python-≥3.11-3776AB?logo=python&logoColor=white" alt="Python"></a>
   <a href="DATASET_LICENSE.md"><img src="https://img.shields.io/badge/dataset%20terms-AW3D30%20%2B%20MIT%20code-orange?logo=opensourceinitiative&logoColor=white" alt="Dataset Terms"></a>
-  <a href="https://huggingface.co/datasets/thalesgroup/passage"><img src="https://img.shields.io/badge/%F0%9F%A4%97-Dataset-yellow" alt="HuggingFace Dataset"></a>
+  <a href="#-citation"><img src="https://img.shields.io/badge/NeurIPS%202026-Evaluations%20%26%20Datasets-6f42c1" alt="NeurIPS 2026, Track on Evaluations and Datasets"></a>
+  <a href="https://huggingface.co/datasets/thalesgroup/passage"><img src="https://img.shields.io/badge/%F0%9F%A4%97%20dataset-v1.0-yellow" alt="Hugging Face dataset, version 1.0"></a>
   <a href="https://docs.astral.sh/ruff/"><img src="https://img.shields.io/badge/code%20style-ruff-000000?logo=ruff&logoColor=white" alt="Ruff"></a>
   <a href="https://docs.astral.sh/uv/"><img src="https://img.shields.io/badge/package-uv-DE5FE9?logo=uv&logoColor=white" alt="uv"></a>
   <a href="https://pre-commit.com/"><img src="https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit&logoColor=white" alt="Pre-commit"></a>
@@ -31,9 +32,26 @@
 
 ---
 
+## 📌 Executive summary
+
+PASSAGE is a dataset and benchmark for constrained path planning on real
+terrain: each scene is a square crop of the JAXA ALOS World 3D–30 m (AW3D30)
+digital surface model with a start cell, a goal cell and procedural obstacles.
+Each scene has six route variants: three cost objectives (`elevation`,
+`slope_uphill`, `energy`), each on free terrain and with the obstacles blocked.
+Each variant carries either an exact minimum-cost reference route for the
+stated graph (eight-connected, 30 m cells) or a proof that no route exists.
+PASSAGE v1.0 holds 4,400,000 core scenes at seven resolutions, from 64×64 to
+4096×4096 cells, and 26,400,000 route variants: 26,358,039 exact routes and
+41,961 proved no-path. Its test split is a geographic hold-out (South America),
+and the MIT-licensed generator and the `passage-eval` evaluator are in the
+[code repository](https://github.com/ThalesGroup/passage).
+
+---
+
 ## 📑 Table of Contents
 
-- [📑 Table of Contents](#-table-of-contents)
+- [📌 Executive summary](#-executive-summary)
 - [🌱 Get started](#-get-started)
 - [📖 Documentation](#-documentation)
 - [🚁 Why PASSAGE?](#-why-passage)
@@ -64,9 +82,13 @@
 
 ## 🌱 Get started
 
-PASSAGE is an open-source pathfinding dataset and generation toolkit built on real-world elevation data to benchmark and improve terrain-aware routing algorithms.
+This repository holds the MIT-licensed PASSAGE code: the generator that builds
+the dataset from JAXA AW3D30 elevation tiles, and the `passage-eval` evaluator
+that scores planners against its reference routes. The dataset itself is on
+[Hugging Face](https://huggingface.co/datasets/thalesgroup/passage) under the
+JAXA AW3D30 terms.
 
-- **Project goals**: provide reproducible, multi-resolution benchmarks for pathfinding research, ML surrogates, and safety-critical AI evaluation.
+- **Project goals**: a reproducible, multi-resolution benchmark for path-planning research and learned routing surrogates, with an evaluation protocol designed for research toward trustworthy learned planners.
 - **Sponsoring SIG**: Thales Group open-source and critical AI research contributors.
 - **Community contact**: use [GitHub Issues](https://github.com/ThalesGroup/passage/issues), [GitHub Discussions](https://github.com/ThalesGroup/passage/discussions), or email `oss@thalesgroup.com`.
 
@@ -76,18 +98,27 @@ For installation and first run commands, see [🚀 Quick Start](#-quick-start).
 
 The documentation sources are in [`docs/`](docs/index.md): user guides, API
 references, architecture notes and the benchmark protocol. They build with
-MkDocs (`mkdocs.yml`); a hosted documentation site is not published yet.
-[USAGE.md](USAGE.md) summarises the command-line interface.
+MkDocs (`mkdocs.yml`). [USAGE.md](USAGE.md) summarises the command-line
+interface.
 
 ---
 
 ## 🚁 Why PASSAGE?
 
-> *Every year, Helicopter Emergency Medical Services (HEMS) crews across Europe perform over 300,000 rescue missions — racing against time through mountain passes, across valleys, and over ridgelines to reach patients in cardiac arrest or severe trauma. For every minute of delay, survival rates drop by 7–10%. The path the helicopter takes matters — yet pathfinding algorithms are still benchmarked on flat synthetic grids.*
+Constrained path planning on real terrain underlies off-network routing in
+robotics, search and rescue and airborne advisory systems: rescue-helicopter
+crews, for example, fly through mountain passes, valleys and ridgelines, where
+the route the aircraft takes matters. As the NeurIPS 2026 paper reviews,
+existing public benchmarks cover this problem only in part: synthetic grids
+offer algorithmic control without geographic realism, while geographic
+information system (GIS) resources provide real terrain without controllable
+obstacles or standard baselines.
 
-**PASSAGE** was created to change that. Built from **real-world satellite elevation data** (JAXA ALOS AW3D30 at 30 m/pixel), it provides the research community with large-scale, multi-resolution pathfinding benchmarks that capture the true complexity of terrain navigation.
-
-We open-source this toolkit to make terrain-routing methods easier to compare, reproduce, and audit under a shared benchmark surface.
+**PASSAGE** combines real terrain from the JAXA ALOS AW3D30 digital surface
+model (nominal 1-arcsecond sampling, routed as 30 m cells), procedural
+obstacles, three cost objectives, exact reference routes, a geographic hold-out
+and a shared evaluator. We open-source the code to make terrain-routing methods
+easier to compare, reproduce and audit on the same benchmark.
 
 ---
 
@@ -95,26 +126,26 @@ We open-source this toolkit to make terrain-routing methods easier to compare, r
 
 <table>
 <tr>
-  <td align="center" width="25%">🌐<br><strong>Multi-Resolution</strong><br><small>64×64 → 4096×4096 px</small></td>
+  <td align="center" width="25%">🌐<br><strong>Multi-Resolution</strong><br><small>64×64 → 4096×4096 cells</small></td>
   <td align="center" width="25%">🏔️<br><strong>Real Elevation</strong><br><small>JAXA ALOS AW3D30 DSM</small></td>
-  <td align="center" width="25%">🔷<br><strong>Rich Obstacles</strong><br><small>Superellipse shapes</small></td>
-  <td align="center" width="25%">⚡<br><strong>3 A* Cost Variants</strong><br><small><code>elevation</code>, <code>slope_uphill</code>, <code>energy</code></small></td>
+  <td align="center" width="25%">🔷<br><strong>Procedural Obstacles</strong><br><small>Super-ellipse shapes</small></td>
+  <td align="center" width="25%">⚡<br><strong>3 Cost Objectives</strong><br><small><code>elevation</code>, <code>slope_uphill</code>, <code>energy</code></small></td>
 </tr>
 <tr>
-  <td align="center">🧮<br><strong>Grid A* Oracle</strong><br><small>Exact labels + timings</small></td>
-  <td align="center">🤗<br><strong>HuggingFace-Ready</strong><br><small>Parquet + one-command upload</small></td>
+  <td align="center">🧮<br><strong>Exact A* Reference</strong><br><small>Exact route or proved no-path</small></td>
+  <td align="center">🤗<br><strong>Hugging Face-Ready</strong><br><small>Parquet + one-command upload</small></td>
   <td align="center">🔁<br><strong>Incremental Resume</strong><br><small>Audit input identity before reuse</small></td>
-  <td align="center">✅<br><strong>Tested & CI/CD</strong><br><small>80%+ coverage, pre-commit</small></td>
+  <td align="center">✅<br><strong>Tested & CI</strong><br><small>860 tests, 80 % coverage gate, pre-commit</small></td>
 </tr>
 </table>
 
 <table>
 <tr>
-  <td align="center"><strong>4.4 M</strong><br><small>Default Samples</small></td>
-  <td align="center"><strong>7</strong><br><small>Resolution Levels</small></td>
-  <td align="center"><strong>3</strong><br><small>A* Configurations</small></td>
-  <td align="center"><strong>1</strong><br><small>Solver Backend</small></td>
-  <td align="center"><strong>30 m/px</strong><br><small>Spatial Resolution</small></td>
+  <td align="center"><strong>4.4 M</strong><br><small>Core scenes</small></td>
+  <td align="center"><strong>26.36 M</strong><br><small>Exact routes</small></td>
+  <td align="center"><strong>7</strong><br><small>Resolutions</small></td>
+  <td align="center"><strong>3</strong><br><small>Cost objectives</small></td>
+  <td align="center"><strong>30 m</strong><br><small>Nominal cell size</small></td>
 </tr>
 </table>
 
@@ -301,8 +332,8 @@ published with their entries (see [First entries](docs/benchmark/candidates.md))
 
 <p align="center"><em>PASSAGE v1.0 validation preview sample 0000000024 (256 × 256), the first row of the first validation preview shard, without selection. Columns identify elevation, uphill-slope and energy costs. Solid green denotes free terrain; short-dashed blue denotes obstacle-aware routes. All panels share calibrated elevation in metres. Stored optimality was not revalidated.</em> <a href="assets/sample.provenance.json">Source and rendering checks</a> · <a href="assets/sample.pdf">PDF</a></p>
 
-The [shared trajectory style](docs/TRAJECTORY_STYLE.md) is used by the paper,
-candidate notebooks and separately staged Hugging Face presentation images.
+The paper figures, the notebooks and this image use one
+[trajectory style](docs/TRAJECTORY_STYLE.md) (in French).
 
 ---
 
@@ -317,14 +348,16 @@ The dataset, **PASSAGE v1.0**, is published on Hugging Face as
 
 | Item | Value |
 | --- | --- |
-| Version | 1.0 |
+| Version | 1.0, verified on the Hub at commit [`65f1e4f`](https://huggingface.co/datasets/thalesgroup/passage/tree/65f1e4f0a37d8a7b476ddf02d48fe542542924ea) |
 | Core scenes | 4,400,000 at seven resolutions, from 64×64 to 4096×4096 cells |
 | Route variants | 26,400,000: 26,358,039 exact routes and 41,961 proved no-path |
 | Splits | train / calibration / validation / test = 90 / 2 / 4 / 4 % |
 | Test geography | South America hold-out; other tiles split by 5°×5° blocks |
 | Preview rows | 1,792 (64 per split and resolution), with rendered images |
 | Size | about 1.27 TB of Parquet (5,997 shards); 1.31 TB with receipts and notebooks |
+| Intended tasks | Classical planning, path-mask segmentation, cost-to-go regression, graph and reinforcement-learning planners |
 | Licence | Code: MIT. Data: JAXA AW3D30 terms, see [DATASET_LICENSE.md](DATASET_LICENSE.md) |
+| Paper | *PASSAGE: A Real-Terrain Benchmark for Trustworthy Constrained Path Planning*, NeurIPS 2026, Track on Evaluations and Datasets |
 
 Every scene records its source windows. Splits follow source-tile blocks with a
 guard ring, crops that touch missing or nodata tiles are rejected, and every
@@ -339,7 +372,7 @@ import numpy as np
 import zstandard
 from datasets import load_dataset
 
-REVISION = "main"  # pin a commit hash for reproducible work
+REVISION = "65f1e4f0a37d8a7b476ddf02d48fe542542924ea"  # verified PASSAGE v1.0 upload
 
 # Preview rows: small, 64 per split, with rendered images.
 rows = load_dataset("thalesgroup/passage", "256x256_samples",
@@ -376,10 +409,9 @@ contract, split policy and limitations.
 ## 🚀 Quick Start
 
 > **CPU-only by default.** No GPU is required to download, generate, or evaluate
-> the dataset, and `uv sync` does **not** install any proprietary NVIDIA CUDA
-> runtime libraries. The optional `passage-eval[torch]` extra is wired to the
-> CPU-only PyTorch index — see [🧾 Disclosures](#-disclosures) for the GPU
-> install path.
+> the dataset, and `uv sync --frozen` installs neither PyTorch nor any NVIDIA
+> CUDA package. The optional `torch` extra installs PyTorch, which on Linux
+> brings NVIDIA CUDA runtime packages — see [🧾 Disclosures](#-disclosures).
 
 ```bash
 # Install uv (if needed)
@@ -408,7 +440,8 @@ recipe](#-sequential-full-dataset-generation-and-structural-analysis) for the co
 
 ```bash
 python -m venv .venv && source .venv/bin/activate
-pip install -e ".[dev]"
+pip install -e .          # runtime dependencies
+pip install --group dev   # development tools (pip 25.1 or later)
 ```
 </details>
 
@@ -434,7 +467,7 @@ pip install -e ".[dev]"
 | 2 | `uv run --frozen passage calibrate` | Scan tiles for global min/max elevation |
 | 3 | `uv run --frozen passage generate` | Create multi-resolution tensors, metadata, paths and previews |
 | 4 | `uv run --frozen passage compress` | Write full and preview Parquet configurations |
-| 5 | `uv run --frozen passage export` | Prepare local metadata and execute the four analysis notebooks per selected resolution |
+| 5 | `uv run --frozen passage export` | Prepare local metadata, execute the four analysis notebooks per selected resolution and, at 256×256, the paper notebooks |
 | 6 | `uv run --frozen passage upload --repo-id <user>/<dataset>` | Publish a prepared export to Hugging Face when explicitly requested |
 
 `uv run --frozen passage regenerate` orchestrates bounded generation, verified
@@ -558,14 +591,19 @@ The publication destination is set in the sequential generation recipe above.
 
 ## 📓 Notebooks
 
-| Notebook | Real inputs and scope |
+| Notebook | What it shows |
 |---|---|
-| [`_dataset.ipynb`](notebooks/_dataset.ipynb) | Core Parquet metadata census over train, calibration, validation and test; bounded route/reference audit reported separately. |
-| [`_display.ipynb`](notebooks/_display.ipynb), [`demo.ipynb`](notebooks/demo.ipynb) | Real released tensors and ordered routes, calibrated terrain, charcoal obstacles and solid objective-colored paths. |
-| [`_metrics.ipynb`](notebooks/_metrics.ipynb), [`costmodel.ipynb`](notebooks/costmodel.ipynb), [`obstacles.ipynb`](notebooks/obstacles.ipynb), [`solve.ipynb`](notebooks/solve.ipynb) | Released core routes: physical recosting, same-objective free/obstacle divergence and bounded exact-reference checks. |
-| [`astar_inference_timing.ipynb`](notebooks/astar_inference_timing.ipynb) | Recorded solver timings with their original boundary; complete-request measurements require evaluator artifacts. |
-| [`_passage_eval_metrics.ipynb`](notebooks/_passage_eval_metrics.ipynb), [`passage-eval/`](notebooks/passage-eval) | Qualified measured-request records and bounded classical diagnostics; absent checkpoints or comparisons remain visible prerequisites. |
-| [`paper/notebooks/`](paper/notebooks) | Four real-data study consumers for dataset statistics, obstacles, route divergence and recorded solver timing. |
+| [`_dataset.ipynb`](notebooks/_dataset.ipynb) | Census of every scene of one configuration: splits, relief, route outcomes and an exact re-solve |
+| [`_display.ipynb`](notebooks/_display.ipynb) | One scene: its input channels, six routes and their costs |
+| [`_metrics.ipynb`](notebooks/_metrics.ipynb) | How far obstacles and objectives move the optimal route |
+| [`_passage_eval_metrics.ipynb`](notebooks/_passage_eval_metrics.ipynb) | Three classical planners scored with `passage-eval` |
+| [`demo.ipynb`](notebooks/demo.ipynb) | Getting started: load a scene, decode it, build a training target |
+| [`costmodel.ipynb`](notebooks/costmodel.ipynb) | The three objectives: routes, elevation profiles, cost of the wrong objective |
+| [`obstacles.ipynb`](notebooks/obstacles.ipynb) | Obstacle masks, coverage and detours over the validation split |
+| [`solve.ipynb`](notebooks/solve.ipynb) | Solving labels again with the exact reference; why the search budget matters |
+| [`astar_inference_timing.ipynb`](notebooks/astar_inference_timing.ipynb) | Timing a planner fairly: warm-up, repetitions, percentiles |
+| [`passage-eval/`](notebooks/passage-eval) | Evaluating a planner step by step, classical baselines on the validation split, the paper's historical per-task results (`02_paper_results`) and the leaderboard record format |
+| [`paper/notebooks/`](paper/notebooks) | Five release-wide reports: dataset statistics, receipt checks, route divergence between objectives, an obstacle showcase, and search effort and solve time across resolutions |
 
 The four underscore templates export as `dataset.ipynb`, `display.ipynb`,
 `metrics.ipynb` and `passage_eval_metrics.ipynb` at each of the seven resolutions.
@@ -581,9 +619,9 @@ outputs and their producing identities are recorded in the export manifest.
 | **Classical AI** | A\*, Dijkstra benchmarking across cost models |
 | **Reinforcement Learning** | Grid-based terrain navigation agents |
 | **Graph Neural Networks** | Learned heuristics on elevation graphs |
-| **Surrogate Models** | Fast path prediction from 4.4M+ multi-resolution terrain-routing examples |
+| **Surrogate Models** | Route prediction trained on 4.4 M scenes (26.36 M exact reference routes) at seven resolutions |
 | **Computer Vision** | Path segmentation from elevation images |
-| **Certified ML** | ARP 6983 / ED-324 — bounded ODD, deterministic data |
+| **Evaluation research** | Geographic hold-out, seed stability and ODD-binned reporting with `passage-eval` |
 
 ---
 
@@ -619,7 +657,7 @@ outputs/
 # Install dev dependencies
 uv sync --group dev
 
-# Run tests (80%+ coverage required)
+# Run the 860 tests (coverage gate: 80 %)
 uv run pytest --cov
 
 # Lint & format
@@ -636,10 +674,8 @@ uv run pre-commit run --all-files
 ## 📝 Citation
 
 PASSAGE is accepted as a poster at the 40th Conference on Neural Information
-Processing Systems (NeurIPS 2026), Track on Evaluations and Datasets.
-Citation metadata is available in [`CITATION.cff`](CITATION.cff). If you prefer
-BibTeX, use the entry below, and also name the dataset version you used
-(PASSAGE v1.0):
+Processing Systems (NeurIPS 2026), Track on Evaluations and Datasets. Please
+cite the paper and name the dataset version you used (PASSAGE v1.0):
 
 ```bibtex
 @inproceedings{delhomme2026passage,
@@ -651,9 +687,12 @@ BibTeX, use the entry below, and also name the dataset version you used
 }
 ```
 
-The NeurIPS 2026 proceedings are not published yet. This entry will be completed
-with the proceedings details (volume, pages and paper URL) once they are
-available; the title, authors, venue and year will not change.
+The NeurIPS 2026 proceedings are not published yet. This entry will be
+completed with the proceedings details (volume, pages and paper URL) once
+they are available; the title, authors, venue and year will not change.
+
+Machine-readable metadata: [CITATION.cff](CITATION.cff) and
+[croissant.json](croissant.json) (Croissant 1.1 with Responsible AI fields).
 
 ---
 
@@ -717,33 +756,28 @@ Python packages declared in `pyproject.toml` and resolved in `uv.lock` are
 released by their respective upstreams under their own licenses, which may
 differ from the MIT license that covers PASSAGE's own source code. Users are
 responsible for reviewing and complying with each upstream's terms — in
-particular, GPU acceleration via the optional `passage-eval[torch]` extra
-relies on PyTorch and, when used with CUDA wheels, on NVIDIA CUDA runtime
-libraries (e.g. `nvidia-cublas`, `nvidia-cuda-runtime`, `nvidia-cudnn`)
-distributed under the proprietary
+particular, the optional `torch` extra (`passage[torch]`) installs PyTorch,
+which on Linux depends on NVIDIA CUDA runtime libraries (e.g.
+`nvidia-cublas`, `nvidia-cuda-runtime`, `nvidia-cudnn-cu13`) distributed
+under the proprietary
 [NVIDIA Software License Agreement](https://www.nvidia.com/en-us/agreements/enterprise-software/nvidia-software-license-agreement/),
 **not** under MIT. PASSAGE itself does not redistribute these libraries.
 
-### ⚡ Optional GPU / CUDA support
+### ⚡ Optional PyTorch and CUDA
 
 PASSAGE runs end-to-end on CPU — no GPU is required to download, generate,
-or evaluate the dataset. The `uv.lock` shipped with this repository resolves
-PyTorch from the official CPU-only index
-(`https://download.pytorch.org/whl/cpu`) and contains **no** `nvidia-*` /
-`cuda-*` packages. To enable GPU acceleration (only required by the optional
-surrogate-baseline tooling under `passage-eval[torch]`), install the CUDA
-build of PyTorch from the appropriate NVIDIA index after `uv sync`, for
-example:
+or evaluate the dataset. The default environment (`uv sync --frozen`)
+contains no PyTorch and no `nvidia-*` or `cuda-*` package. PyTorch is used
+only by the optional device-timing helpers of `passage-eval`; install it
+with the `torch` extra:
 
 ```bash
-uv sync --extra eval                          # installs CPU PyTorch via the eval extra
-uv pip install --reinstall \
-  --index-url https://download.pytorch.org/whl/cu128 \
-  torch                                        # opt in to the CUDA build
+uv sync --frozen --extra torch   # adds the locked PyTorch from PyPI
 ```
 
-By doing so you accept the NVIDIA license terms cited above for the CUDA
-runtime libraries pulled in transitively.
+On Linux, the locked PyTorch wheel comes from PyPI with its NVIDIA CUDA
+runtime packages, so by installing it you accept the NVIDIA license terms
+cited above.
 
 ---
 
@@ -763,22 +797,32 @@ recognise which one applies to what you are doing:
 | Surface | License | What it covers |
 | --- | --- | --- |
 | Generator and evaluator code | [MIT License](LICENSE) | every Python file in this repository — the dataset generator (`passage`), the evaluation contract (`passage-eval`), and the documentation source. |
-| Generated elevation data | [JAXA AW3D30 terms of use](https://www.eorc.jaxa.jp/ALOS/en/dataset/aw3d30/aw3d30_e.htm) | AW3D30-derived terrain; [`DATASET_LICENSE.md`](DATASET_LICENSE.md) summarizes the current official conditions and links to their full text. Model weights require their own licensing and provenance review. |
+| Generated elevation data | [JAXA Terms of Use of Research Data](https://earth.jaxa.jp/en/data/policy/) | AW3D30-derived terrain; [`DATASET_LICENSE.md`](DATASET_LICENSE.md) summarizes the official conditions and links to their full text. Model weights require their own licensing and provenance review. |
 
 > [!WARNING]
-> **Respect JAXA's licensing terms.** PASSAGE is built on the
-> [JAXA ALOS World 3D 30 m DSM (AW3D30)](https://www.eorc.jaxa.jp/ALOS/en/dataset/aw3d30/aw3d30_e.htm).
-> Any user of PASSAGE — or of any artefact derived from it — **must
-> respect the JAXA terms of use**:
+> **Respect JAXA's terms of use.** PASSAGE is built on the
+> [JAXA ALOS World 3D–30m DSM (AW3D30)](https://www.eorc.jaxa.jp/ALOS/en/dataset/aw3d30/aw3d30_e.htm),
+> whose section 5 links to the
+> [JAXA Terms of Use of Research Data](https://earth.jaxa.jp/en/data/policy/).
+> Anyone who uses or redistributes PASSAGE data, or publishes derivatives
+> of them, must follow those terms:
 >
-> 1. **Cite the JAXA AW3D30 source** in publications using PASSAGE
->    (recommended: Takaku *et al.*, *"Updates of 'AW3D30' ALOS Global
->    DSM with Other Open Access Datasets,"* ISPRS Archives, 2020).
-> 2. **Reproduce the AW3D30 attribution** in any redistribution of
->    the elevation channel or of any artefact directly derived from
->    it.
-> 3. **Read and abide by the JAXA terms-of-use page** linked above
->    for the authoritative wording.
+> 1. **Credit JAXA and AW3D30**, including in any redistribution or
+>    published derivative, with the line: *"The original data used for
+>    this product have been supplied by JAXA's ALOS World 3D–30m
+>    (AW3D30)."* Keep the third-party credits listed in
+>    [`DATASET_LICENSE.md`](DATASET_LICENSE.md).
+> 2. **Notify JAXA before any commercial use.** JAXA also asks to be
+>    notified, where possible, of publications that use the data.
+> 3. **Read the JAXA terms of use** linked above for the authoritative
+>    wording.
+>
+> When you publish results on PASSAGE, we recommend citing the AW3D30
+> source with the PASSAGE paper: J. Takaku, T. Tadono, M. Doutsu,
+> F. Ohgushi and H. Kai, "Updates of 'AW3D30' ALOS Global Digital Surface
+> Model with Other Open Access Datasets", *ISPRS Archives* XLIII-B4-2020,
+> 183–189, 2020,
+> [doi:10.5194/isprs-archives-XLIII-B4-2020-183-2020](https://doi.org/10.5194/isprs-archives-XLIII-B4-2020-183-2020).
 >
 > We sincerely thank JAXA for openly sharing AW3D30 with the research
 > community.

@@ -29,8 +29,7 @@ theme:
   name: material
   custom_dir: docs/overrides
   language: en
-  logo: assets/favicon.svg
-  # helicopter emoji is used as favicon; file created in docs/assets/favicon.svg
+  logo: assets/logo.svg
   favicon: assets/favicon.svg
 
   icon:
@@ -50,23 +49,19 @@ theme:
       quote: fontawesome/solid/quote-left
 
   palette:
-    # Light mode — Alpine blue + warm amber accent
-    - media: "(prefers-color-scheme: light)"
-      scheme: default
-      primary: indigo
-      accent: amber
+    # Dark first: the neon theme is designed on a night background.
+    - scheme: slate
+      primary: custom
+      accent: custom
       toggle:
-        icon: material/brightness-7
-        name: Switch to dark mode
-
-    # Dark mode — Deep mountain blue + amber accent
-    - media: "(prefers-color-scheme: dark)"
-      scheme: slate
-      primary: indigo
-      accent: amber
-      toggle:
-        icon: material/brightness-4
+        icon: material/weather-sunny
         name: Switch to light mode
+    - scheme: default
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
 
   font:
     text: Inter
@@ -190,6 +185,7 @@ extra_css:
   - assets/extra.css
 
 extra_javascript:
+  - javascripts/home.js
   - javascripts/katex.js
   - https://unpkg.com/katex@0.16.11/dist/katex.min.js
   - https://unpkg.com/katex@0.16.11/dist/contrib/auto-render.min.js
@@ -197,7 +193,7 @@ extra_javascript:
 extra:
   huggingface:
     link: https://huggingface.co/datasets/thalesgroup/passage
-    name: "🤗 thalesgroup/passage"
+    name: "thalesgroup/passage"
     title: "Dataset on the Hugging Face Hub"
   social:
     - icon: fontawesome/brands/github

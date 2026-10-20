@@ -11,37 +11,37 @@ Hugging Face Hub. Links to files point to the dataset repository on the Hub.
 
 ## 📌 Executive summary
 
-Learned planners and routing surrogates need terrain that looks like the real
-world, and labels that can be trusted. **PASSAGE gives path planners real
-terrain and exact answers.** Each scene is a square crop of the JAXA ALOS
-World 3D–30 m (AW3D30) elevation model with a start cell, a goal cell and
-procedural obstacles. Each scene carries six reference routes: three cost
-objectives (`elevation`, `slope_uphill`, `energy`), each solved once on free
-terrain and once with the obstacles blocked. Every route is either an exact
-optimum or a proved "no path".
+PASSAGE is a dataset and benchmark for constrained path planning on real
+terrain: each scene is a square crop of the JAXA ALOS World 3D–30 m (AW3D30)
+digital surface model with a start cell, a goal cell and procedural obstacles.
+Each scene has six route variants: three cost objectives (`elevation`,
+`slope_uphill`, `energy`), each on free terrain and with the obstacles blocked.
+Each variant carries either an exact minimum-cost reference route for the
+stated graph (eight-connected, 30 m cells) or a proof that no route exists.
+PASSAGE v1.0 holds 4,400,000 core scenes at seven resolutions, from 64×64 to
+4096×4096 cells, and 26,400,000 route variants: 26,358,039 exact routes and
+41,961 proved no-path. Its test split is a geographic hold-out (South America),
+and the MIT-licensed generator and the `passage-eval` evaluator are in the
+[code repository](https://github.com/ThalesGroup/passage).
 
-This repository holds **PASSAGE v1.0**: 4,400,000 core scenes at seven
-resolutions, from 64×64 to 4096×4096 cells, and 26,400,000 route variants.
-Of these, 26,358,039 are exact routes and 41,961 are proved to have no path.
-The test split is a geographic hold-out (South America), so test scores
-measure transfer to unseen terrain. The generator and the `passage-eval`
-evaluator are in the [code repository](https://github.com/ThalesGroup/passage).
+> **🧾 Release receipt.** The
+> [publication facts](https://huggingface.co/datasets/thalesgroup/passage/blob/main/release-receipts/publication-facts.json) record
+> 4,400,000 core scenes, 26,400,000 objective/obstacle variants and 1,792
+> preview rows; preview rows repeat core scenes and add no training
+> observations. Labels are solved in float64 from the same float32 terrain
+> that users load. Source crops with missing tiles or nodata are rejected.
+> The outcomes are 26,358,039 exact routes and 41,961 proved no-path
+> variants; no variant is unresolved.
 
-> **🧾 Release receipt.** PASSAGE v1.0 contains 4,400,000 core scenes and
-> 26,400,000 objective/obstacle variants; 1,792 separate preview rows do not
-> add independent training observations. Labels are solved in float64
-> from the same float32 terrain that users load.
-> Missing/nodata source crops are rejected. The qualified outcomes include
-> 26,358,039 successful exact routes and 41,961 independently proved no-path
-> variants. No learned model has been trained or evaluated on PASSAGE v1.0.
-
-The paper's learned-model results are historical results of the original
-study, reported as obtained; not re-run on the released dataset.
+No learned-model result on PASSAGE v1.0 is published yet; the first
+leaderboard entries will be the paper's two finalists, retrained on PASSAGE
+v1.0. The paper's learned-model results are historical results of the
+original study, reported as obtained; not re-run on the released dataset.
 
 **How to read this card.** [At a glance](#at-a-glance) and the
 [Quick start](#quick-start) get you to a loaded scene in a few lines. The
-next three sections describe what a row holds, the cost model behind each
-route and what its labels guarantee.
+next three sections describe the files, what a row holds, and the cost model
+and label guarantees behind each route.
 [Evaluating a planner](#evaluating-a-planner) gives the six metrics of the
 benchmark. [Geography and splits](#geography-and-splits) and
 [How the scenes were made](#how-the-scenes-were-made) explain the split
@@ -64,7 +64,7 @@ licence terms, maintenance and the citation.
 | Test geography | South America hold-out; other tiles split by 5°×5° blocks |
 | Preview rows | 1,792 (64 per split and resolution), with rendered images |
 | Size | about 1.27 TB of Parquet (5,997 shards); 1.31 TB with receipts and notebooks |
-| Supported tasks | Classical planning, path-mask segmentation, cost-to-go regression, graph and reinforcement-learning planners |
+| Intended tasks | Classical planning, path-mask segmentation, cost-to-go regression, graph and reinforcement-learning planners |
 | Licence | Code: MIT. Data: JAXA AW3D30 terms, see [DATASET_LICENSE.md](https://huggingface.co/datasets/thalesgroup/passage/blob/main/DATASET_LICENSE.md) |
 | Paper | *PASSAGE: A Real-Terrain Benchmark for Trustworthy Constrained Path Planning*, NeurIPS 2026, Track on Evaluations and Datasets |
 
@@ -489,8 +489,8 @@ the notebooks as first published with the release.
 
 ## 🎯 Intended uses and limitations
 
-Use PASSAGE to benchmark classical planners (Dijkstra, A\*, D\*, JPS)
-and learned planners against exact references, to train routing surrogates
+Use PASSAGE to benchmark classical planners (for example Dijkstra and A\*)
+and learned planners against exact reference routes, to train routing surrogates
 (path-mask segmentation, cost-to-go regression, graph or reinforcement-learning
 planners), and to study resolution scaling, geographic transfer and transfer
 between cost models.
@@ -524,11 +524,20 @@ See the [datasheet](https://huggingface.co/datasets/thalesgroup/passage/blob/mai
 
 - Code (generator, evaluator, notebooks): [MIT](https://huggingface.co/datasets/thalesgroup/passage/blob/main/LICENSE).
 - Data: derived from JAXA AW3D30 and subject to the
-  [JAXA terms of use](https://earth.jaxa.jp/en/data/policy/). Modification and
-  redistribution are allowed with credit; commercial use requires prior
-  notification to JAXA. The dataset is neither MIT-licensed nor public domain.
-  See [DATASET_LICENSE.md](https://huggingface.co/datasets/thalesgroup/passage/blob/main/DATASET_LICENSE.md).
+  [JAXA Terms of Use of Research Data](https://earth.jaxa.jp/en/data/policy/),
+  linked from section 5 of the
+  [AW3D30 page](https://www.eorc.jaxa.jp/ALOS/en/dataset/aw3d30/aw3d30_e.htm).
+  Use, modification and redistribution are free of charge with credit to
+  JAXA, including for distributed derivatives; commercial use requires prior
+  notification to JAXA, and JAXA asks to be notified, where possible, of
+  publications that use the data. The dataset is neither MIT-licensed nor
+  public domain. See [DATASET_LICENSE.md](https://huggingface.co/datasets/thalesgroup/passage/blob/main/DATASET_LICENSE.md).
 - Credit line: **The original data used for this product have been supplied by JAXA's ALOS World 3D–30m (AW3D30).**
+- Source reference: J. Takaku, T. Tadono, M. Doutsu, F. Ohgushi and H. Kai,
+  "Updates of 'AW3D30' ALOS Global Digital Surface Model with Other Open
+  Access Datasets", *ISPRS Archives* XLIII-B4-2020, 183–189, 2020,
+  [doi:10.5194/isprs-archives-XLIII-B4-2020-183-2020](https://doi.org/10.5194/isprs-archives-XLIII-B4-2020-183-2020).
+  Cite it with the PASSAGE paper when you publish results on PASSAGE.
 - AW3D30 fills voids with third-party elevation data. JAXA's [AW3D30 Version 4.1 Product Description](https://www.eorc.jaxa.jp/ALOS/en/dataset/aw3d30/data/aw3d30v4.1_product_e_1.0.pdf) (checked on 19 October 2026; Table 1, mask file; Section 4, Related URLs) lists GSI Digital Topographic Map 5 m and 10 m mesh data (Geospatial Information Authority of Japan), SRTM-1 v3 (NASA/JPL), Viewfinder Panoramas DEM (Jonathan de Ferranti), ASTER GDEM v2 and v3 (NASA/METI), ArcticDEM v2 and v3 (NGA/NSF) and ArcticDEM v4, TanDEM-X 90m DEM (DLR), REMA v1.1 (PGC, University of Minnesota) and Copernicus DEM GLO-30 (ESA). For the Copernicus DEM it states: "AW3D30 is produced using Copernicus DEM GLO-30-F © DLR e.V. 2014-2018 and © Airbus Defence and Space GmbH 2014-2018 provided under COPERNICUS by the European Union and ESA, all rights reserved". Retain these credits in derived works.
 
 ---
@@ -549,6 +558,10 @@ See the [datasheet](https://huggingface.co/datasets/thalesgroup/passage/blob/mai
 ---
 
 ## 📝 Citation
+
+PASSAGE is accepted as a poster at the 40th Conference on Neural Information
+Processing Systems (NeurIPS 2026), Track on Evaluations and Datasets. Please
+cite the paper and name the dataset version you used (PASSAGE v1.0):
 
 ```bibtex
 @inproceedings{delhomme2026passage,
