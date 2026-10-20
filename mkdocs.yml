@@ -10,6 +10,12 @@ site_url: "https://thalesgroup.github.io/passage/"
 not_in_nav: |
   /_partials/**
 
+# Developer guides read on GitHub, next to the code and receipts they link to;
+# their relative links point outside docs/ and have no page on the website.
+exclude_docs: |
+  /DATA_QUALIFICATION.md
+  /TRAJECTORY_STYLE.md
+
 repo_url: "https://github.com/ThalesGroup/passage"
 repo_name: "ThalesGroup/passage"
 copyright: "Copyright &copy; 2024–2026 Thales Group — MIT License"
