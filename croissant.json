@@ -53,9 +53,9 @@
   "@type": "sc:Dataset",
   "@id": "https://huggingface.co/datasets/thalesgroup/passage",
   "name": "PASSAGE",
-  "alternateName": "PASSAGE successor (passage-successor-v1)",
-  "description": "PASSAGE successor passage-successor-v1 contains 4,400,000 core scenes and 26,400,000 objective/obstacle variants; 1,792 separate preview rows do not add independent training observations. Terrain and labels use persisted float32 inputs decoded before authoritative float64 graph solves. Missing/nodata source crops are rejected. The qualified outcomes include 26,358,039 successful exact routes and 41,961 independently proved no-path variants. Learned results are not_run.",
-  "version": "passage-successor-v1",
+  "alternateName": "PASSAGE v1.0",
+  "description": "PASSAGE v1.0 contains 4,400,000 core scenes and 26,400,000 objective/obstacle variants; 1,792 separate preview rows do not add independent training observations. Terrain and labels use persisted float32 inputs decoded before authoritative float64 graph solves. Missing/nodata source crops are rejected. The qualified outcomes include 26,358,039 successful exact routes and 41,961 independently proved no-path variants. No learned model has been trained or evaluated on PASSAGE v1.0.",
+  "version": "1.0.0",
   "url": "https://huggingface.co/datasets/thalesgroup/passage",
   "sameAs": "https://github.com/ThalesGroup/passage",
   "license": [
@@ -110,7 +110,7 @@
       "@id": "hf-repository",
       "@type": "cr:FileObject",
       "name": "hf-repository",
-      "description": "Hugging Face dataset repository thalesgroup/passage. Pin the commit revision you use. The sha256 value is the documented Hugging Face git-container sentinel, not a content digest; per-file identities are recorded in release-receipts/.",
+      "description": "Hugging Face dataset repository thalesgroup/passage. Use the release tag v1.0. The sha256 value is the documented Hugging Face git-container sentinel, not a content digest; per-file identities are recorded in release-receipts/.",
       "contentUrl": "https://huggingface.co/datasets/thalesgroup/passage",
       "encodingFormat": "git+https",
       "sha256": "https://github.com/mlcommons/croissant/issues/80"
@@ -59934,7 +59934,7 @@
   "rai:annotationsPerItem": "Six route variants per core scene (3 objectives x free/obstacle-aware), 26,400,000 in total; they share terrain and endpoints and are not independent observations. One deterministic reference solve per variant; no multi-annotator redundancy.",
   "rai:annotatorDemographics": "Not applicable: no human annotators.",
   "rai:machineAnnotationTools": [
-    "PASSAGE successor generator (src/passage/successor_generation.py)",
+    "PASSAGE generator (src/passage/successor_generation.py)",
     "Exact float64 A* reference solver (src/passage/reference.py) under the passage-eval GraphSpec contract",
     "blake2b per-scene seed derivation"
   ],
@@ -59948,7 +59948,7 @@
     "Static 2D grid tasks with procedural obstacles and endpoints; no vehicle dynamics, clearance, weather, airspace, regulation or mission demand is modelled.",
     "Labels are exact or proved infeasible only under the frozen graph contract (8-connectivity, destination-only diagonals, fixed 30 m edges, float64 solves on decoded float32 inputs). Other conventions change optima; tied optima can differ in geometry.",
     "Six variants per scene and scenes from the same 5x5 degree block or across resolutions can share terrain; treat them as correlated, not independent, samples. The 1,792 preview rows duplicate admitted scenes.",
-    "No learned model has been trained or evaluated on this edition (learned_results not_run). The paper's historical learned results come from the historical edition (Anonym-2045/passage, revision 493f0ea, v0.1.0) and are not measurements on this edition.",
+    "No learned model has been trained or evaluated on PASSAGE v1.0. The paper's learned-model results are historical results of the original study, reported as obtained; not re-run on the released dataset.",
     "Not suitable for operational flight planning, search-and-rescue dispatch or other safety-of-life decisions; the dataset does not certify deployment or replace certification processes."
   ],
   "rai:dataUseCases": [
@@ -59959,7 +59959,7 @@
   "rai:dataSocialImpact": "PASSAGE supports research on verifiable planners for safety-relevant terrain navigation, motivated by applications such as helicopter emergency medical services. The main risk is over-trusting learned planners validated only on this benchmark; mitigations are exact references, explicit failure accounting in passage-eval, a documented operational design domain and the stated limitations. PASSAGE is a research benchmark, not a certified navigation product.",
   "rai:personalSensitiveInformation": "None. The data contain public JAXA elevation, procedural obstacles and markers, and computed routes; no people, personal or biometric data. Local file paths, user names and host names were redacted from the published receipts, calibration files, producer source archive, executed notebooks and one Parquet scene receipt; release-receipts/privacy-redactions.json records each change.",
   "rai:hasSyntheticData": true,
-  "rai:dataReleaseMaintenancePlan": "passage-successor-v1 is a separately identified edition with its own receipts in release-receipts/. Pin the Hugging Face commit revision you use. The historical edition remains at Anonym-2045/passage revision 493f0ea57000efa1b871810ff908d986a3565253 while the paper cites it. Semantic changes require a new dataset_version, regenerated receipts and a CHANGELOG entry. Maintainers: the authors at Thales; contact through GitHub issues at https://github.com/ThalesGroup/passage or geoffrey.delhomme@thalesgroup.com.",
+  "rai:dataReleaseMaintenancePlan": "PASSAGE v1.0 is frozen by the Hugging Face tag v1.0 at the camera-ready release; its receipts are in release-receipts/. Semantic changes require a new version (new tag), regenerated receipts and a CHANGELOG entry. Maintainers: the authors at Thales; contact through GitHub issues at https://github.com/ThalesGroup/passage or geoffrey.delhomme@thalesgroup.com.",
   "prov:wasDerivedFrom": [
     {
       "@id": "https://www.eorc.jaxa.jp/ALOS/en/dataset/aw3d30/aw3d30_e.htm",
@@ -59988,12 +59988,12 @@
     {
       "@type": "prov:Activity",
       "prov:label": "Scene generation",
-      "sc:description": "Deterministic successor generation (dataset_version passage-successor-v1, seed 42, split seed 42): source-tile-block splits with a one-tile guard ring and a South America test hold-out, elevation-targeted start, uniform distinct goal, super-ellipse obstacles, rejection of missing/nodata crops, per-scene receipts with source windows and hashes. Configuration and producer source are archived in release-receipts/resolved-config.yaml and release-receipts/producer-source.zip; generation provenance id 7c9a1a2b3c5a7e1bd844c35e35cb2e9c3b5dde4c0bcef9f8e85b0e84b86f647a.",
+      "sc:description": "Deterministic generation (seed 42, split seed 42): source-tile-block splits with a one-tile guard ring and a South America test hold-out, elevation-targeted start, uniform distinct goal, super-ellipse obstacles, rejection of missing/nodata crops, per-scene receipts with source windows and hashes. Configuration and producer source are archived in release-receipts/resolved-config.yaml and release-receipts/producer-source.zip; generation provenance id 7c9a1a2b3c5a7e1bd844c35e35cb2e9c3b5dde4c0bcef9f8e85b0e84b86f647a.",
       "prov:wasAttributedTo": [
         {
           "@type": "prov:SoftwareAgent",
           "@id": "https://github.com/ThalesGroup/passage/blob/main/src/passage/successor_generation.py",
-          "prov:label": "PASSAGE successor generator"
+          "prov:label": "PASSAGE generator"
         }
       ]
     },

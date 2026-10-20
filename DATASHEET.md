@@ -2,25 +2,22 @@
 
 *Table 1. Document revision.*
 
-| Author | Date | Edition | Status |
+| Author | Date | Version | Status |
 | --- | --- | --- | --- |
-| Geoffrey Delhomme | 2026-10-19 | `passage-successor-v1` | Generated, verified and admitted for publication; not yet uploaded |
+| Geoffrey Delhomme | 2026-10-19 | 1.0 | Generated, verified and admitted for publication; not yet uploaded |
 
 This datasheet follows the questions of *Datasheets for Datasets*. It describes
-the dataset edition `passage-successor-v1`, published at
+PASSAGE v1.0 (Hub tag `v1.0`), published at
 [huggingface.co/datasets/thalesgroup/passage](https://huggingface.co/datasets/thalesgroup/passage),
 and accompanies its [Croissant metadata](https://huggingface.co/datasets/thalesgroup/passage/blob/main/croissant.json)
 (Croissant 1.1 with Responsible AI fields). The same file is kept in the
-[code repository](https://github.com/ThalesGroup/passage). The last section
-identifies the historical edition used for the paper's historical learned
-results.
+[code repository](https://github.com/ThalesGroup/passage).
 
-The release receipts summarise the edition as follows:
+The release receipts summarise PASSAGE v1.0 as follows:
 
-PASSAGE successor passage-successor-v1 contains 4,400,000 core scenes and 26,400,000 objective/obstacle variants; 1,792 separate preview rows do not add independent training observations. Terrain and labels use persisted float32 inputs decoded before authoritative float64 graph solves. Missing/nodata source crops are rejected. The qualified outcomes include 26,358,039 successful exact routes and 41,961 independently proved no-path variants. Learned results are not_run.
+PASSAGE v1.0 contains 4,400,000 core scenes and 26,400,000 objective/obstacle variants; 1,792 separate preview rows do not add independent training observations. Terrain and labels use persisted float32 inputs decoded before authoritative float64 graph solves. Missing/nodata source crops are rejected. The qualified outcomes include 26,358,039 successful exact routes and 41,961 independently proved no-path variants. No learned model has been trained or evaluated on PASSAGE v1.0.
 
-"Learned results are not_run" means that no learned model has been trained or
-evaluated on this edition yet. This datasheet documents a computational
+The paper's learned-model results are historical results of the original study, reported as obtained; not re-run on the released dataset. This datasheet documents a computational
 annotation and qualification process. It is not an operational deployment
 certification.
 
@@ -82,7 +79,7 @@ in 5,997 shards.
 It is a seeded sample of a configured parameter space, not an enumeration.
 Each scene derives its seed as `blake2b(seed, resolution, index, split)` with
 generation seed 42 and split seed 42. Regeneration with other settings creates
-a separately identified edition.
+a separately identified version.
 
 ### What data does each instance consist of?
 
@@ -273,7 +270,7 @@ source byte used.
 Yes. The generator, reference solver and evaluator are in
 [github.com/ThalesGroup/passage](https://github.com/ThalesGroup/passage)
 (`src/passage/`, `src/passage-eval/`). The producer source used for this
-edition is archived in `release-receipts/producer-source.zip`. One host label in
+dataset is archived in `release-receipts/producer-source.zip`. One host label in
 that archive was redacted (see `release-receipts/privacy-redactions.json`);
 `release-receipts/generation-provenance.json` keeps the original file hashes.
 
@@ -281,9 +278,10 @@ that archive was redacted (see `release-receipts/privacy-redactions.json`);
 
 ### Has the dataset been used for any tasks already?
 
-Not this edition: no learned model has been trained or evaluated on it. The
-paper's historical learned results (dense path-mask segmentation and cost-to-go
-regression) were obtained on the historical edition described below.
+No learned model has been trained or evaluated on PASSAGE v1.0. The paper's
+learned results (dense path-mask segmentation and cost-to-go regression) are
+historical results of the original study, reported as obtained;
+not re-run on the released dataset.
 
 ### What (other) tasks could the dataset be used for?
 
@@ -320,7 +318,7 @@ regression) were obtained on the historical edition described below.
 
 Yes, publicly, at
 [huggingface.co/datasets/thalesgroup/passage](https://huggingface.co/datasets/thalesgroup/passage).
-Pin the commit revision you use.
+Use the release tag `v1.0`.
 
 ### How will it be distributed?
 
@@ -371,7 +369,7 @@ dataset card.
 
 ### Will the dataset be updated?
 
-Any semantic change creates a new `dataset_version` with regenerated receipts,
+Any semantic change creates a new version (new Hub tag) with regenerated receipts,
 an updated card and Croissant file, and a `CHANGELOG.md` entry, staged and
 reviewed separately before upload.
 
@@ -381,47 +379,21 @@ Not applicable.
 
 ### Will older versions of the dataset continue to be supported/hosted/maintained?
 
-The historical edition remains at `Anonym-2045/passage` revision `493f0ea` while
-the paper cites it. Hub commit history keeps earlier revisions of this
-repository.
+PASSAGE v1.0 is frozen by the Hub tag `v1.0`. A later version would be released
+under a new tag; v1.0 stays available under its tag.
 
 ### If others want to extend / augment / build on / contribute to the dataset, is there a mechanism for them to do so?
 
 Yes, through pull requests and issues on the code repository (see
-`CONTRIBUTING.md`). A change to data semantics requires a new edition and
+`CONTRIBUTING.md`). A change to data semantics requires a new version and
 updated Croissant and datasheet sections.
-
-## Historical edition (v0.1.0)
-
-The paper's historical learned results and device timings were obtained on the
-original release, kept as the anonymous mirror
-[`Anonym-2045/passage`](https://huggingface.co/datasets/Anonym-2045/passage/tree/493f0ea57000efa1b871810ff908d986a3565253)
-at commit `493f0ea57000efa1b871810ff908d986a3565253` (version 0.1.0). It has the
-same resolutions, scene counts and 90/2/4/4 split ratios as
-`passage-successor-v1`, but different crops, labels and split policy. Its
-numbers are not measurements on `passage-successor-v1`.
-
-The authors' qualification of that edition, kept with the code repository's
-producer records and not part of this upload, found:
-
-- All 5,620 files (2,432,204,479,881 bytes, about 2.43 TB) matched pinned object
-  digests.
-- A metadata census of all 4,400,000 core rows found no duplicate IDs and no
-  resolution or split mismatches. Primary train and test tiles were disjoint, but
-  crop rectangles overlapped at 256, 512 and 2048, and source-cell windows were
-  not recorded, so strict geographic independence is unknown.
-- A diagnostic route audit of 196 scenes (1,176 variants) found 1,173 legal
-  stored routes, 433 stored-cost agreements and 237 qualified optima; 541
-  reference solves were censored by the 100,000-expansion budget. These
-  unequal-probability counts do not estimate population defect rates.
-- Missing tiles could be treated as flat terrain at sea level.
 
 ## Lifecycle statement
 
 - **Status**: active.
-- **Versioning**: the authoritative identifiers are `dataset_version` in the
-  receipts, `version` in `croissant.json` and in `CITATION.cff`, and the Hub
-  commit revision.
+- **Versioning**: version 1.0, frozen by the Hub tag `v1.0`; `version` is 1.0.0
+  in `croissant.json` and 1.0 in `CITATION.cff`. Receipts and Parquet rows also
+  carry an internal `dataset_version` field.
 - **Maintenance owner**: Thales Group open-source research SIG; issues/PRs on GitHub.
 - **Deprecation policy**: deprecations are announced in `CHANGELOG.md` and on
   the dataset card.

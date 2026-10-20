@@ -20,7 +20,7 @@ to JAXA. Notification of a research publication is requested where possible.
 JAXA retains source-data copyright and disclaims liability. Its
 [site policy](https://global.jaxa.jp/policy.html) also applies.
 
-Credit line: **The original data used for this product have been supplied by JAXA's ALOS World 3D–30m (AW3D30).** Identify PASSAGE processing and the source revision
+Credit line: **The original data used for this product have been supplied by JAXA's ALOS World 3D–30m (AW3D30).** Identify PASSAGE processing and its version (v1.0)
 in the release metadata. Do not present modified terrain as an unmodified JAXA
 product or the whole dataset as MIT-licensed or public domain.
 
@@ -29,7 +29,7 @@ AW3D30 fills voids with third-party elevation data. JAXA's [AW3D30 Version 4.1 P
 ## 3. Release preparation
 
 Preserve this file, source credits and the [datasheet](DATASHEET.md) in each
-mirror. Before publication, archive the applicable terms with the release and
+copy. Before publication, archive the applicable terms with the release and
 check whether the commercial-use notification applies. No notification or upload
 is performed by this documentation update.
 
