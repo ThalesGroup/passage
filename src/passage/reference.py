@@ -262,6 +262,55 @@ def solve_reference(elevation, obstacles, start, goal, *, graph: GraphSpec | Non
                            time.perf_counter() - begun)
 
 
+@njit(cache=True)
+def _reaches(blocked, origin, target):
+    rows, cols = blocked.shape
+    seen = np.zeros(rows * cols, dtype=np.bool_)
+    stack = np.empty(rows * cols, dtype=np.int32)
+    stack[0] = origin
+    seen[origin] = True
+    count = 1
+    while count:
+        count -= 1
+        node = stack[count]
+        if node == target:
+            return True
+        r, c = node // cols, node % cols
+        for dr in range(-1, 2):
+            for dc in range(-1, 2):
+                rr, cc = r + dr, c + dc
+                if (dr == 0 and dc == 0) or rr < 0 or rr >= rows or cc < 0 or cc >= cols:
+                    continue
+                neighbor = rr * cols + cc
+                if blocked[rr, cc] or seen[neighbor]:
+                    continue
+                seen[neighbor] = True
+                stack[count] = neighbor
+                count += 1
+    return False
+
+
+def endpoints_connected(obstacles, start, goal) -> bool:
+    """Return whether the reference graph has any route from start to goal.
+
+    The edge set is the one ``solve_reference`` searches: eight neighbours,
+    obstacles checked at the destination cell only, every other edge finite.
+    Reachability therefore needs no terrain, and ``False`` is exactly the case
+    the solver would prove ``no_path``. Blocked endpoints are disconnected.
+    """
+    blocked = np.asarray(obstacles)
+    if blocked.ndim != 2 or not blocked.size or not np.isin(blocked, [0, 1]).all():
+        raise ValueError("obstacles must be a nonempty binary 2D grid")
+    if blocked.size > np.iinfo(np.int32).max:
+        raise ValueError("grid exceeds int32 cell indexing")
+    blocked = np.ascontiguousarray(blocked, dtype=np.bool_)
+    start, goal = _point(start, blocked.shape), _point(goal, blocked.shape)
+    if blocked[start] or blocked[goal]:
+        return False
+    cols = blocked.shape[1]
+    return bool(_reaches(blocked, start[0] * cols + start[1], goal[0] * cols + goal[1]))
+
+
 def reverse_goal_field(elevation, obstacles, goal, *, graph: GraphSpec | None = None,
                        max_expansions: int | None = None) -> GoalField:
     """Dijkstra on transposed edges computes directed original costs to goal.
