@@ -198,6 +198,19 @@ def _connectivity_repair(root: Path, relative: str, resolutions: dict) -> dict:
             'source_archive': generator['source_archive']}
 
 
+def labels_paragraph(facts: dict) -> str:
+    """Label-status paragraph of the generated card and datasheet."""
+    if facts['proved_infeasible_variants'] == 0:
+        return ('Every route variant has status `ok`: a legal, exact route under the frozen GraphSpec. Start and goal '
+                'cells that the obstacles disconnect are rejected by the generator. Failed/censored outcomes would '
+                'retain explicit terminal records and block qualification. Supervision rosters list every variant. '
+                'Tied optima may have different path geometry.\n\n')
+    return ('Successful `ok` paths are legal and exact under the frozen GraphSpec. `infeasible` means the reference solve '
+            'proved no path; its ordered route is empty and cost is null. Failed/censored outcomes retain explicit terminal '
+            'records and block qualification. Successful-path supervision uses separate supervision rosters; infeasible '
+            'tasks do not become zero-cost successful examples. Tied optima may have different path geometry.\n\n')
+
+
 def _description(facts: dict) -> str:
     # The published card, datasheet and Croissant metadata embed this exact text, and
     # verification recomputes it.
@@ -207,11 +220,11 @@ def _description(facts: dict) -> str:
     else:
         outcomes = (f"The qualified outcomes include {facts['successful_route_variants']:,} successful exact routes "
                     f"and {facts['proved_infeasible_variants']:,} independently proved no-path variants.")
-    return (f"PASSAGE successor {VERSION} contains {facts['core_scenes']:,} core scenes and "
+    return (f"PASSAGE v1.0 contains {facts['core_scenes']:,} core scenes and "
         f"{facts['route_variants']:,} objective/obstacle variants; {facts['preview_rows']:,} separate preview rows "
         "do not add independent training observations. Terrain and labels use persisted float32 inputs decoded "
         f"before authoritative float64 graph solves. Missing/nodata source crops are rejected. {outcomes} "
-        "Learned results are not_run.")
+        "No learned-model result on PASSAGE v1.0 has been published yet.")
 
 
 def write_successor_publication_metadata(context: ReleaseContext, *, repo_id: str = 'thalesgroup/passage') -> dict:
@@ -245,10 +258,7 @@ def write_successor_publication_metadata(context: ReleaseContext, *, repo_id: st
         '30 m graph distance convention. Elevation/slope/energy costs are routing proxies on the JAXA ALOS AW3D30 '
         'digital surface model, which includes canopy/building surfaces; 30 m graph spacing does not certify actual '
         'ground spacing. Calibration and objective weights remain float64 in exported metadata.\n\n'
-        'Successful `ok` paths are legal and exact under the frozen GraphSpec. `infeasible` means the reference solve '
-        'proved no path; its ordered route is empty and cost is null. Failed/censored outcomes retain explicit terminal '
-        'records and block qualification. Successful-path supervision uses separate supervision rosters; infeasible '
-        'tasks do not become zero-cost successful examples. Tied optima may have different path geometry.\n\n'
+        + labels_paragraph(facts) +
         '```json\n' + json.dumps(facts['graphs'], indent=2, sort_keys=True) + '\n```\n\n'
         '## Geography and replay\n\n'
         'Source-cell windows, including neighboring tiles and wrapped longitude, are retained in scene receipts. '
