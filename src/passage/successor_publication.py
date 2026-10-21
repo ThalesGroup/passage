@@ -125,6 +125,12 @@ def _facts(root: Path) -> tuple[dict, dict[str, str]]:
         resolutions[key] = summary
     if not resolutions:
         raise ValueError('Release publication requires verified resolution populations')
+    endpoint_policy, repair = provenance['endpoint_policy'], None
+    repair_relative = 'release-receipts/connectivity-repair-v1.json'
+    if (root / repair_relative).is_file():
+        repair = _connectivity_repair(root, repair_relative, resolutions)
+        endpoint_policy = repair['endpoint_policy']
+        controls.extend([repair_relative, repair['source_archive']])
     facts = {'dataset_version': VERSION, 'scope': verification['scope'], 'configurations': configurations,
         'resolutions': resolutions, 'core_scenes': sum(s['requested_scenes'] for s in resolutions.values()),
         'preview_rows': sum(sum(s['sample_counts'].values()) for s in resolutions.values()),
@@ -137,20 +143,75 @@ def _facts(root: Path) -> tuple[dict, dict[str, str]]:
         'geographic_policy': provenance['geographic_policy'], 'nodata_policy': provenance['nodata_policy'],
         'terrain_normalization': provenance['terrain_normalization'], 'sample_seeding': provenance['sample_seeding'],
         'tie_policy': provenance['tie_policy'], 'scene_attempts': provenance['scene_attempts'],
-        'endpoint_policy': provenance['endpoint_policy'], 'split_ratios': config['splits']['ratios'],
+        'endpoint_policy': endpoint_policy, 'split_ratios': config['splits']['ratios'],
         'split_seed': config['splits']['seed'], 'learned_results': 'not_run', 'upload': 'not_run'}
+    if repair is not None:
+        facts['connectivity_repair'] = {key: repair[key] for key in
+                                        ('repaired_scenes', 'generation_provenance_id', 'code_commit')}
     return facts, {path: _hash(root / path) for path in controls}
+
+
+def _connectivity_repair(root: Path, relative: str, resolutions: dict) -> dict:
+    """Check the receipt of scenes regenerated under the disconnected-endpoint rule.
+
+    Each listed scene must sit in its batch manifest with the new receipt, every replaced
+    shard must carry its new hash there, and the archived generator must be the recorded one.
+    """
+    receipt = _json(root / relative)
+    generator = receipt['generator']
+    if receipt.get('schema') != 'passage-connectivity-repair/v1' or receipt['repaired_scenes'] != len(receipt['scenes']):
+        raise ValueError('Connectivity repair receipt identity mismatch')
+    archive_path = root / generator['source_archive']
+    if _hash(archive_path) != receipt['source_archive_sha256']:
+        raise ValueError('Connectivity repair source archive mismatch')
+    from passage.successor_generation import semantic_hash
+    with zipfile.ZipFile(archive_path) as archive:
+        snapshot = {name.removeprefix('src/'): hashlib.sha256(archive.read(name)).hexdigest()
+                    for name in archive.namelist()}
+    if semantic_hash(snapshot) != generator['source_snapshot_sha256']:
+        raise ValueError('Connectivity repair archived generator differs from the recorded source')
+    by_batch = {}
+    for scene in receipt['scenes']:
+        by_batch.setdefault(scene['batch'], []).append(scene)
+    batch_files = {}
+    for path in sorted((root / 'release-receipts').glob('batch-*.json')):
+        manifest = _json(path)
+        for record in manifest['files']:
+            batch_files[record['path']] = record['sha256']
+        if path.name not in by_batch:
+            continue
+        committed = {(s['split'], s['index']): s for s in manifest['scenes']}
+        for scene in by_batch.pop(path.name):
+            found = committed.get((scene['split'], scene['index']))
+            if (found is None or found['receipt_semantic_sha256'] != scene['new_receipt_semantic_sha256']
+                    or found['receipt']['provenance_id'] != generator['provenance_id']
+                    or any(v['status'] != 'ok' for v in found['receipt']['variants'].values())):
+                raise ValueError(f"Connectivity repair scene not committed: {scene['resolution']}/{scene['index']}")
+    if by_batch:
+        raise ValueError('Connectivity repair lists a batch manifest that is not published')
+    if any(batch_files.get(shard['path']) != shard['new']['sha256'] for shard in receipt['shards']):
+        raise ValueError('Connectivity repair shard hash differs from its batch manifest')
+    if sum(s['proved_infeasible_variants'] for s in resolutions.values()) != 0:
+        raise ValueError('Connectivity repair leaves variants without a path')
+    return {'repaired_scenes': receipt['repaired_scenes'], 'generation_provenance_id': generator['provenance_id'],
+            'code_commit': generator['code_commit'], 'endpoint_policy': generator['endpoint_policy'],
+            'source_archive': generator['source_archive']}
 
 
 def _description(facts: dict) -> str:
     # The published card, datasheet and Croissant metadata embed this exact text, and
-    # verification recomputes it; keep it unchanged for the sealed release receipts.
+    # verification recomputes it.
+    if facts['proved_infeasible_variants'] == 0:
+        outcomes = (f"All {facts['successful_route_variants']:,} variants are exact routes; start and goal cells "
+                    "that the obstacles disconnect are rejected by the generator.")
+    else:
+        outcomes = (f"The qualified outcomes include {facts['successful_route_variants']:,} successful exact routes "
+                    f"and {facts['proved_infeasible_variants']:,} independently proved no-path variants.")
     return (f"PASSAGE successor {VERSION} contains {facts['core_scenes']:,} core scenes and "
         f"{facts['route_variants']:,} objective/obstacle variants; {facts['preview_rows']:,} separate preview rows "
         "do not add independent training observations. Terrain and labels use persisted float32 inputs decoded "
-        "before authoritative float64 graph solves. Missing/nodata source crops are rejected. "
-        f"The qualified outcomes include {facts['successful_route_variants']:,} successful exact routes and "
-        f"{facts['proved_infeasible_variants']:,} independently proved no-path variants. Learned results are not_run.")
+        f"before authoritative float64 graph solves. Missing/nodata source crops are rejected. {outcomes} "
+        "Learned results are not_run.")
 
 
 def write_successor_publication_metadata(context: ReleaseContext, *, repo_id: str = 'thalesgroup/passage') -> dict:
