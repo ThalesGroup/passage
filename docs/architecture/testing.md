@@ -4,7 +4,7 @@ title: Testing Strategy
 
 # Testing Strategy
 
-PASSAGE has **65 test files**: 44 in `tests/` for the `passage` package and 21 in `tests/passage_eval/` for the evaluator. Together they run **860 tests**. Coverage is measured on both packages, with a gate at **80 %**. The tests cover unit logic, integration workflows, CLI behavior and edge cases.
+PASSAGE has **65 test files**: 44 in `tests/` for the `passage` package and 21 in `tests/passage_eval/` for the evaluator. Together they run **865 tests**. Coverage is measured on both packages, with a gate at **80 %**. The tests cover unit logic, integration workflows, CLI behavior and edge cases.
 
 ---
 

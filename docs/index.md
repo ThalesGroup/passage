@@ -31,9 +31,9 @@ stats:
     decimals: 1
     suffix: " M"
   - label: "Exact routes"
-    text: "26.36 M"
-    count: 26.36
-    decimals: 2
+    text: "26.4 M"
+    count: 26.4
+    decimals: 1
     suffix: " M"
   - label: "Grid sizes"
     text: "7"
@@ -63,8 +63,9 @@ terrain: each scene is a square crop of the
 digital surface model with a start cell, a goal cell and procedural obstacles.
 Each scene has six route variants: three cost objectives (`elevation`,
 `slope_uphill`, `energy`), each on free terrain and with the obstacles blocked.
-Each variant carries either an exact minimum-cost reference route for the stated
-graph (eight-connected, 30 m cells) or a proof that no route exists. The dataset,
+Each variant carries an exact minimum-cost reference route for the stated graph
+(eight-connected, 30 m cells); start and goal cells that the obstacles
+disconnect are rejected by the generator. The dataset,
 the generator and the `passage-eval` evaluator are publicly released (code under
 MIT, data under the JAXA terms), so that classical planners, learned surrogates,
 graph networks and reinforcement learning can be scored on the same tasks.
@@ -127,9 +128,9 @@ Publish the prepared tree to a Hugging Face dataset repository that you name.
 
 | Item | Value |
 | --- | --- |
-| Version | 1.0, verified on the Hub at commit `65f1e4f` |
+| Version | 1.0, verified on the Hub at commit `2ab44d8` |
 | Core scenes | 4,400,000 at seven resolutions, from 64×64 to 4096×4096 cells |
-| Route variants | 26,400,000: 26,358,039 exact routes and 41,961 proved no-path |
+| Route variants | 26,400,000, all exact routes (six per scene) |
 | Splits | train / calibration / validation / test = 90 / 2 / 4 / 4 % |
 | Test geography | South America hold-out; other tiles split by 5°×5° blocks |
 | Preview rows | 1,792 (64 per split and resolution), with rendered images |
@@ -188,7 +189,7 @@ Super-ellipses of varied shape, size and rotation, up to 30 % of a crop, never o
 
 ### Exact references
 
-A Numba-compiled float64 grid A\* labels every variant: an exact optimum or a proved no-path. A published notebook solves a sample again.
+A Numba-compiled float64 grid A\* labels every variant with an exact optimum; the generator rejects start and goal cells that the obstacles disconnect. A published notebook solves a sample again.
 </div>
 
 <div class="feature-card" markdown>
@@ -204,7 +205,7 @@ The scene parameters form an operational design domain, a term the paper borrows
 
 ### Tested
 
-860 tests with an 80 % coverage gate, deterministic seeding, pre-commit hooks and continuous integration.
+865 tests with an 80 % coverage gate, deterministic seeding, pre-commit hooks and continuous integration.
 </div>
 
 <div class="feature-card" markdown>
@@ -231,7 +232,7 @@ import numpy as np
 import zstandard
 from datasets import load_dataset
 
-REVISION = "65f1e4f0a37d8a7b476ddf02d48fe542542924ea"  # verified PASSAGE v1.0 upload
+REVISION = "2ab44d899652c7fb99c425488e84a7d565963547"  # verified PASSAGE v1.0 upload
 
 rows = load_dataset("thalesgroup/passage", "256x256_samples",
                     split="validation", revision=REVISION)

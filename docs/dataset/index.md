@@ -16,13 +16,13 @@ terrain: each scene is a square crop of the JAXA ALOS World 3D–30 m (AW3D30)
 digital surface model with a start cell, a goal cell and procedural obstacles.
 Each scene has six route variants: three cost objectives (`elevation`,
 `slope_uphill`, `energy`), each on free terrain and with the obstacles blocked.
-Each variant carries either an exact minimum-cost reference route for the
-stated graph (eight-connected, 30 m cells) or a proof that no route exists.
-PASSAGE v1.0 holds 4,400,000 core scenes at seven resolutions, from 64×64 to
-4096×4096 cells, and 26,400,000 route variants: 26,358,039 exact routes and
-41,961 proved no-path. Its test split is a geographic hold-out (South America),
-and the MIT-licensed generator and the `passage-eval` evaluator are in the
-[code repository](https://github.com/ThalesGroup/passage).
+Each variant carries an exact minimum-cost reference route for the stated
+graph (eight-connected, 30 m cells); start and goal cells that the obstacles
+disconnect are rejected by the generator. PASSAGE v1.0 holds 4,400,000 core
+scenes at seven resolutions, from 64×64 to 4096×4096 cells, and 26,400,000
+route variants, all exact routes. Its test split is a geographic hold-out
+(South America), and the MIT-licensed generator and the `passage-eval`
+evaluator are in the [code repository](https://github.com/ThalesGroup/passage).
 
 > **🧾 Release receipt.** The
 > [publication facts](https://huggingface.co/datasets/thalesgroup/passage/blob/main/release-receipts/publication-facts.json) record
@@ -30,8 +30,8 @@ and the MIT-licensed generator and the `passage-eval` evaluator are in the
 > preview rows; preview rows repeat core scenes and add no training
 > observations. Labels are solved in float64 from the same float32 terrain
 > that users load. Source crops with missing tiles or nodata are rejected.
-> The outcomes are 26,358,039 exact routes and 41,961 proved no-path
-> variants; no variant is unresolved.
+> All 26,400,000 variants are exact routes; start and goal cells that the
+> obstacles disconnect are rejected by the generator.
 
 No learned-model result on PASSAGE v1.0 is published yet; the first
 leaderboard entries will be the paper's two finalists, retrained on PASSAGE
@@ -57,9 +57,9 @@ licence terms, maintenance and the citation.
 
 | Item | Value |
 | --- | --- |
-| Version | 1.0, verified on the Hub at commit [`65f1e4f`](https://huggingface.co/datasets/thalesgroup/passage/tree/65f1e4f0a37d8a7b476ddf02d48fe542542924ea) |
+| Version | 1.0, verified on the Hub at commit [`2ab44d8`](https://huggingface.co/datasets/thalesgroup/passage/tree/2ab44d899652c7fb99c425488e84a7d565963547) |
 | Core scenes | 4,400,000 at seven resolutions, from 64×64 to 4096×4096 cells |
-| Route variants | 26,400,000: 26,358,039 exact routes and 41,961 proved no-path |
+| Route variants | 26,400,000, all exact routes (six per scene) |
 | Splits | train / calibration / validation / test = 90 / 2 / 4 / 4 % |
 | Test geography | South America hold-out; other tiles split by 5°×5° blocks |
 | Preview rows | 1,792 (64 per split and resolution), with rendered images |
@@ -84,15 +84,15 @@ blocked (dashed blue routes). Rendered by the executed
 
 Install `datasets`, `pillow`, `zstandard` and `numpy` (for example
 `pip install datasets pillow zstandard numpy`). Pin a commit for reproducible
-work. The examples use `65f1e4f…`, the upload whose 6,636 files were checked
-against the release hashes.
+work. The examples use `2ab44d8…`, the commit whose data and receipts were
+checked against the release hashes.
 
 ```python
 import numpy as np
 import zstandard
 from datasets import load_dataset
 
-REVISION = "65f1e4f0a37d8a7b476ddf02d48fe542542924ea"  # verified PASSAGE v1.0 upload
+REVISION = "2ab44d899652c7fb99c425488e84a7d565963547"  # verified PASSAGE v1.0 upload
 
 # Preview rows: small, 64 per split, with rendered images.
 rows = load_dataset("thalesgroup/passage", "256x256_samples",
@@ -111,17 +111,14 @@ obstacles = x[..., 2]  # 1 = blocked cell
 # One reference route: ordered [row, col] cells from start to goal.
 route = np.asarray(row["path_astar_energy_obstacles"])
 outcome = row["metadata"]["paths"]["astar_energy"]["obstacles"]
-print(outcome["status"], outcome["cost"], len(route))  # "ok" or "infeasible"
+print(outcome["status"], outcome["cost"], len(route))  # "ok" for every released variant
 ```
 
-A route converts directly into a path-mask target for segmentation. Check the
-status first: a proved no-path variant has an empty route and must not become
-an empty-mask training example.
+Every route converts directly into a path-mask target for segmentation:
 
 ```python
-if outcome["status"] == "ok":
-    path_mask = np.zeros((n, n), dtype=np.uint8)
-    path_mask[route[:, 0], route[:, 1]] = 1
+path_mask = np.zeros((n, n), dtype=np.uint8)
+path_mask[route[:, 0], route[:, 1]] = 1
 ```
 
 Core configurations are large: `256x256` holds 57 GB and `4096x4096` holds
@@ -200,8 +197,8 @@ the [Hub dataset card](https://huggingface.co/datasets/thalesgroup/passage/blob/
 | `image_<solver>` | image | Rendered preview, `_samples` configurations only |
 
 `<solver>` is `astar_elevation`, `astar_energy` or `astar_slope` (the
-`slope_uphill` objective). A route is empty when its status in
-`metadata.paths.<solver>.<free|obstacles>.status` is `infeasible`.
+`slope_uphill` objective). Every route joins start to goal, and its status in
+`metadata.paths.<solver>.<free|obstacles>.status` is `ok`.
 
 ---
 
@@ -238,26 +235,15 @@ surfaces. The graph assumes 30 m cells; the actual ground spacing varies with
 latitude. Calibration bounds and objective weights are
 stored as float64 in the metadata.
 
-Successful `ok` paths are legal and exact under the frozen graph
-specification. `infeasible` means the reference solve proved that no path
-exists; the route is empty and the cost is null. Each resolution also has a
-supervision roster, the list of its successful route variants, so
-infeasible tasks never become zero-cost training examples. Tied optima may have different geometry.
+Every released variant has the status `ok`: its path is legal and exact
+under the frozen graph specification. The generator rejects start and goal
+cells that the obstacles disconnect, so every variant has a route. Each
+resolution also has a supervision roster, the list of its route variants.
+Tied optima may have different geometry.
 
-*Table 4. Label outcomes per resolution, from the release receipts.*
-
-| Resolution | Route variants | Exact routes | Proved no-path | No-path share |
-| --- | ---: | ---: | ---: | ---: |
-| 64×64 | 6,000,000 | 5,987,736 | 12,264 | 0.204 % |
-| 128×128 | 6,000,000 | 5,989,788 | 10,212 | 0.170 % |
-| 256×256 | 6,000,000 | 5,991,657 | 8,343 | 0.139 % |
-| 512×512 | 6,000,000 | 5,992,002 | 7,998 | 0.133 % |
-| 1024×1024 | 1,500,000 | 1,498,014 | 1,986 | 0.132 % |
-| 2048×2048 | 600,000 | 599,250 | 750 | 0.125 % |
-| 4096×4096 | 300,000 | 299,592 | 408 | 0.136 % |
-| **All** | 26,400,000 | 26,358,039 | 41,961 | 0.159 % |
-
-No variant is left unresolved at any resolution.
+The release receipts record six exact routes per scene at every resolution:
+6,000,000 at each resolution from 64×64 to 512×512, 1,500,000 at
+1024×1024, 600,000 at 2048×2048 and 300,000 at 4096×4096.
 
 > **🧭 See it on one task.** [`notebooks/costmodel.ipynb`](https://huggingface.co/datasets/thalesgroup/passage/blob/main/notebooks/costmodel.ipynb)
 > and [`notebooks/paper/cost_model_path_divergence.ipynb`](https://huggingface.co/datasets/thalesgroup/passage/blob/main/notebooks/paper/cost_model_path_divergence.ipynb)
@@ -338,7 +324,7 @@ $$
 H_{95,i} = \max\left(Q_{95}\big\{d(p, P_i^{\star})\big\}_{p\in\hat{P}_i},\; Q_{95}\big\{d(q, \hat{P}_i)\big\}_{q\in P_i^{\star}}\right)
 $$
 
-*Table 5. The six primary metrics.*
+*Table 4. The six primary metrics.*
 
 | Metric | Aggregate | Better |
 | --- | --- | :-: |
@@ -404,7 +390,9 @@ are rejected, not padded.
    split)`. It draws a centre tile and a target elevation, takes the nearest
    cell as the start, places the crop around it and draws the goal uniformly
    among the other cells. Super-ellipse obstacles cover up to 30 % of the crop
-   and avoid both markers. A scene may take up to 100 attempts.
+   and avoid both markers. A crop whose obstacles disconnect start and goal is
+   rejected, and the scene draws its next candidate crop. A scene may take up
+   to 100 attempts.
 4. **Labels.** An exact float64 A\* reference solves all six variants from the
    decoded float32 tensor, with no expansion budget.
 5. **Release.** Shards are verified against the per-resolution cohort and
@@ -414,7 +402,7 @@ are rejected, not padded.
 
 Normalisation `nearest-angular-center-v1`, tie policy
 `float64-priority-then-row-major-node-strict-improvement-v1` and endpoint
-policy `one-distinct-pair-per-accepted-crop-no-feasibility-selection` are
+policy `one-distinct-pair-per-accepted-crop-disconnected-endpoints-rejected` are
 recorded in [publication-facts.json](https://huggingface.co/datasets/thalesgroup/passage/blob/main/release-receipts/publication-facts.json).
 
 > **🧾 Where the claims come from.** The scientific claims of this card derive
@@ -427,10 +415,9 @@ recorded in [publication-facts.json](https://huggingface.co/datasets/thalesgroup
 > calibration files, producer source archive, executed notebooks and one
 > Parquet scene receipt; [privacy-redactions.json](https://huggingface.co/datasets/thalesgroup/passage/blob/main/release-receipts/privacy-redactions.json)
 > lists every changed file with its original and published SHA-256. The
-> receipts bind the files of the verified upload commit `65f1e4f`. Since then,
-> this card has been updated and the notebooks have been reworked and executed
-> again (see [Notebooks](#notebooks)); the data and the receipts have not
-> changed. You do not need the receipts to use the data.
+> receipts bind the data files of commit `2ab44d8`; this card and the executed
+> notebooks (see [Notebooks](#notebooks)) were published in the next commit. You
+> do not need the receipts to use the data.
 
 The images in `assets/` are illustrations; for the released data, inspect the
 `_samples` configurations and the executed `display.ipynb` notebooks listed in
@@ -451,7 +438,7 @@ parameters and the hashes of its outputs.
 [`notebook-export-manifest.json`](https://huggingface.co/datasets/thalesgroup/passage/blob/main/notebook-export-manifest.json) describes
 the notebooks as first published with the release.
 
-*Table 6. Executed reports per resolution.*
+*Table 5. Executed reports per resolution.*
 
 | Report | 64 | 128 | 256 | 512 | 1024 | 2048 | 4096 |
 | --- | :-: | :-: | :-: | :-: | :-: | :-: | :-: |
@@ -460,7 +447,7 @@ the notebooks as first published with the release.
 | How far obstacles and objectives move the optimal route (`metrics`) | [open](https://huggingface.co/datasets/thalesgroup/passage/blob/main/64x64/metrics.ipynb) | [open](https://huggingface.co/datasets/thalesgroup/passage/blob/main/128x128/metrics.ipynb) | [open](https://huggingface.co/datasets/thalesgroup/passage/blob/main/256x256/metrics.ipynb) | [open](https://huggingface.co/datasets/thalesgroup/passage/blob/main/512x512/metrics.ipynb) | [open](https://huggingface.co/datasets/thalesgroup/passage/blob/main/1024x1024/metrics.ipynb) | [open](https://huggingface.co/datasets/thalesgroup/passage/blob/main/2048x2048/metrics.ipynb) | [open](https://huggingface.co/datasets/thalesgroup/passage/blob/main/4096x4096/metrics.ipynb) |
 | Three classical planners scored with `passage-eval` (`passage_eval_metrics`) | [open](https://huggingface.co/datasets/thalesgroup/passage/blob/main/64x64/passage_eval_metrics.ipynb) | [open](https://huggingface.co/datasets/thalesgroup/passage/blob/main/128x128/passage_eval_metrics.ipynb) | [open](https://huggingface.co/datasets/thalesgroup/passage/blob/main/256x256/passage_eval_metrics.ipynb) | [open](https://huggingface.co/datasets/thalesgroup/passage/blob/main/512x512/passage_eval_metrics.ipynb) | [open](https://huggingface.co/datasets/thalesgroup/passage/blob/main/1024x1024/passage_eval_metrics.ipynb) | [open](https://huggingface.co/datasets/thalesgroup/passage/blob/main/2048x2048/passage_eval_metrics.ipynb) | [open](https://huggingface.co/datasets/thalesgroup/passage/blob/main/4096x4096/passage_eval_metrics.ipynb) |
 
-*Table 7. Topic notebooks.*
+*Table 6. Topic notebooks.*
 
 | Notebook | What it shows |
 | --- | --- |

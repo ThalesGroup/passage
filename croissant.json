@@ -54,7 +54,7 @@
   "@id": "https://huggingface.co/datasets/thalesgroup/passage",
   "name": "PASSAGE",
   "alternateName": "PASSAGE v1.0",
-  "description": "PASSAGE v1.0 contains 4,400,000 core scenes and 26,400,000 objective/obstacle variants; 1,792 separate preview rows do not add independent training observations. Terrain and labels use persisted float32 inputs decoded before authoritative float64 graph solves. Missing/nodata source crops are rejected. The qualified outcomes include 26,358,039 successful exact routes and 41,961 independently proved no-path variants. No learned model has been trained or evaluated on PASSAGE v1.0.",
+  "description": "PASSAGE v1.0 contains 4,400,000 core scenes and 26,400,000 objective/obstacle variants; 1,792 separate preview rows do not add independent training observations. Terrain and labels use persisted float32 inputs decoded before authoritative float64 graph solves. Missing/nodata source crops are rejected. All 26,400,000 variants are exact routes; start and goal cells that the obstacles disconnect are rejected by the generator. No learned model has been trained or evaluated on PASSAGE v1.0.",
   "version": "1.0.0",
   "url": "https://huggingface.co/datasets/thalesgroup/passage",
   "sameAs": "https://github.com/ThalesGroup/passage",
@@ -4414,7 +4414,7 @@
           },
           "isArray": true,
           "arrayShape": "-1,-1",
-          "description": "Ordered [row, col] grid cells of the reference route for objective astar_elevation without obstacles (free terrain), start to goal. Empty when the terminal status in metadata.paths.astar_elevation.free.status is \"infeasible\" (proved no path)."
+          "description": "Ordered [row, col] grid cells of the reference route for objective astar_elevation without obstacles (free terrain), start to goal. The terminal status in metadata.paths.astar_elevation.free.status is \"ok\" for every released variant."
         },
         {
           "@id": "64x64/path_astar_elevation_obstacles",
@@ -4431,7 +4431,7 @@
           },
           "isArray": true,
           "arrayShape": "-1,-1",
-          "description": "Ordered [row, col] grid cells of the reference route for objective astar_elevation with the obstacle mask treated as blocked cells, start to goal. Empty when the terminal status in metadata.paths.astar_elevation.obstacles.status is \"infeasible\" (proved no path)."
+          "description": "Ordered [row, col] grid cells of the reference route for objective astar_elevation with the obstacle mask treated as blocked cells, start to goal. The terminal status in metadata.paths.astar_elevation.obstacles.status is \"ok\" for every released variant."
         },
         {
           "@id": "64x64/path_astar_energy_free",
@@ -4448,7 +4448,7 @@
           },
           "isArray": true,
           "arrayShape": "-1,-1",
-          "description": "Ordered [row, col] grid cells of the reference route for objective astar_energy without obstacles (free terrain), start to goal. Empty when the terminal status in metadata.paths.astar_energy.free.status is \"infeasible\" (proved no path)."
+          "description": "Ordered [row, col] grid cells of the reference route for objective astar_energy without obstacles (free terrain), start to goal. The terminal status in metadata.paths.astar_energy.free.status is \"ok\" for every released variant."
         },
         {
           "@id": "64x64/path_astar_energy_obstacles",
@@ -4465,7 +4465,7 @@
           },
           "isArray": true,
           "arrayShape": "-1,-1",
-          "description": "Ordered [row, col] grid cells of the reference route for objective astar_energy with the obstacle mask treated as blocked cells, start to goal. Empty when the terminal status in metadata.paths.astar_energy.obstacles.status is \"infeasible\" (proved no path)."
+          "description": "Ordered [row, col] grid cells of the reference route for objective astar_energy with the obstacle mask treated as blocked cells, start to goal. The terminal status in metadata.paths.astar_energy.obstacles.status is \"ok\" for every released variant."
         },
         {
           "@id": "64x64/path_astar_slope_free",
@@ -4482,7 +4482,7 @@
           },
           "isArray": true,
           "arrayShape": "-1,-1",
-          "description": "Ordered [row, col] grid cells of the reference route for objective astar_slope without obstacles (free terrain), start to goal. Empty when the terminal status in metadata.paths.astar_slope.free.status is \"infeasible\" (proved no path)."
+          "description": "Ordered [row, col] grid cells of the reference route for objective astar_slope without obstacles (free terrain), start to goal. The terminal status in metadata.paths.astar_slope.free.status is \"ok\" for every released variant."
         },
         {
           "@id": "64x64/path_astar_slope_obstacles",
@@ -4499,7 +4499,7 @@
           },
           "isArray": true,
           "arrayShape": "-1,-1",
-          "description": "Ordered [row, col] grid cells of the reference route for objective astar_slope with the obstacle mask treated as blocked cells, start to goal. Empty when the terminal status in metadata.paths.astar_slope.obstacles.status is \"infeasible\" (proved no path)."
+          "description": "Ordered [row, col] grid cells of the reference route for objective astar_slope with the obstacle mask treated as blocked cells, start to goal. The terminal status in metadata.paths.astar_slope.obstacles.status is \"ok\" for every released variant."
         }
       ],
       "description": "Core scenes at 64x64: one row per scene with six reference route variants."
@@ -8665,7 +8665,7 @@
           },
           "isArray": true,
           "arrayShape": "-1,-1",
-          "description": "Ordered [row, col] grid cells of the reference route for objective astar_elevation without obstacles (free terrain), start to goal. Empty when the terminal status in metadata.paths.astar_elevation.free.status is \"infeasible\" (proved no path)."
+          "description": "Ordered [row, col] grid cells of the reference route for objective astar_elevation without obstacles (free terrain), start to goal. The terminal status in metadata.paths.astar_elevation.free.status is \"ok\" for every released variant."
         },
         {
           "@id": "64x64_samples/path_astar_elevation_obstacles",
@@ -8682,7 +8682,7 @@
           },
           "isArray": true,
           "arrayShape": "-1,-1",
-          "description": "Ordered [row, col] grid cells of the reference route for objective astar_elevation with the obstacle mask treated as blocked cells, start to goal. Empty when the terminal status in metadata.paths.astar_elevation.obstacles.status is \"infeasible\" (proved no path)."
+          "description": "Ordered [row, col] grid cells of the reference route for objective astar_elevation with the obstacle mask treated as blocked cells, start to goal. The terminal status in metadata.paths.astar_elevation.obstacles.status is \"ok\" for every released variant."
         },
         {
           "@id": "64x64_samples/image_astar_energy",
@@ -8717,7 +8717,7 @@
           },
           "isArray": true,
           "arrayShape": "-1,-1",
-          "description": "Ordered [row, col] grid cells of the reference route for objective astar_energy without obstacles (free terrain), start to goal. Empty when the terminal status in metadata.paths.astar_energy.free.status is \"infeasible\" (proved no path)."
+          "description": "Ordered [row, col] grid cells of the reference route for objective astar_energy without obstacles (free terrain), start to goal. The terminal status in metadata.paths.astar_energy.free.status is \"ok\" for every released variant."
         },
         {
           "@id": "64x64_samples/path_astar_energy_obstacles",
@@ -8734,7 +8734,7 @@
           },
           "isArray": true,
           "arrayShape": "-1,-1",
-          "description": "Ordered [row, col] grid cells of the reference route for objective astar_energy with the obstacle mask treated as blocked cells, start to goal. Empty when the terminal status in metadata.paths.astar_energy.obstacles.status is \"infeasible\" (proved no path)."
+          "description": "Ordered [row, col] grid cells of the reference route for objective astar_energy with the obstacle mask treated as blocked cells, start to goal. The terminal status in metadata.paths.astar_energy.obstacles.status is \"ok\" for every released variant."
         },
         {
           "@id": "64x64_samples/image_astar_slope",
@@ -8769,7 +8769,7 @@
           },
           "isArray": true,
           "arrayShape": "-1,-1",
-          "description": "Ordered [row, col] grid cells of the reference route for objective astar_slope without obstacles (free terrain), start to goal. Empty when the terminal status in metadata.paths.astar_slope.free.status is \"infeasible\" (proved no path)."
+          "description": "Ordered [row, col] grid cells of the reference route for objective astar_slope without obstacles (free terrain), start to goal. The terminal status in metadata.paths.astar_slope.free.status is \"ok\" for every released variant."
         },
         {
           "@id": "64x64_samples/path_astar_slope_obstacles",
@@ -8786,7 +8786,7 @@
           },
           "isArray": true,
           "arrayShape": "-1,-1",
-          "description": "Ordered [row, col] grid cells of the reference route for objective astar_slope with the obstacle mask treated as blocked cells, start to goal. Empty when the terminal status in metadata.paths.astar_slope.obstacles.status is \"infeasible\" (proved no path)."
+          "description": "Ordered [row, col] grid cells of the reference route for objective astar_slope with the obstacle mask treated as blocked cells, start to goal. The terminal status in metadata.paths.astar_slope.obstacles.status is \"ok\" for every released variant."
         }
       ],
       "description": "Preview rows (64x64), 64 per split, with rendered images. Inspection examples that duplicate admitted scenes; do not add them to training populations."
@@ -12934,7 +12934,7 @@
           },
           "isArray": true,
           "arrayShape": "-1,-1",
-          "description": "Ordered [row, col] grid cells of the reference route for objective astar_elevation without obstacles (free terrain), start to goal. Empty when the terminal status in metadata.paths.astar_elevation.free.status is \"infeasible\" (proved no path)."
+          "description": "Ordered [row, col] grid cells of the reference route for objective astar_elevation without obstacles (free terrain), start to goal. The terminal status in metadata.paths.astar_elevation.free.status is \"ok\" for every released variant."
         },
         {
           "@id": "128x128/path_astar_elevation_obstacles",
@@ -12951,7 +12951,7 @@
           },
           "isArray": true,
           "arrayShape": "-1,-1",
-          "description": "Ordered [row, col] grid cells of the reference route for objective astar_elevation with the obstacle mask treated as blocked cells, start to goal. Empty when the terminal status in metadata.paths.astar_elevation.obstacles.status is \"infeasible\" (proved no path)."
+          "description": "Ordered [row, col] grid cells of the reference route for objective astar_elevation with the obstacle mask treated as blocked cells, start to goal. The terminal status in metadata.paths.astar_elevation.obstacles.status is \"ok\" for every released variant."
         },
         {
           "@id": "128x128/path_astar_energy_free",
@@ -12968,7 +12968,7 @@
           },
           "isArray": true,
           "arrayShape": "-1,-1",
-          "description": "Ordered [row, col] grid cells of the reference route for objective astar_energy without obstacles (free terrain), start to goal. Empty when the terminal status in metadata.paths.astar_energy.free.status is \"infeasible\" (proved no path)."
+          "description": "Ordered [row, col] grid cells of the reference route for objective astar_energy without obstacles (free terrain), start to goal. The terminal status in metadata.paths.astar_energy.free.status is \"ok\" for every released variant."
         },
         {
           "@id": "128x128/path_astar_energy_obstacles",
@@ -12985,7 +12985,7 @@
           },
           "isArray": true,
           "arrayShape": "-1,-1",
-          "description": "Ordered [row, col] grid cells of the reference route for objective astar_energy with the obstacle mask treated as blocked cells, start to goal. Empty when the terminal status in metadata.paths.astar_energy.obstacles.status is \"infeasible\" (proved no path)."
+          "description": "Ordered [row, col] grid cells of the reference route for objective astar_energy with the obstacle mask treated as blocked cells, start to goal. The terminal status in metadata.paths.astar_energy.obstacles.status is \"ok\" for every released variant."
         },
         {
           "@id": "128x128/path_astar_slope_free",
@@ -13002,7 +13002,7 @@
           },
           "isArray": true,
           "arrayShape": "-1,-1",
-          "description": "Ordered [row, col] grid cells of the reference route for objective astar_slope without obstacles (free terrain), start to goal. Empty when the terminal status in metadata.paths.astar_slope.free.status is \"infeasible\" (proved no path)."
+          "description": "Ordered [row, col] grid cells of the reference route for objective astar_slope without obstacles (free terrain), start to goal. The terminal status in metadata.paths.astar_slope.free.status is \"ok\" for every released variant."
         },
         {
           "@id": "128x128/path_astar_slope_obstacles",
@@ -13019,7 +13019,7 @@
           },
           "isArray": true,
           "arrayShape": "-1,-1",
-          "description": "Ordered [row, col] grid cells of the reference route for objective astar_slope with the obstacle mask treated as blocked cells, start to goal. Empty when the terminal status in metadata.paths.astar_slope.obstacles.status is \"infeasible\" (proved no path)."
+          "description": "Ordered [row, col] grid cells of the reference route for objective astar_slope with the obstacle mask treated as blocked cells, start to goal. The terminal status in metadata.paths.astar_slope.obstacles.status is \"ok\" for every released variant."
         }
       ],
       "description": "Core scenes at 128x128: one row per scene with six reference route variants."
@@ -17185,7 +17185,7 @@
           },
           "isArray": true,
           "arrayShape": "-1,-1",
-          "description": "Ordered [row, col] grid cells of the reference route for objective astar_elevation without obstacles (free terrain), start to goal. Empty when the terminal status in metadata.paths.astar_elevation.free.status is \"infeasible\" (proved no path)."
+          "description": "Ordered [row, col] grid cells of the reference route for objective astar_elevation without obstacles (free terrain), start to goal. The terminal status in metadata.paths.astar_elevation.free.status is \"ok\" for every released variant."
         },
         {
           "@id": "128x128_samples/path_astar_elevation_obstacles",
@@ -17202,7 +17202,7 @@
           },
           "isArray": true,
           "arrayShape": "-1,-1",
-          "description": "Ordered [row, col] grid cells of the reference route for objective astar_elevation with the obstacle mask treated as blocked cells, start to goal. Empty when the terminal status in metadata.paths.astar_elevation.obstacles.status is \"infeasible\" (proved no path)."
+          "description": "Ordered [row, col] grid cells of the reference route for objective astar_elevation with the obstacle mask treated as blocked cells, start to goal. The terminal status in metadata.paths.astar_elevation.obstacles.status is \"ok\" for every released variant."
         },
         {
           "@id": "128x128_samples/image_astar_energy",
@@ -17237,7 +17237,7 @@
           },
           "isArray": true,
           "arrayShape": "-1,-1",
-          "description": "Ordered [row, col] grid cells of the reference route for objective astar_energy without obstacles (free terrain), start to goal. Empty when the terminal status in metadata.paths.astar_energy.free.status is \"infeasible\" (proved no path)."
+          "description": "Ordered [row, col] grid cells of the reference route for objective astar_energy without obstacles (free terrain), start to goal. The terminal status in metadata.paths.astar_energy.free.status is \"ok\" for every released variant."
         },
         {
           "@id": "128x128_samples/path_astar_energy_obstacles",
@@ -17254,7 +17254,7 @@
           },
           "isArray": true,
           "arrayShape": "-1,-1",
-          "description": "Ordered [row, col] grid cells of the reference route for objective astar_energy with the obstacle mask treated as blocked cells, start to goal. Empty when the terminal status in metadata.paths.astar_energy.obstacles.status is \"infeasible\" (proved no path)."
+          "description": "Ordered [row, col] grid cells of the reference route for objective astar_energy with the obstacle mask treated as blocked cells, start to goal. The terminal status in metadata.paths.astar_energy.obstacles.status is \"ok\" for every released variant."
         },
         {
           "@id": "128x128_samples/image_astar_slope",
@@ -17289,7 +17289,7 @@
           },
           "isArray": true,
           "arrayShape": "-1,-1",
-          "description": "Ordered [row, col] grid cells of the reference route for objective astar_slope without obstacles (free terrain), start to goal. Empty when the terminal status in metadata.paths.astar_slope.free.status is \"infeasible\" (proved no path)."
+          "description": "Ordered [row, col] grid cells of the reference route for objective astar_slope without obstacles (free terrain), start to goal. The terminal status in metadata.paths.astar_slope.free.status is \"ok\" for every released variant."
         },
         {
           "@id": "128x128_samples/path_astar_slope_obstacles",
@@ -17306,7 +17306,7 @@
           },
           "isArray": true,
           "arrayShape": "-1,-1",
-          "description": "Ordered [row, col] grid cells of the reference route for objective astar_slope with the obstacle mask treated as blocked cells, start to goal. Empty when the terminal status in metadata.paths.astar_slope.obstacles.status is \"infeasible\" (proved no path)."
+          "description": "Ordered [row, col] grid cells of the reference route for objective astar_slope with the obstacle mask treated as blocked cells, start to goal. The terminal status in metadata.paths.astar_slope.obstacles.status is \"ok\" for every released variant."
         }
       ],
       "description": "Preview rows (128x128), 64 per split, with rendered images. Inspection examples that duplicate admitted scenes; do not add them to training populations."
@@ -21454,7 +21454,7 @@
           },
           "isArray": true,
           "arrayShape": "-1,-1",
-          "description": "Ordered [row, col] grid cells of the reference route for objective astar_elevation without obstacles (free terrain), start to goal. Empty when the terminal status in metadata.paths.astar_elevation.free.status is \"infeasible\" (proved no path)."
+          "description": "Ordered [row, col] grid cells of the reference route for objective astar_elevation without obstacles (free terrain), start to goal. The terminal status in metadata.paths.astar_elevation.free.status is \"ok\" for every released variant."
         },
         {
           "@id": "256x256/path_astar_elevation_obstacles",
@@ -21471,7 +21471,7 @@
           },
           "isArray": true,
           "arrayShape": "-1,-1",
-          "description": "Ordered [row, col] grid cells of the reference route for objective astar_elevation with the obstacle mask treated as blocked cells, start to goal. Empty when the terminal status in metadata.paths.astar_elevation.obstacles.status is \"infeasible\" (proved no path)."
+          "description": "Ordered [row, col] grid cells of the reference route for objective astar_elevation with the obstacle mask treated as blocked cells, start to goal. The terminal status in metadata.paths.astar_elevation.obstacles.status is \"ok\" for every released variant."
         },
         {
           "@id": "256x256/path_astar_energy_free",
@@ -21488,7 +21488,7 @@
           },
           "isArray": true,
           "arrayShape": "-1,-1",
-          "description": "Ordered [row, col] grid cells of the reference route for objective astar_energy without obstacles (free terrain), start to goal. Empty when the terminal status in metadata.paths.astar_energy.free.status is \"infeasible\" (proved no path)."
+          "description": "Ordered [row, col] grid cells of the reference route for objective astar_energy without obstacles (free terrain), start to goal. The terminal status in metadata.paths.astar_energy.free.status is \"ok\" for every released variant."
         },
         {
           "@id": "256x256/path_astar_energy_obstacles",
@@ -21505,7 +21505,7 @@
           },
           "isArray": true,
           "arrayShape": "-1,-1",
-          "description": "Ordered [row, col] grid cells of the reference route for objective astar_energy with the obstacle mask treated as blocked cells, start to goal. Empty when the terminal status in metadata.paths.astar_energy.obstacles.status is \"infeasible\" (proved no path)."
+          "description": "Ordered [row, col] grid cells of the reference route for objective astar_energy with the obstacle mask treated as blocked cells, start to goal. The terminal status in metadata.paths.astar_energy.obstacles.status is \"ok\" for every released variant."
         },
         {
           "@id": "256x256/path_astar_slope_free",
@@ -21522,7 +21522,7 @@
           },
           "isArray": true,
           "arrayShape": "-1,-1",
-          "description": "Ordered [row, col] grid cells of the reference route for objective astar_slope without obstacles (free terrain), start to goal. Empty when the terminal status in metadata.paths.astar_slope.free.status is \"infeasible\" (proved no path)."
+          "description": "Ordered [row, col] grid cells of the reference route for objective astar_slope without obstacles (free terrain), start to goal. The terminal status in metadata.paths.astar_slope.free.status is \"ok\" for every released variant."
         },
         {
           "@id": "256x256/path_astar_slope_obstacles",
@@ -21539,7 +21539,7 @@
           },
           "isArray": true,
           "arrayShape": "-1,-1",
-          "description": "Ordered [row, col] grid cells of the reference route for objective astar_slope with the obstacle mask treated as blocked cells, start to goal. Empty when the terminal status in metadata.paths.astar_slope.obstacles.status is \"infeasible\" (proved no path)."
+          "description": "Ordered [row, col] grid cells of the reference route for objective astar_slope with the obstacle mask treated as blocked cells, start to goal. The terminal status in metadata.paths.astar_slope.obstacles.status is \"ok\" for every released variant."
         }
       ],
       "description": "Core scenes at 256x256: one row per scene with six reference route variants."
@@ -25705,7 +25705,7 @@
           },
           "isArray": true,
           "arrayShape": "-1,-1",
-          "description": "Ordered [row, col] grid cells of the reference route for objective astar_elevation without obstacles (free terrain), start to goal. Empty when the terminal status in metadata.paths.astar_elevation.free.status is \"infeasible\" (proved no path)."
+          "description": "Ordered [row, col] grid cells of the reference route for objective astar_elevation without obstacles (free terrain), start to goal. The terminal status in metadata.paths.astar_elevation.free.status is \"ok\" for every released variant."
         },
         {
           "@id": "256x256_samples/path_astar_elevation_obstacles",
@@ -25722,7 +25722,7 @@
           },
           "isArray": true,
           "arrayShape": "-1,-1",
-          "description": "Ordered [row, col] grid cells of the reference route for objective astar_elevation with the obstacle mask treated as blocked cells, start to goal. Empty when the terminal status in metadata.paths.astar_elevation.obstacles.status is \"infeasible\" (proved no path)."
+          "description": "Ordered [row, col] grid cells of the reference route for objective astar_elevation with the obstacle mask treated as blocked cells, start to goal. The terminal status in metadata.paths.astar_elevation.obstacles.status is \"ok\" for every released variant."
         },
         {
           "@id": "256x256_samples/image_astar_energy",
@@ -25757,7 +25757,7 @@
           },
           "isArray": true,
           "arrayShape": "-1,-1",
-          "description": "Ordered [row, col] grid cells of the reference route for objective astar_energy without obstacles (free terrain), start to goal. Empty when the terminal status in metadata.paths.astar_energy.free.status is \"infeasible\" (proved no path)."
+          "description": "Ordered [row, col] grid cells of the reference route for objective astar_energy without obstacles (free terrain), start to goal. The terminal status in metadata.paths.astar_energy.free.status is \"ok\" for every released variant."
         },
         {
           "@id": "256x256_samples/path_astar_energy_obstacles",
@@ -25774,7 +25774,7 @@
           },
           "isArray": true,
           "arrayShape": "-1,-1",
-          "description": "Ordered [row, col] grid cells of the reference route for objective astar_energy with the obstacle mask treated as blocked cells, start to goal. Empty when the terminal status in metadata.paths.astar_energy.obstacles.status is \"infeasible\" (proved no path)."
+          "description": "Ordered [row, col] grid cells of the reference route for objective astar_energy with the obstacle mask treated as blocked cells, start to goal. The terminal status in metadata.paths.astar_energy.obstacles.status is \"ok\" for every released variant."
         },
         {
           "@id": "256x256_samples/image_astar_slope",
@@ -25809,7 +25809,7 @@
           },
           "isArray": true,
           "arrayShape": "-1,-1",
-          "description": "Ordered [row, col] grid cells of the reference route for objective astar_slope without obstacles (free terrain), start to goal. Empty when the terminal status in metadata.paths.astar_slope.free.status is \"infeasible\" (proved no path)."
+          "description": "Ordered [row, col] grid cells of the reference route for objective astar_slope without obstacles (free terrain), start to goal. The terminal status in metadata.paths.astar_slope.free.status is \"ok\" for every released variant."
         },
         {
           "@id": "256x256_samples/path_astar_slope_obstacles",
@@ -25826,7 +25826,7 @@
           },
           "isArray": true,
           "arrayShape": "-1,-1",
-          "description": "Ordered [row, col] grid cells of the reference route for objective astar_slope with the obstacle mask treated as blocked cells, start to goal. Empty when the terminal status in metadata.paths.astar_slope.obstacles.status is \"infeasible\" (proved no path)."
+          "description": "Ordered [row, col] grid cells of the reference route for objective astar_slope with the obstacle mask treated as blocked cells, start to goal. The terminal status in metadata.paths.astar_slope.obstacles.status is \"ok\" for every released variant."
         }
       ],
       "description": "Preview rows (256x256), 64 per split, with rendered images. Inspection examples that duplicate admitted scenes; do not add them to training populations."
@@ -29974,7 +29974,7 @@
           },
           "isArray": true,
           "arrayShape": "-1,-1",
-          "description": "Ordered [row, col] grid cells of the reference route for objective astar_elevation without obstacles (free terrain), start to goal. Empty when the terminal status in metadata.paths.astar_elevation.free.status is \"infeasible\" (proved no path)."
+          "description": "Ordered [row, col] grid cells of the reference route for objective astar_elevation without obstacles (free terrain), start to goal. The terminal status in metadata.paths.astar_elevation.free.status is \"ok\" for every released variant."
         },
         {
           "@id": "512x512/path_astar_elevation_obstacles",
@@ -29991,7 +29991,7 @@
           },
           "isArray": true,
           "arrayShape": "-1,-1",
-          "description": "Ordered [row, col] grid cells of the reference route for objective astar_elevation with the obstacle mask treated as blocked cells, start to goal. Empty when the terminal status in metadata.paths.astar_elevation.obstacles.status is \"infeasible\" (proved no path)."
+          "description": "Ordered [row, col] grid cells of the reference route for objective astar_elevation with the obstacle mask treated as blocked cells, start to goal. The terminal status in metadata.paths.astar_elevation.obstacles.status is \"ok\" for every released variant."
         },
         {
           "@id": "512x512/path_astar_energy_free",
@@ -30008,7 +30008,7 @@
           },
           "isArray": true,
           "arrayShape": "-1,-1",
-          "description": "Ordered [row, col] grid cells of the reference route for objective astar_energy without obstacles (free terrain), start to goal. Empty when the terminal status in metadata.paths.astar_energy.free.status is \"infeasible\" (proved no path)."
+          "description": "Ordered [row, col] grid cells of the reference route for objective astar_energy without obstacles (free terrain), start to goal. The terminal status in metadata.paths.astar_energy.free.status is \"ok\" for every released variant."
         },
         {
           "@id": "512x512/path_astar_energy_obstacles",
@@ -30025,7 +30025,7 @@
           },
           "isArray": true,
           "arrayShape": "-1,-1",
-          "description": "Ordered [row, col] grid cells of the reference route for objective astar_energy with the obstacle mask treated as blocked cells, start to goal. Empty when the terminal status in metadata.paths.astar_energy.obstacles.status is \"infeasible\" (proved no path)."
+          "description": "Ordered [row, col] grid cells of the reference route for objective astar_energy with the obstacle mask treated as blocked cells, start to goal. The terminal status in metadata.paths.astar_energy.obstacles.status is \"ok\" for every released variant."
         },
         {
           "@id": "512x512/path_astar_slope_free",
@@ -30042,7 +30042,7 @@
           },
           "isArray": true,
           "arrayShape": "-1,-1",
-          "description": "Ordered [row, col] grid cells of the reference route for objective astar_slope without obstacles (free terrain), start to goal. Empty when the terminal status in metadata.paths.astar_slope.free.status is \"infeasible\" (proved no path)."
+          "description": "Ordered [row, col] grid cells of the reference route for objective astar_slope without obstacles (free terrain), start to goal. The terminal status in metadata.paths.astar_slope.free.status is \"ok\" for every released variant."
         },
         {
           "@id": "512x512/path_astar_slope_obstacles",
@@ -30059,7 +30059,7 @@
           },
           "isArray": true,
           "arrayShape": "-1,-1",
-          "description": "Ordered [row, col] grid cells of the reference route for objective astar_slope with the obstacle mask treated as blocked cells, start to goal. Empty when the terminal status in metadata.paths.astar_slope.obstacles.status is \"infeasible\" (proved no path)."
+          "description": "Ordered [row, col] grid cells of the reference route for objective astar_slope with the obstacle mask treated as blocked cells, start to goal. The terminal status in metadata.paths.astar_slope.obstacles.status is \"ok\" for every released variant."
         }
       ],
       "description": "Core scenes at 512x512: one row per scene with six reference route variants."
@@ -34225,7 +34225,7 @@
           },
           "isArray": true,
           "arrayShape": "-1,-1",
-          "description": "Ordered [row, col] grid cells of the reference route for objective astar_elevation without obstacles (free terrain), start to goal. Empty when the terminal status in metadata.paths.astar_elevation.free.status is \"infeasible\" (proved no path)."
+          "description": "Ordered [row, col] grid cells of the reference route for objective astar_elevation without obstacles (free terrain), start to goal. The terminal status in metadata.paths.astar_elevation.free.status is \"ok\" for every released variant."
         },
         {
           "@id": "512x512_samples/path_astar_elevation_obstacles",
@@ -34242,7 +34242,7 @@
           },
           "isArray": true,
           "arrayShape": "-1,-1",
-          "description": "Ordered [row, col] grid cells of the reference route for objective astar_elevation with the obstacle mask treated as blocked cells, start to goal. Empty when the terminal status in metadata.paths.astar_elevation.obstacles.status is \"infeasible\" (proved no path)."
+          "description": "Ordered [row, col] grid cells of the reference route for objective astar_elevation with the obstacle mask treated as blocked cells, start to goal. The terminal status in metadata.paths.astar_elevation.obstacles.status is \"ok\" for every released variant."
         },
         {
           "@id": "512x512_samples/image_astar_energy",
@@ -34277,7 +34277,7 @@
           },
           "isArray": true,
           "arrayShape": "-1,-1",
-          "description": "Ordered [row, col] grid cells of the reference route for objective astar_energy without obstacles (free terrain), start to goal. Empty when the terminal status in metadata.paths.astar_energy.free.status is \"infeasible\" (proved no path)."
+          "description": "Ordered [row, col] grid cells of the reference route for objective astar_energy without obstacles (free terrain), start to goal. The terminal status in metadata.paths.astar_energy.free.status is \"ok\" for every released variant."
         },
         {
           "@id": "512x512_samples/path_astar_energy_obstacles",
@@ -34294,7 +34294,7 @@
           },
           "isArray": true,
           "arrayShape": "-1,-1",
-          "description": "Ordered [row, col] grid cells of the reference route for objective astar_energy with the obstacle mask treated as blocked cells, start to goal. Empty when the terminal status in metadata.paths.astar_energy.obstacles.status is \"infeasible\" (proved no path)."
+          "description": "Ordered [row, col] grid cells of the reference route for objective astar_energy with the obstacle mask treated as blocked cells, start to goal. The terminal status in metadata.paths.astar_energy.obstacles.status is \"ok\" for every released variant."
         },
         {
           "@id": "512x512_samples/image_astar_slope",
@@ -34329,7 +34329,7 @@
           },
           "isArray": true,
           "arrayShape": "-1,-1",
-          "description": "Ordered [row, col] grid cells of the reference route for objective astar_slope without obstacles (free terrain), start to goal. Empty when the terminal status in metadata.paths.astar_slope.free.status is \"infeasible\" (proved no path)."
+          "description": "Ordered [row, col] grid cells of the reference route for objective astar_slope without obstacles (free terrain), start to goal. The terminal status in metadata.paths.astar_slope.free.status is \"ok\" for every released variant."
         },
         {
           "@id": "512x512_samples/path_astar_slope_obstacles",
@@ -34346,7 +34346,7 @@
           },
           "isArray": true,
           "arrayShape": "-1,-1",
-          "description": "Ordered [row, col] grid cells of the reference route for objective astar_slope with the obstacle mask treated as blocked cells, start to goal. Empty when the terminal status in metadata.paths.astar_slope.obstacles.status is \"infeasible\" (proved no path)."
+          "description": "Ordered [row, col] grid cells of the reference route for objective astar_slope with the obstacle mask treated as blocked cells, start to goal. The terminal status in metadata.paths.astar_slope.obstacles.status is \"ok\" for every released variant."
         }
       ],
       "description": "Preview rows (512x512), 64 per split, with rendered images. Inspection examples that duplicate admitted scenes; do not add them to training populations."
@@ -38494,7 +38494,7 @@
           },
           "isArray": true,
           "arrayShape": "-1,-1",
-          "description": "Ordered [row, col] grid cells of the reference route for objective astar_elevation without obstacles (free terrain), start to goal. Empty when the terminal status in metadata.paths.astar_elevation.free.status is \"infeasible\" (proved no path)."
+          "description": "Ordered [row, col] grid cells of the reference route for objective astar_elevation without obstacles (free terrain), start to goal. The terminal status in metadata.paths.astar_elevation.free.status is \"ok\" for every released variant."
         },
         {
           "@id": "1024x1024/path_astar_elevation_obstacles",
@@ -38511,7 +38511,7 @@
           },
           "isArray": true,
           "arrayShape": "-1,-1",
-          "description": "Ordered [row, col] grid cells of the reference route for objective astar_elevation with the obstacle mask treated as blocked cells, start to goal. Empty when the terminal status in metadata.paths.astar_elevation.obstacles.status is \"infeasible\" (proved no path)."
+          "description": "Ordered [row, col] grid cells of the reference route for objective astar_elevation with the obstacle mask treated as blocked cells, start to goal. The terminal status in metadata.paths.astar_elevation.obstacles.status is \"ok\" for every released variant."
         },
         {
           "@id": "1024x1024/path_astar_energy_free",
@@ -38528,7 +38528,7 @@
           },
           "isArray": true,
           "arrayShape": "-1,-1",
-          "description": "Ordered [row, col] grid cells of the reference route for objective astar_energy without obstacles (free terrain), start to goal. Empty when the terminal status in metadata.paths.astar_energy.free.status is \"infeasible\" (proved no path)."
+          "description": "Ordered [row, col] grid cells of the reference route for objective astar_energy without obstacles (free terrain), start to goal. The terminal status in metadata.paths.astar_energy.free.status is \"ok\" for every released variant."
         },
         {
           "@id": "1024x1024/path_astar_energy_obstacles",
@@ -38545,7 +38545,7 @@
           },
           "isArray": true,
           "arrayShape": "-1,-1",
-          "description": "Ordered [row, col] grid cells of the reference route for objective astar_energy with the obstacle mask treated as blocked cells, start to goal. Empty when the terminal status in metadata.paths.astar_energy.obstacles.status is \"infeasible\" (proved no path)."
+          "description": "Ordered [row, col] grid cells of the reference route for objective astar_energy with the obstacle mask treated as blocked cells, start to goal. The terminal status in metadata.paths.astar_energy.obstacles.status is \"ok\" for every released variant."
         },
         {
           "@id": "1024x1024/path_astar_slope_free",
@@ -38562,7 +38562,7 @@
           },
           "isArray": true,
           "arrayShape": "-1,-1",
-          "description": "Ordered [row, col] grid cells of the reference route for objective astar_slope without obstacles (free terrain), start to goal. Empty when the terminal status in metadata.paths.astar_slope.free.status is \"infeasible\" (proved no path)."
+          "description": "Ordered [row, col] grid cells of the reference route for objective astar_slope without obstacles (free terrain), start to goal. The terminal status in metadata.paths.astar_slope.free.status is \"ok\" for every released variant."
         },
         {
           "@id": "1024x1024/path_astar_slope_obstacles",
@@ -38579,7 +38579,7 @@
           },
           "isArray": true,
           "arrayShape": "-1,-1",
-          "description": "Ordered [row, col] grid cells of the reference route for objective astar_slope with the obstacle mask treated as blocked cells, start to goal. Empty when the terminal status in metadata.paths.astar_slope.obstacles.status is \"infeasible\" (proved no path)."
+          "description": "Ordered [row, col] grid cells of the reference route for objective astar_slope with the obstacle mask treated as blocked cells, start to goal. The terminal status in metadata.paths.astar_slope.obstacles.status is \"ok\" for every released variant."
         }
       ],
       "description": "Core scenes at 1024x1024: one row per scene with six reference route variants."
@@ -42745,7 +42745,7 @@
           },
           "isArray": true,
           "arrayShape": "-1,-1",
-          "description": "Ordered [row, col] grid cells of the reference route for objective astar_elevation without obstacles (free terrain), start to goal. Empty when the terminal status in metadata.paths.astar_elevation.free.status is \"infeasible\" (proved no path)."
+          "description": "Ordered [row, col] grid cells of the reference route for objective astar_elevation without obstacles (free terrain), start to goal. The terminal status in metadata.paths.astar_elevation.free.status is \"ok\" for every released variant."
         },
         {
           "@id": "1024x1024_samples/path_astar_elevation_obstacles",
@@ -42762,7 +42762,7 @@
           },
           "isArray": true,
           "arrayShape": "-1,-1",
-          "description": "Ordered [row, col] grid cells of the reference route for objective astar_elevation with the obstacle mask treated as blocked cells, start to goal. Empty when the terminal status in metadata.paths.astar_elevation.obstacles.status is \"infeasible\" (proved no path)."
+          "description": "Ordered [row, col] grid cells of the reference route for objective astar_elevation with the obstacle mask treated as blocked cells, start to goal. The terminal status in metadata.paths.astar_elevation.obstacles.status is \"ok\" for every released variant."
         },
         {
           "@id": "1024x1024_samples/image_astar_energy",
@@ -42797,7 +42797,7 @@
           },
           "isArray": true,
           "arrayShape": "-1,-1",
-          "description": "Ordered [row, col] grid cells of the reference route for objective astar_energy without obstacles (free terrain), start to goal. Empty when the terminal status in metadata.paths.astar_energy.free.status is \"infeasible\" (proved no path)."
+          "description": "Ordered [row, col] grid cells of the reference route for objective astar_energy without obstacles (free terrain), start to goal. The terminal status in metadata.paths.astar_energy.free.status is \"ok\" for every released variant."
         },
         {
           "@id": "1024x1024_samples/path_astar_energy_obstacles",
@@ -42814,7 +42814,7 @@
           },
           "isArray": true,
           "arrayShape": "-1,-1",
-          "description": "Ordered [row, col] grid cells of the reference route for objective astar_energy with the obstacle mask treated as blocked cells, start to goal. Empty when the terminal status in metadata.paths.astar_energy.obstacles.status is \"infeasible\" (proved no path)."
+          "description": "Ordered [row, col] grid cells of the reference route for objective astar_energy with the obstacle mask treated as blocked cells, start to goal. The terminal status in metadata.paths.astar_energy.obstacles.status is \"ok\" for every released variant."
         },
         {
           "@id": "1024x1024_samples/image_astar_slope",
@@ -42849,7 +42849,7 @@
           },
           "isArray": true,
           "arrayShape": "-1,-1",
-          "description": "Ordered [row, col] grid cells of the reference route for objective astar_slope without obstacles (free terrain), start to goal. Empty when the terminal status in metadata.paths.astar_slope.free.status is \"infeasible\" (proved no path)."
+          "description": "Ordered [row, col] grid cells of the reference route for objective astar_slope without obstacles (free terrain), start to goal. The terminal status in metadata.paths.astar_slope.free.status is \"ok\" for every released variant."
         },
         {
           "@id": "1024x1024_samples/path_astar_slope_obstacles",
@@ -42866,7 +42866,7 @@
           },
           "isArray": true,
           "arrayShape": "-1,-1",
-          "description": "Ordered [row, col] grid cells of the reference route for objective astar_slope with the obstacle mask treated as blocked cells, start to goal. Empty when the terminal status in metadata.paths.astar_slope.obstacles.status is \"infeasible\" (proved no path)."
+          "description": "Ordered [row, col] grid cells of the reference route for objective astar_slope with the obstacle mask treated as blocked cells, start to goal. The terminal status in metadata.paths.astar_slope.obstacles.status is \"ok\" for every released variant."
         }
       ],
       "description": "Preview rows (1024x1024), 64 per split, with rendered images. Inspection examples that duplicate admitted scenes; do not add them to training populations."
@@ -47014,7 +47014,7 @@
           },
           "isArray": true,
           "arrayShape": "-1,-1",
-          "description": "Ordered [row, col] grid cells of the reference route for objective astar_elevation without obstacles (free terrain), start to goal. Empty when the terminal status in metadata.paths.astar_elevation.free.status is \"infeasible\" (proved no path)."
+          "description": "Ordered [row, col] grid cells of the reference route for objective astar_elevation without obstacles (free terrain), start to goal. The terminal status in metadata.paths.astar_elevation.free.status is \"ok\" for every released variant."
         },
         {
           "@id": "2048x2048/path_astar_elevation_obstacles",
@@ -47031,7 +47031,7 @@
           },
           "isArray": true,
           "arrayShape": "-1,-1",
-          "description": "Ordered [row, col] grid cells of the reference route for objective astar_elevation with the obstacle mask treated as blocked cells, start to goal. Empty when the terminal status in metadata.paths.astar_elevation.obstacles.status is \"infeasible\" (proved no path)."
+          "description": "Ordered [row, col] grid cells of the reference route for objective astar_elevation with the obstacle mask treated as blocked cells, start to goal. The terminal status in metadata.paths.astar_elevation.obstacles.status is \"ok\" for every released variant."
         },
         {
           "@id": "2048x2048/path_astar_energy_free",
@@ -47048,7 +47048,7 @@
           },
           "isArray": true,
           "arrayShape": "-1,-1",
-          "description": "Ordered [row, col] grid cells of the reference route for objective astar_energy without obstacles (free terrain), start to goal. Empty when the terminal status in metadata.paths.astar_energy.free.status is \"infeasible\" (proved no path)."
+          "description": "Ordered [row, col] grid cells of the reference route for objective astar_energy without obstacles (free terrain), start to goal. The terminal status in metadata.paths.astar_energy.free.status is \"ok\" for every released variant."
         },
         {
           "@id": "2048x2048/path_astar_energy_obstacles",
@@ -47065,7 +47065,7 @@
           },
           "isArray": true,
           "arrayShape": "-1,-1",
-          "description": "Ordered [row, col] grid cells of the reference route for objective astar_energy with the obstacle mask treated as blocked cells, start to goal. Empty when the terminal status in metadata.paths.astar_energy.obstacles.status is \"infeasible\" (proved no path)."
+          "description": "Ordered [row, col] grid cells of the reference route for objective astar_energy with the obstacle mask treated as blocked cells, start to goal. The terminal status in metadata.paths.astar_energy.obstacles.status is \"ok\" for every released variant."
         },
         {
           "@id": "2048x2048/path_astar_slope_free",
@@ -47082,7 +47082,7 @@
           },
           "isArray": true,
           "arrayShape": "-1,-1",
-          "description": "Ordered [row, col] grid cells of the reference route for objective astar_slope without obstacles (free terrain), start to goal. Empty when the terminal status in metadata.paths.astar_slope.free.status is \"infeasible\" (proved no path)."
+          "description": "Ordered [row, col] grid cells of the reference route for objective astar_slope without obstacles (free terrain), start to goal. The terminal status in metadata.paths.astar_slope.free.status is \"ok\" for every released variant."
         },
         {
           "@id": "2048x2048/path_astar_slope_obstacles",
@@ -47099,7 +47099,7 @@
           },
           "isArray": true,
           "arrayShape": "-1,-1",
-          "description": "Ordered [row, col] grid cells of the reference route for objective astar_slope with the obstacle mask treated as blocked cells, start to goal. Empty when the terminal status in metadata.paths.astar_slope.obstacles.status is \"infeasible\" (proved no path)."
+          "description": "Ordered [row, col] grid cells of the reference route for objective astar_slope with the obstacle mask treated as blocked cells, start to goal. The terminal status in metadata.paths.astar_slope.obstacles.status is \"ok\" for every released variant."
         }
       ],
       "description": "Core scenes at 2048x2048: one row per scene with six reference route variants."
@@ -51265,7 +51265,7 @@
           },
           "isArray": true,
           "arrayShape": "-1,-1",
-          "description": "Ordered [row, col] grid cells of the reference route for objective astar_elevation without obstacles (free terrain), start to goal. Empty when the terminal status in metadata.paths.astar_elevation.free.status is \"infeasible\" (proved no path)."
+          "description": "Ordered [row, col] grid cells of the reference route for objective astar_elevation without obstacles (free terrain), start to goal. The terminal status in metadata.paths.astar_elevation.free.status is \"ok\" for every released variant."
         },
         {
           "@id": "2048x2048_samples/path_astar_elevation_obstacles",
@@ -51282,7 +51282,7 @@
           },
           "isArray": true,
           "arrayShape": "-1,-1",
-          "description": "Ordered [row, col] grid cells of the reference route for objective astar_elevation with the obstacle mask treated as blocked cells, start to goal. Empty when the terminal status in metadata.paths.astar_elevation.obstacles.status is \"infeasible\" (proved no path)."
+          "description": "Ordered [row, col] grid cells of the reference route for objective astar_elevation with the obstacle mask treated as blocked cells, start to goal. The terminal status in metadata.paths.astar_elevation.obstacles.status is \"ok\" for every released variant."
         },
         {
           "@id": "2048x2048_samples/image_astar_energy",
@@ -51317,7 +51317,7 @@
           },
           "isArray": true,
           "arrayShape": "-1,-1",
-          "description": "Ordered [row, col] grid cells of the reference route for objective astar_energy without obstacles (free terrain), start to goal. Empty when the terminal status in metadata.paths.astar_energy.free.status is \"infeasible\" (proved no path)."
+          "description": "Ordered [row, col] grid cells of the reference route for objective astar_energy without obstacles (free terrain), start to goal. The terminal status in metadata.paths.astar_energy.free.status is \"ok\" for every released variant."
         },
         {
           "@id": "2048x2048_samples/path_astar_energy_obstacles",
@@ -51334,7 +51334,7 @@
           },
           "isArray": true,
           "arrayShape": "-1,-1",
-          "description": "Ordered [row, col] grid cells of the reference route for objective astar_energy with the obstacle mask treated as blocked cells, start to goal. Empty when the terminal status in metadata.paths.astar_energy.obstacles.status is \"infeasible\" (proved no path)."
+          "description": "Ordered [row, col] grid cells of the reference route for objective astar_energy with the obstacle mask treated as blocked cells, start to goal. The terminal status in metadata.paths.astar_energy.obstacles.status is \"ok\" for every released variant."
         },
         {
           "@id": "2048x2048_samples/image_astar_slope",
@@ -51369,7 +51369,7 @@
           },
           "isArray": true,
           "arrayShape": "-1,-1",
-          "description": "Ordered [row, col] grid cells of the reference route for objective astar_slope without obstacles (free terrain), start to goal. Empty when the terminal status in metadata.paths.astar_slope.free.status is \"infeasible\" (proved no path)."
+          "description": "Ordered [row, col] grid cells of the reference route for objective astar_slope without obstacles (free terrain), start to goal. The terminal status in metadata.paths.astar_slope.free.status is \"ok\" for every released variant."
         },
         {
           "@id": "2048x2048_samples/path_astar_slope_obstacles",
@@ -51386,7 +51386,7 @@
           },
           "isArray": true,
           "arrayShape": "-1,-1",
-          "description": "Ordered [row, col] grid cells of the reference route for objective astar_slope with the obstacle mask treated as blocked cells, start to goal. Empty when the terminal status in metadata.paths.astar_slope.obstacles.status is \"infeasible\" (proved no path)."
+          "description": "Ordered [row, col] grid cells of the reference route for objective astar_slope with the obstacle mask treated as blocked cells, start to goal. The terminal status in metadata.paths.astar_slope.obstacles.status is \"ok\" for every released variant."
         }
       ],
       "description": "Preview rows (2048x2048), 64 per split, with rendered images. Inspection examples that duplicate admitted scenes; do not add them to training populations."
@@ -55534,7 +55534,7 @@
           },
           "isArray": true,
           "arrayShape": "-1,-1",
-          "description": "Ordered [row, col] grid cells of the reference route for objective astar_elevation without obstacles (free terrain), start to goal. Empty when the terminal status in metadata.paths.astar_elevation.free.status is \"infeasible\" (proved no path)."
+          "description": "Ordered [row, col] grid cells of the reference route for objective astar_elevation without obstacles (free terrain), start to goal. The terminal status in metadata.paths.astar_elevation.free.status is \"ok\" for every released variant."
         },
         {
           "@id": "4096x4096/path_astar_elevation_obstacles",
@@ -55551,7 +55551,7 @@
           },
           "isArray": true,
           "arrayShape": "-1,-1",
-          "description": "Ordered [row, col] grid cells of the reference route for objective astar_elevation with the obstacle mask treated as blocked cells, start to goal. Empty when the terminal status in metadata.paths.astar_elevation.obstacles.status is \"infeasible\" (proved no path)."
+          "description": "Ordered [row, col] grid cells of the reference route for objective astar_elevation with the obstacle mask treated as blocked cells, start to goal. The terminal status in metadata.paths.astar_elevation.obstacles.status is \"ok\" for every released variant."
         },
         {
           "@id": "4096x4096/path_astar_energy_free",
@@ -55568,7 +55568,7 @@
           },
           "isArray": true,
           "arrayShape": "-1,-1",
-          "description": "Ordered [row, col] grid cells of the reference route for objective astar_energy without obstacles (free terrain), start to goal. Empty when the terminal status in metadata.paths.astar_energy.free.status is \"infeasible\" (proved no path)."
+          "description": "Ordered [row, col] grid cells of the reference route for objective astar_energy without obstacles (free terrain), start to goal. The terminal status in metadata.paths.astar_energy.free.status is \"ok\" for every released variant."
         },
         {
           "@id": "4096x4096/path_astar_energy_obstacles",
@@ -55585,7 +55585,7 @@
           },
           "isArray": true,
           "arrayShape": "-1,-1",
-          "description": "Ordered [row, col] grid cells of the reference route for objective astar_energy with the obstacle mask treated as blocked cells, start to goal. Empty when the terminal status in metadata.paths.astar_energy.obstacles.status is \"infeasible\" (proved no path)."
+          "description": "Ordered [row, col] grid cells of the reference route for objective astar_energy with the obstacle mask treated as blocked cells, start to goal. The terminal status in metadata.paths.astar_energy.obstacles.status is \"ok\" for every released variant."
         },
         {
           "@id": "4096x4096/path_astar_slope_free",
@@ -55602,7 +55602,7 @@
           },
           "isArray": true,
           "arrayShape": "-1,-1",
-          "description": "Ordered [row, col] grid cells of the reference route for objective astar_slope without obstacles (free terrain), start to goal. Empty when the terminal status in metadata.paths.astar_slope.free.status is \"infeasible\" (proved no path)."
+          "description": "Ordered [row, col] grid cells of the reference route for objective astar_slope without obstacles (free terrain), start to goal. The terminal status in metadata.paths.astar_slope.free.status is \"ok\" for every released variant."
         },
         {
           "@id": "4096x4096/path_astar_slope_obstacles",
@@ -55619,7 +55619,7 @@
           },
           "isArray": true,
           "arrayShape": "-1,-1",
-          "description": "Ordered [row, col] grid cells of the reference route for objective astar_slope with the obstacle mask treated as blocked cells, start to goal. Empty when the terminal status in metadata.paths.astar_slope.obstacles.status is \"infeasible\" (proved no path)."
+          "description": "Ordered [row, col] grid cells of the reference route for objective astar_slope with the obstacle mask treated as blocked cells, start to goal. The terminal status in metadata.paths.astar_slope.obstacles.status is \"ok\" for every released variant."
         }
       ],
       "description": "Core scenes at 4096x4096: one row per scene with six reference route variants."
@@ -59785,7 +59785,7 @@
           },
           "isArray": true,
           "arrayShape": "-1,-1",
-          "description": "Ordered [row, col] grid cells of the reference route for objective astar_elevation without obstacles (free terrain), start to goal. Empty when the terminal status in metadata.paths.astar_elevation.free.status is \"infeasible\" (proved no path)."
+          "description": "Ordered [row, col] grid cells of the reference route for objective astar_elevation without obstacles (free terrain), start to goal. The terminal status in metadata.paths.astar_elevation.free.status is \"ok\" for every released variant."
         },
         {
           "@id": "4096x4096_samples/path_astar_elevation_obstacles",
@@ -59802,7 +59802,7 @@
           },
           "isArray": true,
           "arrayShape": "-1,-1",
-          "description": "Ordered [row, col] grid cells of the reference route for objective astar_elevation with the obstacle mask treated as blocked cells, start to goal. Empty when the terminal status in metadata.paths.astar_elevation.obstacles.status is \"infeasible\" (proved no path)."
+          "description": "Ordered [row, col] grid cells of the reference route for objective astar_elevation with the obstacle mask treated as blocked cells, start to goal. The terminal status in metadata.paths.astar_elevation.obstacles.status is \"ok\" for every released variant."
         },
         {
           "@id": "4096x4096_samples/image_astar_energy",
@@ -59837,7 +59837,7 @@
           },
           "isArray": true,
           "arrayShape": "-1,-1",
-          "description": "Ordered [row, col] grid cells of the reference route for objective astar_energy without obstacles (free terrain), start to goal. Empty when the terminal status in metadata.paths.astar_energy.free.status is \"infeasible\" (proved no path)."
+          "description": "Ordered [row, col] grid cells of the reference route for objective astar_energy without obstacles (free terrain), start to goal. The terminal status in metadata.paths.astar_energy.free.status is \"ok\" for every released variant."
         },
         {
           "@id": "4096x4096_samples/path_astar_energy_obstacles",
@@ -59854,7 +59854,7 @@
           },
           "isArray": true,
           "arrayShape": "-1,-1",
-          "description": "Ordered [row, col] grid cells of the reference route for objective astar_energy with the obstacle mask treated as blocked cells, start to goal. Empty when the terminal status in metadata.paths.astar_energy.obstacles.status is \"infeasible\" (proved no path)."
+          "description": "Ordered [row, col] grid cells of the reference route for objective astar_energy with the obstacle mask treated as blocked cells, start to goal. The terminal status in metadata.paths.astar_energy.obstacles.status is \"ok\" for every released variant."
         },
         {
           "@id": "4096x4096_samples/image_astar_slope",
@@ -59889,7 +59889,7 @@
           },
           "isArray": true,
           "arrayShape": "-1,-1",
-          "description": "Ordered [row, col] grid cells of the reference route for objective astar_slope without obstacles (free terrain), start to goal. Empty when the terminal status in metadata.paths.astar_slope.free.status is \"infeasible\" (proved no path)."
+          "description": "Ordered [row, col] grid cells of the reference route for objective astar_slope without obstacles (free terrain), start to goal. The terminal status in metadata.paths.astar_slope.free.status is \"ok\" for every released variant."
         },
         {
           "@id": "4096x4096_samples/path_astar_slope_obstacles",
@@ -59906,7 +59906,7 @@
           },
           "isArray": true,
           "arrayShape": "-1,-1",
-          "description": "Ordered [row, col] grid cells of the reference route for objective astar_slope with the obstacle mask treated as blocked cells, start to goal. Empty when the terminal status in metadata.paths.astar_slope.obstacles.status is \"infeasible\" (proved no path)."
+          "description": "Ordered [row, col] grid cells of the reference route for objective astar_slope with the obstacle mask treated as blocked cells, start to goal. The terminal status in metadata.paths.astar_slope.obstacles.status is \"ok\" for every released variant."
         }
       ],
       "description": "Preview rows (4096x4096), 64 per split, with rendered images. Inspection examples that duplicate admitted scenes; do not add them to training populations."
@@ -59918,19 +59918,19 @@
     "Software collection (procedural obstacles, markers and reference routes)"
   ],
   "rai:dataCollectionRawData": "AW3D30 1x1 degree GeoTIFF tiles (signed int16 elevation, EPSG:4326), obtained in JAXA 5x5 degree archives. Tiles are read as exact source windows and normalised to 3600x3600 cells by nearest angular-centre sampling (nearest-angular-center-v1). The DSM includes canopy and building surfaces; geographic cell spacing varies with latitude, while the routing graph uses a fixed 30 m edge convention. Raw tiles are not redistributed.",
-  "rai:dataCollectionMissingData": "Crops whose source windows touch missing tiles, nodata cells, incomplete windows or elevations outside the frozen calibration range are rejected, never padded or clipped (nodata_policy reject-source-crop). Each scene allows up to 100 attempts and records rejected attempts in its receipt. All 4,400,000 requested core scenes completed and no route variant is unresolved.",
+  "rai:dataCollectionMissingData": "Crops whose source windows touch missing tiles, nodata cells, incomplete windows or elevations outside the frozen calibration range are rejected, never padded or clipped (nodata_policy reject-source-crop). Start/goal pairs that the obstacles disconnect are rejected in the same way, and the scene's seeded input stream supplies the next candidate crop. Each scene allows up to 100 attempts and records rejected attempts in its receipt. All 4,400,000 requested core scenes completed and every route variant is an exact route.",
   "rai:dataImputationProtocol": "None. No imputation, padding or clipping is applied; affected crops are rejected.",
   "rai:dataPreprocessingProtocol": [
     "Calibrate the global elevation range over the authenticated tile inventory: -430.0 m to 8767.0 m.",
     "Assign every source tile to one split: South America hold-out mask tiles to test; other tiles to train/calibration/validation by seeded 5x5 degree blocks (source-tile-blocks-v1, seed 42). A crop and its one-tile guard ring must lie entirely in its split.",
     "Per scene, derive seeds as blake2b(seed, resolution, index, split); draw a centre tile and a target elevation uniformly over the calibration range; take the nearest cell as the start; place an N x N crop containing it; draw the goal uniformly among the other cells.",
-    "Synthesise super-ellipse obstacles (coverage target up to 30%, size ratio 0.02-0.25, exponent 1-80 log-uniform) that avoid both markers.",
+    "Synthesise super-ellipse obstacles (coverage target up to 30%, size ratio 0.02-0.25, exponent 1-80 log-uniform) that avoid both markers; reject the crop when the obstacles disconnect start and goal on the reference graph (passage.reference.endpoints_connected).",
     "Store the float32 tensor (normalised elevation, markers, obstacles); decode it and solve all six route variants from the decoded inputs.",
     "Export zstd-compressed Parquet shards (5,997 shards across 14 configurations) with structured metadata, JSON metadata and scene receipts; previews add rendered PNG images."
   ],
-  "rai:dataAnnotationProtocol": "Labels are computed, not human-made. For each scene, an exact float64 A* reference (passage.reference.solve_reference, no expansion budget) solves three objectives (elevation weight 62.4, energy weight 1125.3, slope_uphill weight 8886.2) on an 8-connected grid with destination-only diagonals and 30 m edges, once without and once with blocked obstacles. Each variant ends as \"ok\" (exact optimum) or \"infeasible\" (proved no path, empty route, null cost). Release admission accepts only exact routes and proved no-path outcomes; successful routes are also listed in separate supervision rosters.",
+  "rai:dataAnnotationProtocol": "Labels are computed, not human-made. For each scene, an exact float64 A* reference (passage.reference.solve_reference, no expansion budget) solves three objectives (elevation weight 62.4, energy weight 1125.3, slope_uphill weight 8886.2) on an 8-connected grid with destination-only diagonals and 30 m edges, once without and once with blocked obstacles. Every variant ends as \"ok\" (exact optimum), because start/goal pairs that the obstacles disconnect are rejected by the generator. Release admission accepts only exact routes; every variant is also listed in separate supervision rosters.",
   "rai:dataAnnotationPlatform": "None: annotation is fully computational, run on CPU by the PASSAGE generator.",
-  "rai:dataAnnotationAnalysis": "Release verification status verified; admission qualified with 0 unresolved variants. Of 26,400,000 variants, 26,358,039 are exact routes and 41,961 are proved no-path (by resolution: 64: 12,264; 128: 10,212; 256: 8,343; 512: 7,998; 1024: 1,986; 2048: 750; 4096: 408). A bounded replay of 56 selected scenes reproduced 84 scientific records and 84 preview images byte-identically; it does not certify every row or cross-platform reproducibility. Tied optima can have different geometry (tie policy float64-priority-then-row-major-node-strict-improvement-v1).",
+  "rai:dataAnnotationAnalysis": "Release verification status verified; admission qualified with 0 unresolved variants. All 26,400,000 variants are exact routes (by resolution: 64, 128, 256 and 512: 6,000,000 each; 1024: 1,500,000; 2048: 600,000; 4096: 300,000). A bounded replay of 56 selected scenes reproduced 84 scientific records and 84 preview images byte-identically; it does not certify every row or cross-platform reproducibility. Tied optima can have different geometry (tie policy float64-priority-then-row-major-node-strict-improvement-v1).",
   "rai:annotationsPerItem": "Six route variants per core scene (3 objectives x free/obstacle-aware), 26,400,000 in total; they share terrain and endpoints and are not independent observations. One deterministic reference solve per variant; no multi-annotator redundancy.",
   "rai:annotatorDemographics": "Not applicable: no human annotators.",
   "rai:machineAnnotationTools": [
@@ -59946,7 +59946,7 @@
   ],
   "rai:dataLimitations": [
     "Static 2D grid tasks with procedural obstacles and endpoints; no vehicle dynamics, clearance, weather, airspace, regulation or mission demand is modelled.",
-    "Labels are exact or proved infeasible only under the frozen graph contract (8-connectivity, destination-only diagonals, fixed 30 m edges, float64 solves on decoded float32 inputs). Other conventions change optima; tied optima can differ in geometry.",
+    "Labels are exact only under the frozen graph contract (8-connectivity, destination-only diagonals, fixed 30 m edges, float64 solves on decoded float32 inputs). Other conventions change optima; tied optima can differ in geometry.",
     "Six variants per scene and scenes from the same 5x5 degree block or across resolutions can share terrain; treat them as correlated, not independent, samples. The 1,792 preview rows duplicate admitted scenes.",
     "No learned model has been trained or evaluated on PASSAGE v1.0. The paper's learned-model results are historical results of the original study, reported as obtained; not re-run on the released dataset.",
     "Not suitable for operational flight planning, search-and-rescue dispatch or other safety-of-life decisions; the dataset does not certify deployment or replace certification processes."
@@ -59988,7 +59988,7 @@
     {
       "@type": "prov:Activity",
       "prov:label": "Scene generation",
-      "sc:description": "Deterministic generation (seed 42, split seed 42): source-tile-block splits with a one-tile guard ring and a South America test hold-out, elevation-targeted start, uniform distinct goal, super-ellipse obstacles, rejection of missing/nodata crops, per-scene receipts with source windows and hashes. Configuration and producer source are archived in release-receipts/resolved-config.yaml and release-receipts/producer-source.zip; generation provenance id 7c9a1a2b3c5a7e1bd844c35e35cb2e9c3b5dde4c0bcef9f8e85b0e84b86f647a.",
+      "sc:description": "Deterministic generation (seed 42, split seed 42): source-tile-block splits with a one-tile guard ring and a South America test hold-out, elevation-targeted start, uniform distinct goal, super-ellipse obstacles, rejection of missing/nodata crops and of start/goal pairs that the obstacles disconnect, per-scene receipts with source windows and hashes. Configuration and producer source are archived in release-receipts/resolved-config.yaml and release-receipts/producer-source.zip; generation provenance id 7c9a1a2b3c5a7e1bd844c35e35cb2e9c3b5dde4c0bcef9f8e85b0e84b86f647a.",
       "prov:wasAttributedTo": [
         {
           "@type": "prov:SoftwareAgent",
@@ -60000,7 +60000,7 @@
     {
       "@type": "prov:Activity",
       "prov:label": "Reference route annotation",
-      "sc:description": "Exact float64 A* solves of six variants per scene from the decoded persisted float32 inputs under the frozen GraphSpec; each variant ends as an exact route or a proved no-path status. No human annotators.",
+      "sc:description": "Exact float64 A* solves of six variants per scene from the decoded persisted float32 inputs under the frozen GraphSpec; each variant ends as an exact route. No human annotators.",
       "prov:wasAttributedTo": [
         {
           "@type": "prov:SoftwareAgent",

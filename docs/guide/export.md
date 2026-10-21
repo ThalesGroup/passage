@@ -290,7 +290,7 @@ separate folder. It runs three phases, which can also run one at a time with
 ```bash
 passage qualify \
   --dataset-path <root>/passage-snapshot \
-  --dataset-revision 65f1e4f0a37d8a7b476ddf02d48fe542542924ea \
+  --dataset-revision 2ab44d899652c7fb99c425488e84a7d565963547 \
   --output <root>/qualification
 ```
 
@@ -315,7 +315,7 @@ the example uses the verified PASSAGE v1.0 upload.
 from datasets import load_dataset
 from passage.utils import decode_tensor_blob
 
-REVISION = "65f1e4f0a37d8a7b476ddf02d48fe542542924ea"  # verified PASSAGE v1.0 upload
+REVISION = "2ab44d899652c7fb99c425488e84a7d565963547"  # verified PASSAGE v1.0 upload
 
 # Preview rows: small, 64 per split, with rendered images
 rows = load_dataset("thalesgroup/passage", "256x256_samples",

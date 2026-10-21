@@ -104,12 +104,12 @@ solvers:
 paths:
   astar_elevation:
     free:
-      status: <ok | infeasible>
+      status: <ok | infeasible>  # ok for every released variant
       cost: <float or null>
       length: <int>              # number of cells in the route
       expansions: <int>          # cells expanded by the reference search
       considered_area: <int>
-      reference_status: <exact | no_path>
+      reference_status: <exact | no_path>  # exact for every released variant
       graph_id: <sha256>
       crosses_obstacles: false
     obstacles: {…}               # same keys, obstacles blocked
@@ -132,7 +132,7 @@ Each solver produces two route files per scene: one on free terrain and one with
 ...
 ```
 
-A variant with the status `infeasible` has an empty file. The generator writes the files to `paths/<solver>/free/…` and `paths/<solver>/obstacles/…` (see [File Naming Conventions](#file-naming-conventions)).
+Every released variant has the status `ok`, so every file holds a route. The generator writes the files to `paths/<solver>/free/…` and `paths/<solver>/obstacles/…` (see [File Naming Conventions](#file-naming-conventions)).
 
 ---
 
@@ -151,7 +151,7 @@ During export, scenes are packaged into **Apache Parquet** shards with Hugging F
 | `path_<solver>_obstacles` | list of [row, col] | Reference route with obstacles blocked |
 | `image_<solver>` | image | Rendered preview, `_samples` configurations only |
 
-`<solver>` is `astar_elevation`, `astar_energy` or `astar_slope` (the `slope_uphill` objective). A route is an empty list when its status in `metadata.paths.<solver>.<free|obstacles>.status` is `infeasible`.
+`<solver>` is `astar_elevation`, `astar_energy` or `astar_slope` (the `slope_uphill` objective). Every released variant has the status `ok` in `metadata.paths.<solver>.<free|obstacles>.status`, so no route is an empty list.
 
 The `metadata` struct has a fixed schema. Fields that the v1.0 generator does not write are null there; `metadata_json` holds the complete metadata.
 
@@ -233,7 +233,7 @@ The default configuration is `1024x1024_samples`. Core configurations are large 
 ```python
 from datasets import load_dataset
 
-REVISION = "65f1e4f0a37d8a7b476ddf02d48fe542542924ea"  # verified PASSAGE v1.0 upload
+REVISION = "2ab44d899652c7fb99c425488e84a7d565963547"  # verified PASSAGE v1.0 upload
 
 # Preview rows: small, 64 per split, with rendered images.
 rows = load_dataset("thalesgroup/passage", "256x256_samples",

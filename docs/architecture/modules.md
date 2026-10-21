@@ -81,7 +81,7 @@ Scans every DSM tile for its minimum and maximum elevation and writes `calibrate
 
 ### `reference.py` — Reference Solver
 
-Exact, deterministic A\* on an implicit grid, in float64, compiled with Numba. `solve_reference()` returns an exact route, a proved no-path or a censored result (`ReferenceResult`); `reverse_goal_field()` computes exact costs-to-go to a goal (`GoalField`); `recost_legal_path()` recomputes the cost of a route. See [Solvers & Heuristics](../generation/solvers.md).
+Exact, deterministic A\* on an implicit grid, in float64, compiled with Numba. `solve_reference()` returns an exact route, a proved no-path or a censored result (`ReferenceResult`); `endpoints_connected()` tells, on the same graph, whether the obstacles leave any route from start to goal, and the release generator rejects a crop when they do not; `reverse_goal_field()` computes exact costs-to-go to a goal (`GoalField`); `recost_legal_path()` recomputes the cost of a route. See [Solvers & Heuristics](../generation/solvers.md).
 
 ### `obstacles.py` — Superellipse Shapes
 

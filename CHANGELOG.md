@@ -9,8 +9,9 @@ and Datasets Track paper. The repository and the dataset share version 1.0.
   ([`thalesgroup/passage`](https://huggingface.co/datasets/thalesgroup/passage)):
   4,400,000 core scenes at seven resolutions, from 64×64 to 4096×4096 cells,
   built from JAXA ALOS AW3D30 terrain. Each scene carries 6 route variants
-  (three objectives, with and without obstacles): 26,358,039 exact A* routes
-  and 41,961 proved no-path outcomes. Train / calibration / validation / test
+  (three objectives, with and without obstacles), 26,400,000 exact A* routes
+  in all; start and goal cells that the obstacles disconnect are rejected by
+  the generator. Train / calibration / validation / test
   splits are 90 / 2 / 4 / 4 %, with a South America hold-out and 5°×5° source
   blocks elsewhere; 1,792 preview rows carry rendered images.
 - **Generator** (`passage`): `download`, `calibrate`, `generate`, `compress`,

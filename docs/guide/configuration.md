@@ -235,7 +235,7 @@ obstacles:
 | `shape.n.distribution.type` | Distribution of the exponent: `log_uniform` (shipped), `uniform`, `beta` (parameters `a`, `b`) or `exponential` (parameter `lambda`) |
 | `generation.max_attempts` | Masks tried before giving up; an empty mask is then used |
 | `generation.candidates_per_mask` | Largest number of superellipses tried for one mask |
-| `impassable` | `true`: obstacle cells are blocked. A variant with no route around them is a proved no-path (`infeasible`). The release generator requires `true` |
+| `impassable` | `true`: obstacle cells are blocked, and a crop whose obstacles disconnect the start from the goal is rejected. The release generator requires `true` |
 | `obstacle_penalty` | Elevation penalty added to obstacle cells when `impassable: false`; not used by the v1.0 release |
 
 Obstacles never cover the start or the goal. See

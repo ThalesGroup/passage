@@ -49,8 +49,9 @@ release does not use.
 
 ### `passage.reference` — Exact Reference Solver
 
-The exact solver that labels every PASSAGE v1.0 route variant: an optimal
-route, or a proof that no route exists.
+The exact solver that labels every PASSAGE v1.0 route variant with an optimal
+route, and the connectivity check (`endpoints_connected`) with which the
+generator rejects start and goal cells that the obstacles disconnect.
 
 ::: passage.reference
     options:
@@ -60,6 +61,7 @@ route, or a proof that no route exists.
       show_source: false
       members:
         - solve_reference
+        - endpoints_connected
         - recost_legal_path
 
 ---
