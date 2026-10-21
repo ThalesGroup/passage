@@ -186,6 +186,7 @@ extra_css:
 
 extra_javascript:
   - javascripts/home.js
+  - javascripts/mermaid-zoom.js
   - javascripts/katex.js
   - https://unpkg.com/katex@0.16.11/dist/katex.min.js
   - https://unpkg.com/katex@0.16.11/dist/contrib/auto-render.min.js

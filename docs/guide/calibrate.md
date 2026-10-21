@@ -80,9 +80,9 @@ flowchart TD
     F -->|Yes| G[Write complete calibrate.json<br>and elevation maps]
     F -->|No| H[Write incomplete receipt<br>and stop with an error]
 
-    style A fill:#42A5F5,color:#fff
-    style C fill:#1565C0,color:#fff
-    style G fill:#D32F2F,color:#fff
+    style A fill:#a78bfa2e,stroke:#8b6fe0,stroke-width:1.5px
+    style C fill:#0891b233,stroke:#0891b2,stroke-width:1.5px
+    style G fill:#ff4d5e2e,stroke:#ff4d5e,stroke-width:1.5px
 ```
 
 1. **Tile discovery** — lists every `*_DSM.tif` file directly inside the tiles

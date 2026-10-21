@@ -34,10 +34,10 @@ graph LR
     EXP --> UTL
     REF --> PE["passage_eval<br><small>cost, GraphSpec</small>"]
 
-    style GEN fill:#1565C0,color:#fff
-    style RG fill:#1565C0,color:#fff
-    style REF fill:#2E7D32,color:#fff
-    style EXP fill:#42A5F5,color:#fff
+    style GEN fill:#0891b233,stroke:#0891b2,stroke-width:1.5px
+    style RG fill:#0891b233,stroke:#0891b2,stroke-width:1.5px
+    style REF fill:#ffb93833,stroke:#d99a1b,stroke-width:1.5px
+    style EXP fill:#a78bfa2e,stroke:#8b6fe0,stroke-width:1.5px
 ```
 
 ---

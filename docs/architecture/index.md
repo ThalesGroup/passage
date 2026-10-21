@@ -79,10 +79,10 @@ graph TB
     REF --> NUMBA
     EXP --> HF
 
-    style MAIN fill:#D32F2F,color:#fff
-    style GEN fill:#1565C0,color:#fff
-    style REF fill:#2E7D32,color:#fff
-    style EXP fill:#42A5F5,color:#fff
+    style MAIN fill:#ff4d5e2e,stroke:#ff4d5e,stroke-width:1.5px
+    style GEN fill:#0891b233,stroke:#0891b2,stroke-width:1.5px
+    style REF fill:#ffb93833,stroke:#d99a1b,stroke-width:1.5px
+    style EXP fill:#a78bfa2e,stroke:#8b6fe0,stroke-width:1.5px
 ```
 
 ---

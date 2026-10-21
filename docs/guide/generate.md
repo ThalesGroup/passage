@@ -87,10 +87,10 @@ flowchart TD
     H --> I[Solve six routes<br>with the exact reference]
     I --> J[Write routes, then the receipt]
 
-    style A fill:#1565C0,color:#fff
-    style G fill:#D32F2F,color:#fff
-    style I fill:#2E7D32,color:#fff
-    style J fill:#42A5F5,color:#fff
+    style A fill:#0891b233,stroke:#0891b2,stroke-width:1.5px
+    style G fill:#ff4d5e2e,stroke:#ff4d5e,stroke-width:1.5px
+    style I fill:#ffb93833,stroke:#d99a1b,stroke-width:1.5px
+    style J fill:#a78bfa2e,stroke:#8b6fe0,stroke-width:1.5px
 ```
 
 ### Step-by-step

@@ -181,11 +181,11 @@ flowchart TD
     D --> E[Write README<br>and run the checks]
     E --> F[Upload prepared export tree<br>via upload_large_folder]
 
-    style A fill:#1565C0,color:#fff
-    style B fill:#00897B,color:#fff
-    style C fill:#6D4C41,color:#fff
-    style D fill:#2E7D32,color:#fff
-    style F fill:#D32F2F,color:#fff
+    style A fill:#0891b233,stroke:#0891b2,stroke-width:1.5px
+    style B fill:#0891b233,stroke:#0891b2,stroke-width:1.5px
+    style C fill:#a78bfa2e,stroke:#8b6fe0,stroke-width:1.5px
+    style D fill:#ffb93833,stroke:#d99a1b,stroke-width:1.5px
+    style F fill:#ff4d5e2e,stroke:#ff4d5e,stroke-width:1.5px
 ```
 
 ---

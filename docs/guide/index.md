@@ -37,12 +37,12 @@ flowchart LR
     D --> E["🧾 Export<br>README + notebooks + assets"]
     E --> F["🚀 Upload<br>HF Hub publish"]
 
-    style A fill:#1565C0,color:#fff,stroke:#0D47A1
-    style B fill:#42A5F5,color:#fff,stroke:#1565C0
-    style C fill:#2E7D32,color:#fff,stroke:#1B5E20
-    style D fill:#00897B,color:#fff,stroke:#00695C
-    style E fill:#6D4C41,color:#fff,stroke:#4E342E
-    style F fill:#D32F2F,color:#fff,stroke:#B71C1C
+    style A fill:#0891b233,stroke:#0891b2,stroke-width:1.5px
+    style B fill:#a78bfa2e,stroke:#8b6fe0,stroke-width:1.5px
+    style C fill:#ffb93833,stroke:#d99a1b,stroke-width:1.5px
+    style D fill:#0891b233,stroke:#0891b2,stroke-width:1.5px
+    style E fill:#a78bfa2e,stroke:#8b6fe0,stroke-width:1.5px
+    style F fill:#ff4d5e2e,stroke:#ff4d5e,stroke-width:1.5px
 ```
 
 | Step | Command | What it does | Main output |

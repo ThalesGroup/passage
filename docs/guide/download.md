@@ -95,9 +95,9 @@ flowchart TD
     S --> F
     F --> G[Write status map and summary]
 
-    style A fill:#1565C0,color:#fff
-    style C fill:#2E7D32,color:#fff
-    style G fill:#D32F2F,color:#fff
+    style A fill:#0891b233,stroke:#0891b2,stroke-width:1.5px
+    style C fill:#ffb93833,stroke:#d99a1b,stroke-width:1.5px
+    style G fill:#ff4d5e2e,stroke:#ff4d5e,stroke-width:1.5px
 ```
 
 1. **Receipt check** — on a re-run, an archive is skipped when its receipt lists
