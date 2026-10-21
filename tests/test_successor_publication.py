@@ -139,3 +139,12 @@ def test_successor_metadata_rejects_footer_count_different_from_verified_populat
     path.write_text(json.dumps(receipt))
     with pytest.raises(ValueError, match='footer count'):
         write_successor_publication_metadata(context)
+
+
+def test_description_states_all_exact_routes_when_no_variant_lacks_a_path():
+    from passage.successor_publication import _description
+    facts = {'core_scenes': 4, 'route_variants': 24, 'preview_rows': 4,
+             'successful_route_variants': 24, 'proved_infeasible_variants': 0}
+    text = _description(facts)
+    assert 'All 24 variants are exact routes' in text
+    assert 'disconnect are rejected by the generator' in text and 'no-path' not in text
