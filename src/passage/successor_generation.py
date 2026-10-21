@@ -33,6 +33,7 @@ from rasterio.windows import Window
 from tqdm import tqdm
 
 from passage.dataset import decode_scene_inputs
+from passage.reference import endpoints_connected
 from passage.utils import TENSOR_SUFFIX, save_tensor
 from passage_eval.protocol.contracts import GraphSpec
 
@@ -335,7 +336,7 @@ def prepare_provenance(config_path: Path, calibration_path: Path, tiles_path: Pa
                'package_metadata_sha256': file_hash(package_root.parent/'pyproject.toml'),
                'code_commit': commit, 'tie_policy': 'float64-priority-then-row-major-node-strict-improvement-v1',
                'sample_seeding': 'blake2b(seed,resolution,index,split)', 'nodata_policy': 'reject-source-crop', 'terrain_normalization': 'nearest-angular-center-v1',
-               'endpoint_policy': 'one-distinct-pair-per-accepted-crop-no-feasibility-selection',
+               'endpoint_policy': 'one-distinct-pair-per-accepted-crop-disconnected-endpoints-rejected',
                'scene_attempts': int(config.get('generation', {}).get('max_scene_attempts', 100)),
                'infrastructure_retry_policy': {'max_retries':int(config.get('generation',{}).get('max_infrastructure_retries',2)),
                                                'same_scene_seed':True,'proof_of_infeasibility_retried':False}}
@@ -604,7 +605,10 @@ def generate_successor_scene(context: dict, index: int, split: str, preview: boo
                         marker_positions=[start, goal], rng=np_rng, generation_cfg=obstacle_settings['generation_cfg'])
                 else:
                     obstacles, target_ratio = np.zeros_like(crop, dtype=np.uint8), 0.0
-                normalized = ((crop.astype(np.float64)-low)/(high-low)).astype(np.float32)
+                if not endpoints_connected(obstacles, start, goal):
+                    # The reference would prove no path: reject this input like any unusable crop.
+                    raise ValueError('endpoints_disconnected_by_obstacles')
+                normalized =((crop.astype(np.float64)-low)/(high-low)).astype(np.float32)
                 markers = np.full(crop.shape, -1, dtype=np.float32)
                 markers[start], markers[goal] = 0, 1
                 tensor = np.stack([normalized, markers, obstacles.astype(np.float32)], axis=-1)
@@ -648,8 +652,10 @@ def generate_successor_scene(context: dict, index: int, split: str, preview: boo
                         mask = inputs['obstacles'] if kind == 'obstacles' else np.zeros_like(inputs['obstacles'])
                         result = solve_reference(inputs['elevation'], mask, inputs['start'], inputs['goal'], graph=graph,
                                     max_expansions=context['max_expansions'])
+                        if result.status == 'no_path':
+                            raise RuntimeError('reference proved no path for endpoints accepted as connected')
                         status = {'exact': 'ok', 'no_path': 'infeasible', 'censored': 'failed'}[result.status]
-                        variant = {'status': status, 'cost': result.cost, 'length': len(result.path),
+                        variant ={'status': status, 'cost': result.cost, 'length': len(result.path),
                                    'graph_id': graph.identity(), 'reference_status': result.status,
                                    'expansions': result.expansions}
                         variants[f'{name}:{kind}'] = variant

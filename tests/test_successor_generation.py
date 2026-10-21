@@ -96,30 +96,58 @@ def test_persisted_roundtrip_six_labels_and_missing_path_resume(tmp_path):
         s.generate_successor_scene(context,0,'train')
 
 
-def test_no_path_and_budget_outcomes_are_explicit_without_input_resampling(tmp_path, monkeypatch):
+def _isolating_goal(shape, marker_positions):
+    mask = np.zeros(shape,dtype=np.uint8)
+    # Isolate goal: destination-only diagonals still blocked by all 8 neighbours.
+    goal = marker_positions[1]
+    for dy in (-1,0,1):
+        for dx in (-1,0,1):
+            if (dy or dx) and 0 <= goal[0]+dy < shape[0] and 0 <= goal[1]+dx < shape[1]:
+                mask[goal[0]+dy,goal[1]+dx] = 1
+    mask[marker_positions[0]] = 0
+    return mask
+
+
+def test_disconnected_endpoints_are_rejected_and_redrawn_before_labels(tmp_path, monkeypatch):
     s = successor()
     from passage import generate
     context = scene_context(tmp_path)
     context['config']['obstacles'] = {'enabled': True, 'ratio_max': .1}
-    def wall(shape, *args, marker_positions=None, **kwargs):
-        mask = np.zeros(shape,dtype=np.uint8)
-        mask[shape[0]//2,:] = 1
-        for point in marker_positions:
-            mask[point] = 0
-        # Isolate goal: destination-only diagonals still blocked by all8neighbors.
-        goal = marker_positions[1]
-        for dy in (-1,0,1):
-            for dx in (-1,0,1):
-                if (dy or dx) and 0 <= goal[0]+dy < shape[0] and 0 <= goal[1]+dx < shape[1]:
-                    mask[goal[0]+dy,goal[1]+dx] = 1
-        mask[marker_positions[0]] = 0
-        return mask,.1
-    monkeypatch.setattr(generate,'_generate_obstacles_mask',wall)
+    calls = []
+    def first_isolates(shape, *args, marker_positions=None, **kwargs):
+        calls.append(marker_positions)
+        if len(calls) == 1:
+            return _isolating_goal(shape, marker_positions), .1
+        return np.zeros(shape,dtype=np.uint8), .1
+    monkeypatch.setattr(generate,'_generate_obstacles_mask',first_isolates)
     assert s.generate_successor_scene(context,0,'train')[2] == 'complete'
     receipt = s.validate_scene_receipt(tmp_path/'out'/'64'/'train',0)
-    assert len(receipt['attempts']) == 1
-    assert all(v['status']=='infeasible' and v['cost'] is None and v['length']==0
-               for key,v in receipt['variants'].items() if key.endswith(':obstacles'))
+    assert [a['reason'] for a in receipt['attempts']] == ['endpoints_disconnected_by_obstacles', 'accepted_input']
+    assert all(v['status']=='ok' and v['cost'] > 0 for v in receipt['variants'].values())
+    monkeypatch.setattr(generate,'_generate_obstacles_mask',
+                        lambda shape, *a, marker_positions=None, **k: (_isolating_goal(shape, marker_positions), .1))
+    assert s.generate_successor_scene(context,1,'train')[2] == 'rejected'
+    receipt = json.loads((tmp_path/'out'/'64'/'train'/'receipts'/'0000000001.json').read_text())
+    assert receipt['scene_status'] == 'rejected' and not receipt['artifacts']
+    assert {a['reason'] for a in receipt['attempts']} == {'endpoints_disconnected_by_obstacles'}
+    assert len(receipt['attempts']) == context['max_attempts']
+
+
+def test_solver_contradicting_connectivity_fails_visibly(tmp_path, monkeypatch):
+    s = successor()
+    from passage import reference
+    context = scene_context(tmp_path)
+    proved = reference.ReferenceResult('no_path', (), None, 0, {}, 0.)
+    monkeypatch.setattr(reference, 'solve_reference', lambda *a, **k: proved)
+    with pytest.raises(RuntimeError, match='no path'):
+        s.generate_successor_scene(context,0,'train')
+    receipt = json.loads((tmp_path/'out'/'64'/'train'/'receipts'/'0000000000.json').read_text())
+    assert receipt['scene_status'] == 'failed' and not receipt['artifacts']
+
+
+def test_budget_outcomes_are_explicit_without_input_resampling(tmp_path):
+    s = successor()
+    context = scene_context(tmp_path)
     context['max_expansions'] = 0
     assert s.generate_successor_scene(context,1,'train')[2] == 'complete'
     receipt = s.validate_scene_receipt(tmp_path/'out'/'64'/'train',1)

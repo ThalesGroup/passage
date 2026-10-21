@@ -148,3 +148,27 @@ def test_float64_overflow_is_an_arithmetic_error_not_proved_unreachable(model, v
         reverse_goal_field(terrain, obstacles, goal, graph=spec)
     with pytest.raises(ValueError, match="float64.*(cost|arithmetic)|arithmetic.*float64"):
         recost_legal_path(terrain, [(0, col) for col in range(len(values))], graph=spec)
+
+
+def test_endpoints_connected_matches_solver_proofs_on_random_masks():
+    from passage.reference import endpoints_connected, solve_reference
+    rng = np.random.default_rng(7)
+    seen = set()
+    for _ in range(300):
+        shape = tuple(rng.integers(2, 12, size=2))
+        mask = (rng.random(shape) < rng.uniform(.2, .7)).astype(np.uint8)
+        terrain = rng.normal(size=shape).astype(np.float32)
+        start, goal = (tuple(int(rng.integers(0, n)) for n in shape) for _ in range(2))
+        connected = endpoints_connected(mask, start, goal)
+        seen.add(connected)
+        assert connected == (solve_reference(terrain, mask, start, goal).status == "exact")
+    assert seen == {True, False}
+
+
+def test_endpoints_connected_uses_destination_only_diagonals():
+    from passage.reference import endpoints_connected
+    mask = np.array([[0, 1], [1, 0]], dtype=np.uint8)
+    assert endpoints_connected(mask, (0, 0), (1, 1))
+    assert not endpoints_connected(mask, (0, 0), (0, 1))
+    with pytest.raises(ValueError, match="binary"):
+        endpoints_connected(np.full((2, 2), 2), (0, 0), (1, 1))
