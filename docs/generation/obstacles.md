@@ -140,13 +140,13 @@ All keys sit under `obstacles` in `config/config.yaml`.
 
 ---
 
-## Blocked Cells and Proved No-Path
+## Blocked Cells and Connected Endpoints
 
 Each scene is solved twice per objective: once on free terrain, where the obstacle channel is ignored, and once with the obstacles. With obstacles, the obstacle cells are removed from the routing graph:
 
 - A route never enters an obstacle cell.
 - A diagonal step is checked against its destination cell only, so a route may pass between two obstacle cells that touch at a corner.
-- If no route joins the start to the goal, the exact search proves it. The variant gets the status `infeasible`, an empty route and a null cost. PASSAGE v1.0 contains 41,961 such proved no-path variants out of 26,400,000.
+- A route always joins the start to the goal. Before any label is computed, `passage.reference.endpoints_connected()` checks the mask on exactly this graph (eight neighbours, obstacle cells blocked at the destination cell). If the obstacles disconnect the start from the goal, the crop is rejected like any other unusable input (nodata, elevations outside the calibration range), and the scene's seeded input stream supplies the next candidate crop. A rejected pair is precisely one that the exact search would prove to have no path, so all 26,400,000 variants of PASSAGE v1.0 are exact routes.
 
 The v1.0 generator refuses a configuration with `impassable: false`.
 

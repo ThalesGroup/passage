@@ -113,15 +113,18 @@ flowchart TD
 6. **Goal** — drawn uniformly among the other cells of the crop.
 7. **Obstacles** — superellipse obstacles are added until the next one would
    push coverage above a target drawn uniformly between 0 and
-   `obstacles.ratio_max` (30 %). They never cover the start or the goal.
+   `obstacles.ratio_max` (30 %). They never cover the start or the goal. If
+   they disconnect the start from the goal on the routing graph, the attempt
+   is rejected like a crop with missing data, and the next attempt draws a new
+   crop.
 8. **Tensor** — three float32 channels are stacked into an (R, R, 3) tensor:
    elevation scaled with the calibration range, markers (−1 background, 0
    start, 1 goal) and obstacles (1 = blocked). The tensor is compressed with
    Zstandard and saved, with its metadata, before any route is solved.
 9. **Labels** — the saved tensor is decoded, and an exact A\* reference solves
    each objective in float64, once on free terrain and once with the obstacle
-   cells blocked. Each of the six variants is `ok` (an exact optimum) or
-   `infeasible` (no path exists: empty route, null cost). The shipped
+   cells blocked. Each of the six variants is `ok` (an exact optimum), since
+   step 7 keeps only start and goal cells that a route can join. The shipped
    `max_reference_expansions: null` sets no search budget; with a budget, an
    unfinished search would be recorded as `failed`.
 10. **Receipt** — the route CSV files are written, then a receipt that lists
@@ -200,8 +203,7 @@ outputs/dataset/
 
 - Scene files are named by the 10-digit scene index. `N045/E006` stands for
   the latitude and longitude of the scene's center tile.
-- Each route CSV holds one `row,col` cell per line, from start to goal. It is
-  empty when the variant is `infeasible`.
+- Each route CSV holds one `row,col` cell per line, from start to goal.
 - `passage compress` later adds `images/<solver>/…/<index>.png` for the
   preview rows of the `_samples` configurations.
 

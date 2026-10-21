@@ -39,13 +39,13 @@ terrain: each scene is a square crop of the JAXA ALOS World 3D–30 m (AW3D30)
 digital surface model with a start cell, a goal cell and procedural obstacles.
 Each scene has six route variants: three cost objectives (`elevation`,
 `slope_uphill`, `energy`), each on free terrain and with the obstacles blocked.
-Each variant carries either an exact minimum-cost reference route for the
-stated graph (eight-connected, 30 m cells) or a proof that no route exists.
-PASSAGE v1.0 holds 4,400,000 core scenes at seven resolutions, from 64×64 to
-4096×4096 cells, and 26,400,000 route variants: 26,358,039 exact routes and
-41,961 proved no-path. Its test split is a geographic hold-out (South America),
-and the MIT-licensed generator and the `passage-eval` evaluator are in the
-[code repository](https://github.com/ThalesGroup/passage).
+Each variant carries an exact minimum-cost reference route for the stated
+graph (eight-connected, 30 m cells); start and goal cells that the obstacles
+disconnect are rejected by the generator. PASSAGE v1.0 holds 4,400,000 core
+scenes at seven resolutions, from 64×64 to 4096×4096 cells, and 26,400,000
+route variants, all exact routes. Its test split is a geographic hold-out
+(South America), and the MIT-licensed generator and the `passage-eval`
+evaluator are in the [code repository](https://github.com/ThalesGroup/passage).
 
 ---
 
@@ -132,17 +132,17 @@ easier to compare, reproduce and audit on the same benchmark.
   <td align="center" width="25%">⚡<br><strong>3 Cost Objectives</strong><br><small><code>elevation</code>, <code>slope_uphill</code>, <code>energy</code></small></td>
 </tr>
 <tr>
-  <td align="center">🧮<br><strong>Exact A* Reference</strong><br><small>Exact route or proved no-path</small></td>
+  <td align="center">🧮<br><strong>Exact A* Reference</strong><br><small>Exact optimal route for every variant</small></td>
   <td align="center">🤗<br><strong>Hugging Face-Ready</strong><br><small>Parquet + one-command upload</small></td>
   <td align="center">🔁<br><strong>Incremental Resume</strong><br><small>Audit input identity before reuse</small></td>
-  <td align="center">✅<br><strong>Tested & CI</strong><br><small>860 tests, 80 % coverage gate, pre-commit</small></td>
+  <td align="center">✅<br><strong>Tested & CI</strong><br><small>865 tests, 80 % coverage gate, pre-commit</small></td>
 </tr>
 </table>
 
 <table>
 <tr>
   <td align="center"><strong>4.4 M</strong><br><small>Core scenes</small></td>
-  <td align="center"><strong>26.36 M</strong><br><small>Exact routes</small></td>
+  <td align="center"><strong>26.4 M</strong><br><small>Exact routes</small></td>
   <td align="center"><strong>7</strong><br><small>Resolutions</small></td>
   <td align="center"><strong>3</strong><br><small>Cost objectives</small></td>
   <td align="center"><strong>30 m</strong><br><small>Nominal cell size</small></td>
@@ -348,9 +348,9 @@ The dataset, **PASSAGE v1.0**, is published on Hugging Face as
 
 | Item | Value |
 | --- | --- |
-| Version | 1.0, verified on the Hub at commit [`65f1e4f`](https://huggingface.co/datasets/thalesgroup/passage/tree/65f1e4f0a37d8a7b476ddf02d48fe542542924ea) |
+| Version | 1.0, verified on the Hub at commit [`2ab44d8`](https://huggingface.co/datasets/thalesgroup/passage/tree/2ab44d899652c7fb99c425488e84a7d565963547) |
 | Core scenes | 4,400,000 at seven resolutions, from 64×64 to 4096×4096 cells |
-| Route variants | 26,400,000: 26,358,039 exact routes and 41,961 proved no-path |
+| Route variants | 26,400,000, all exact routes (six per scene) |
 | Splits | train / calibration / validation / test = 90 / 2 / 4 / 4 % |
 | Test geography | South America hold-out; other tiles split by 5°×5° blocks |
 | Preview rows | 1,792 (64 per split and resolution), with rendered images |
@@ -360,8 +360,9 @@ The dataset, **PASSAGE v1.0**, is published on Hugging Face as
 | Paper | *PASSAGE: A Real-Terrain Benchmark for Trustworthy Constrained Path Planning*, NeurIPS 2026, Track on Evaluations and Datasets |
 
 Every scene records its source windows. Splits follow source-tile blocks with a
-guard ring, crops that touch missing or nodata tiles are rejected, and every
-route variant has an exact reference label or a proved no-path outcome.
+guard ring, crops that touch missing or nodata tiles and start/goal pairs that
+the obstacles disconnect are rejected, and every route variant has an exact
+reference label.
 Learned results on PASSAGE v1.0 will appear on the
 [leaderboard](docs/benchmark/leaderboard.md).
 
@@ -372,7 +373,7 @@ import numpy as np
 import zstandard
 from datasets import load_dataset
 
-REVISION = "65f1e4f0a37d8a7b476ddf02d48fe542542924ea"  # verified PASSAGE v1.0 upload
+REVISION = "2ab44d899652c7fb99c425488e84a7d565963547"  # verified PASSAGE v1.0 upload
 
 # Preview rows: small, 64 per split, with rendered images.
 rows = load_dataset("thalesgroup/passage", "256x256_samples",
@@ -391,7 +392,7 @@ obstacles = x[..., 2]  # 1 = blocked cell
 # One reference route: ordered [row, col] cells from start to goal.
 route = np.asarray(row["path_astar_energy_obstacles"])
 outcome = row["metadata"]["paths"]["astar_energy"]["obstacles"]
-print(outcome["status"], outcome["cost"], len(route))  # "ok" or "infeasible"
+print(outcome["status"], outcome["cost"], len(route))  # "ok" for every released variant
 ```
 
 Core configurations (`<N>x<N>`, no image columns) are large: `256x256` holds
@@ -619,7 +620,7 @@ outputs and their producing identities are recorded in the export manifest.
 | **Classical AI** | A\*, Dijkstra benchmarking across cost models |
 | **Reinforcement Learning** | Grid-based terrain navigation agents |
 | **Graph Neural Networks** | Learned heuristics on elevation graphs |
-| **Surrogate Models** | Route prediction trained on 4.4 M scenes (26.36 M exact reference routes) at seven resolutions |
+| **Surrogate Models** | Route prediction trained on 4.4 M scenes (26.4 M exact reference routes) at seven resolutions |
 | **Computer Vision** | Path segmentation from elevation images |
 | **Evaluation research** | Geographic hold-out, seed stability and ODD-binned reporting with `passage-eval` |
 
@@ -657,7 +658,7 @@ outputs/
 # Install dev dependencies
 uv sync --group dev
 
-# Run the 860 tests (coverage gate: 80 %)
+# Run the 865 tests (coverage gate: 80 %)
 uv run pytest --cov
 
 # Lint & format

@@ -128,7 +128,7 @@ Tensor encoding, metadata keys, route files, Parquet columns and file naming con
 
 <div class="feature-card" markdown>
 ### [Testing Strategy](testing.md)
-65 test files and 860 tests, pytest markers, the 80 % coverage gate and CI integration.
+65 test files and 865 tests, pytest markers, the 80 % coverage gate and CI integration.
 </div>
 
 </div>

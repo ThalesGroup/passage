@@ -15,7 +15,7 @@ and accompanies its [Croissant metadata](https://huggingface.co/datasets/thalesg
 
 The release receipts summarise PASSAGE v1.0 as follows:
 
-PASSAGE v1.0 contains 4,400,000 core scenes and 26,400,000 objective/obstacle variants; 1,792 separate preview rows do not add independent training observations. Terrain and labels use persisted float32 inputs decoded before authoritative float64 graph solves. Missing/nodata source crops are rejected. The qualified outcomes include 26,358,039 successful exact routes and 41,961 independently proved no-path variants. No learned model has been trained or evaluated on PASSAGE v1.0.
+PASSAGE v1.0 contains 4,400,000 core scenes and 26,400,000 objective/obstacle variants; 1,792 separate preview rows do not add independent training observations. Terrain and labels use persisted float32 inputs decoded before authoritative float64 graph solves. Missing/nodata source crops are rejected. All 26,400,000 variants are exact routes; start and goal cells that the obstacles disconnect are rejected by the generator. No learned model has been trained or evaluated on PASSAGE v1.0.
 
 The paper's learned-model results are historical results of the original study, reported as obtained; not re-run on the released dataset. This datasheet documents a computational
 annotation and qualification process. It is not an operational deployment
@@ -28,7 +28,7 @@ certification.
 PASSAGE supports reproducible, verifiable research on constrained path
 planning over real terrain. It provides multi-resolution scenes from a declared
 Operational Design Domain (ODD), three terrain cost models, procedural
-obstacles, and an exact reference outcome for every route variant, so that
+obstacles, and an exact reference route for every route variant, so that
 classical and learned planners can be compared on legality, cost and failure.
 
 ### Who created this dataset and on behalf of which entity?
@@ -55,8 +55,8 @@ obstacles blocked.
 4,400,000 core scenes at seven resolutions: 1,000,000 each at 64, 128, 256 and
 512; 250,000 at 1024; 100,000 at 2048; 50,000 at 4096. Each resolution follows
 the 90/2/4/4 train/calibration/validation/test allocation. The scenes carry
-26,400,000 route variants: 26,358,039 exact routes and 41,961 proved no-path
-outcomes, with none unresolved. Seven `_samples` configurations add 1,792
+26,400,000 route variants, six per scene, all of them exact routes. Seven
+`_samples` configurations add 1,792
 preview rows (64 per split and resolution); they repeat admitted scenes and do
 not enlarge the training population. The data occupy about 1.27 TB of Parquet
 in 5,997 shards.
@@ -99,17 +99,20 @@ a separately identified version.
 
 ### Is there a label or target associated with each instance?
 
-Yes. Each route variant has a terminal status. `ok` routes are exact optima
-under the frozen graph specification below, computed in float64 from the
-decoded float32 tensor. `infeasible` means the reference proved that no path
-exists; the route is empty and the cost is null. Tied optima can have different
-geometry. Successful routes are also listed in separate supervision rosters.
+Yes. Each route variant has a terminal status, and every released variant has
+the status `ok`: its route is an exact optimum under the frozen graph
+specification below, computed in float64 from the decoded float32 tensor. Start
+and goal cells that the obstacles disconnect are rejected by the generator, so
+every variant has a route. Tied optima can have different geometry. Every
+variant is also listed in separate supervision rosters.
 
 ### Is any information missing from individual instances?
 
 No admitted scene is incomplete. Crops that touch missing tiles, nodata cells,
 incomplete windows or elevations outside the frozen calibration range are
-rejected rather than padded or clipped. Each scene allows up to 100 attempts and
+rejected rather than padded or clipped. A start/goal pair that the obstacles
+disconnect is rejected in the same way, and the scene's seeded input stream
+supplies the next candidate crop. Each scene allows up to 100 attempts and
 records rejected attempts in its receipt. All requested scenes completed.
 
 ### Are relationships between individual instances made explicit?
@@ -155,19 +158,6 @@ statuses and cohort and supervision hashes for every resolution. A bounded
 replay of 56 selected scenes reproduced 84 scientific records and 84 preview
 images byte for byte; it does not certify every row or cross-platform
 reproducibility.
-
-*Table 3. Proved no-path variants per resolution.*
-
-| Resolution | Route variants | Exact routes | Proved no-path |
-| --- | ---: | ---: | ---: |
-| 64×64 | 6,000,000 | 5,987,736 | 12,264 |
-| 128×128 | 6,000,000 | 5,989,788 | 10,212 |
-| 256×256 | 6,000,000 | 5,991,657 | 8,343 |
-| 512×512 | 6,000,000 | 5,992,002 | 7,998 |
-| 1024×1024 | 1,500,000 | 1,498,014 | 1,986 |
-| 2048×2048 | 600,000 | 599,250 | 750 |
-| 4096×4096 | 300,000 | 299,592 | 408 |
-| **All** | 26,400,000 | 26,358,039 | 41,961 |
 
 ### Is the dataset self-contained, or does it link to other resources?
 

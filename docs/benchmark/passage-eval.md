@@ -48,7 +48,7 @@ from passage_eval.io.dataset import load_val_scenes
 scenes = load_val_scenes(
     resolution=64, cost_model="elevation", split="validation", n_samples=8,
     dataset_repo="thalesgroup/passage",
-    dataset_revision="65f1e4f0a37d8a7b476ddf02d48fe542542924ea",
+    dataset_revision="2ab44d899652c7fb99c425488e84a7d565963547",
 )
 # Local alternative: dataset_path="<root>/export"
 ```

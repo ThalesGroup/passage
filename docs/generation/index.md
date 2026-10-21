@@ -53,7 +53,7 @@ flowchart TD
     style OUT fill:#42A5F5,color:#fff
 ```
 
-Each scene yields six route variants. A variant is either an exact optimal route or a proved no-path (`infeasible`), never an approximation.
+Each scene yields six route variants, each an exact optimal route, never an approximation. A crop whose obstacles disconnect the start from the goal is rejected before any label is computed, and the scene draws its next candidate crop (see [Blocked Cells and Connected Endpoints](obstacles.md#blocked-cells-and-connected-endpoints)).
 
 ---
 

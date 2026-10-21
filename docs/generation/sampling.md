@@ -72,13 +72,14 @@ The attempt is rejected, and the scene draws again, when:
 
 - a source tile of the crop, or a tile of its guard ring, belongs to another split;
 - a source tile is missing, or a window contains nodata cells or is incomplete (crops are never padded);
-- an elevation of the crop lies outside the calibration range (values are never clipped).
+- an elevation of the crop lies outside the calibration range (values are never clipped);
+- the obstacles of Step 5 disconnect the start from the goal on the routing graph (see [Blocked Cells and Connected Endpoints](obstacles.md#blocked-cells-and-connected-endpoints)).
 
 ---
 
 ## Step 4 — Draw the Goal
 
-The **goal** is drawn uniformly among the $R^2 - 1$ cells of the crop other than the start. The pair is kept whatever the route outcome: the generator never redraws endpoints to make a route exist.
+The **goal** is drawn uniformly among the $R^2 - 1$ cells of the crop other than the start. The generator never redraws the goal alone: if the obstacles of Step 5 disconnect the start from the goal, the whole attempt is rejected and the scene draws its next candidate crop.
 
 The **marker channel** of the output tensor encodes both endpoints:
 
@@ -92,7 +93,7 @@ The **marker channel** of the output tensor encodes both endpoints:
 
 ## Step 5 — Add Obstacles
 
-Super-ellipse obstacles are drawn on the crop. They cover at most 30 % of it and never cover the start or the goal. Obstacle cells are blocked for routing. See [Obstacle Generation](obstacles.md).
+Super-ellipse obstacles are drawn on the crop. They cover at most 30 % of it and never cover the start or the goal. Obstacle cells are blocked for routing; if they disconnect the start from the goal, the attempt is rejected. See [Obstacle Generation](obstacles.md).
 
 ---
 
@@ -153,7 +154,9 @@ flowchart TD
     E -->|No| A
     E -->|Yes| F[Draw the goal among the other cells]
     F --> G["Add obstacles (≤ 30 %)"]
-    G --> H[Normalize elevation]
+    G --> K{"Start and goal<br>connected?"}
+    K -->|No| A
+    K -->|Yes| H[Normalize elevation]
     H --> L["Output: (R, R, 3) tensor"]
 
     style A fill:#1565C0,color:#fff
