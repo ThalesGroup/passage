@@ -23,11 +23,10 @@ does not replace success and obstacle violations.
 
 The per-task results of the two finalists reported in the paper are released
 under `src/passage-eval/results/paper-results/`, with three seeds of 1,024
-validation tasks at 256² under `elevation`. They are historical results of the
-original study, reported as obtained; not re-run on the released dataset. They
+validation tasks at 256² under `elevation`. They
 are not leaderboard entries. Their geometry values follow the study's
 normalization; see the
-[alignment record](protocol.md#1-reference-paper-and-alignment). The
+[alignment record](protocol.md#1-reference-paper-and-evaluation). The
 [paper-results notebook](notebooks/02-paper-results.md) tabulates them.
 
 ## Entry status

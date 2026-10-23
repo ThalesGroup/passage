@@ -19,8 +19,8 @@ intentionally git-friendly:
             ├── trustworthiness.json (optional)
             └── per_sample.npz       (optional, enables paired-bootstrap recompute)
 
-`run_id` is `<ISO-timestamp>--<method>__<resolution>__<cost>__seed<N>`
-which sorts chronologically and is unique per submission.
+`run_id` contains the method, seed and UTC timestamp. A repeated identifier
+at the same run path is rejected, so no submission can overwrite another.
 
 The leaderboard CSV is an *append-only index*: each row carries the
 canonical metadata + the six primary-metric values + a relative
@@ -37,14 +37,19 @@ from __future__ import annotations
 import csv
 import dataclasses
 import datetime as _dt
+import fcntl
 import getpass
 import json
 import os
+import shutil
 import socket
 import sys
+import tempfile
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
-from typing import Any, Iterable, Mapping, Sequence, TYPE_CHECKING
+from typing import Any, Iterable, Literal, Mapping, Sequence, TYPE_CHECKING, get_args, get_type_hints
 
 if TYPE_CHECKING:
     from pandas import DataFrame
@@ -159,7 +164,7 @@ class Submission:
         return f"{host}-cpu"
 
     def run_id(self) -> str:
-        """Globally unique run identifier (used as on-disk directory leaf)."""
+        """Run directory leaf; :func:`submit` refuses an existing path."""
         return f"{_slug(self.method_name)}__seed{self.seed}__{self.timestamp_utc}"
 
     def run_subpath(self) -> Path:
@@ -185,35 +190,39 @@ class Submission:
 
     @classmethod
     def from_row(cls, row: Mapping[str, Any]) -> "Submission":
-        primary = {k: float(row[k]) for k in PRIMARY_METRIC_KEYS if k in row}
-        kwargs = {f.name: row.get(f.name) for f in dataclasses.fields(cls) if f.name not in {"metrics", "extra"}}
-        # Coerce ints / floats / strings appropriately.
+        """Restore CSV types, rejecting malformed numeric metadata."""
+        primary = {k: float(row[k]) for k in PRIMARY_METRIC_KEYS if row.get(k) not in (None, "")}
+        kwargs = {}
+        hints = get_type_hints(cls)
         for f in dataclasses.fields(cls):
-            v = kwargs.get(f.name)
-            if v in (None, ""):
-                if f.default is not dataclasses.MISSING:
-                    kwargs[f.name] = f.default
-                elif f.default_factory is not dataclasses.MISSING:  # type: ignore[misc]
-                    kwargs[f.name] = f.default_factory()  # type: ignore[misc]
-                else:
+            if f.name in {"metrics", "extra"}:
+                continue
+            v = row.get(f.name)
+            if v in (None, "") or isinstance(v, (float, np.floating)) and np.isnan(v):
+                if f.default is dataclasses.MISSING and f.default_factory is dataclasses.MISSING:
                     kwargs[f.name] = None
                 continue
-            if f.type is int and not isinstance(v, int):
+            hint = hints[f.name]
+            if hint is int:
                 try:
-                    kwargs[f.name] = int(float(v))
-                except Exception:
-                    pass
-            if f.type is float and not isinstance(v, float):
+                    number = Decimal(str(v))
+                    if not number.is_finite() or number != number.to_integral_value():
+                        raise ValueError("expected an integer")
+                    v = int(number)
+                except (InvalidOperation, ValueError) as exc:
+                    raise ValueError(f"Invalid integer field {f.name}: {v!r}") from exc
+            elif hint is float or float in get_args(hint):
                 try:
-                    kwargs[f.name] = float(v)
-                except Exception:
-                    pass
-        sub = cls(metrics=primary, **{k: v for k, v in kwargs.items() if k != "metrics"})
-        if row.get("extra_json"):
-            try:
-                sub.extra = json.loads(row["extra_json"])
-            except json.JSONDecodeError:
-                pass
+                    v = float(v)
+                except (TypeError, ValueError) as exc:
+                    raise ValueError(f"Invalid numeric field {f.name}: {v!r}") from exc
+            kwargs[f.name] = v
+        sub = cls(metrics=primary, **kwargs)
+        extra_json = row.get("extra_json")
+        if extra_json and not (isinstance(extra_json, (float, np.floating)) and np.isnan(extra_json)):
+            sub.extra = json.loads(extra_json)
+            if not isinstance(sub.extra, dict):
+                raise ValueError("extra_json must encode an object")
         return sub
 
 
@@ -225,14 +234,64 @@ LEADERBOARD_CSV = "leaderboard.csv"
 RUNS_DIR = "runs"
 
 
-def _atomic_append_csv(csv_path: Path, row: dict[str, Any], fieldnames: Sequence[str]) -> None:
+@contextmanager
+def _store_lock(root: Path):
+    """Serialize writers on the supported POSIX filesystem."""
+    root.mkdir(parents=True, exist_ok=True)
+    with (root / ".leaderboard.lock").open("a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(lock, fcntl.LOCK_UN)
+
+
+def _replace_csv(csv_path: Path, rows: Iterable[Mapping[str, Any]], fieldnames: Sequence[str]) -> None:
+    """Publish a complete CSV, leaving the previous index intact on failure."""
     csv_path.parent.mkdir(parents=True, exist_ok=True)
-    new_file = not csv_path.exists()
-    with csv_path.open("a", newline="") as fh:
-        writer = csv.DictWriter(fh, fieldnames=fieldnames, extrasaction="ignore")
-        if new_file:
+    descriptor, temporary = tempfile.mkstemp(prefix=".leaderboard-", suffix=".csv", dir=csv_path.parent)
+    try:
+        with os.fdopen(descriptor, "w", newline="", encoding="utf-8") as fh:
+            writer = csv.DictWriter(fh, fieldnames=fieldnames, extrasaction="ignore")
             writer.writeheader()
-        writer.writerow(row)
+            writer.writerows(rows)
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(temporary, csv_path)
+    finally:
+        Path(temporary).unlink(missing_ok=True)
+
+
+def _atomic_append_csv(csv_path: Path, row: dict[str, Any], fieldnames: Sequence[str]) -> None:
+    # Callers hold _store_lock across validation, run publication and index update.
+    rows = []
+    if csv_path.exists():
+        with csv_path.open(newline="", encoding="utf-8") as fh:
+            reader = csv.DictReader(fh)
+            fieldnames = list(dict.fromkeys([*(reader.fieldnames or []), *fieldnames]))
+            rows.extend(reader)
+    rows.append(row)
+    _replace_csv(csv_path, rows, fieldnames)
+
+
+def _index_contains_row(csv_path: Path, row: Mapping[str, Any]) -> bool:
+    """Resolve an interrupted replace from the committed index under its lock."""
+    if not csv_path.exists():
+        return False
+    expected = {key: "" if value is None else str(value) for key, value in row.items()}
+    with csv_path.open(newline="", encoding="utf-8") as store:
+        return any(
+            all(candidate.get(key) == value for key, value in expected.items()) for candidate in csv.DictReader(store)
+        )
+
+
+def _run_metrics_paths(root: Path) -> Iterable[Path]:
+    """Visit each run bundle once, excluding its nested execution artifacts."""
+    for directory, children, files in os.walk(root / RUNS_DIR):
+        children.sort()
+        if "metrics.json" in files:
+            yield Path(directory) / "metrics.json"
+            children.clear()
 
 
 def _write_json(path: Path, data: Any) -> None:
@@ -283,55 +342,100 @@ def submit(
     -------
     Path
         The run directory.
+
+    Notes
+    -----
+    Writers and rebuilds share a POSIX lock. Existing run paths are rejected.
+    A write failure before index publication leaves the previous index unchanged.
+    An interruption after publication preserves the committed run and index.
+    After an abrupt process interruption between run and index publication,
+    :func:`rebuild_leaderboard` recovers the completed run from ``metrics.json``.
     """
     root = Path(root)
     csv_path = root / LEADERBOARD_CSV
-    if csv_path.exists():
-        contract = submission.extra.get("metric_contract")
-        with csv_path.open(newline="", encoding="utf-8") as store:
-            for row in csv.DictReader(store):
-                existing = json.loads(row.get("extra_json") or "{}")
-                if existing.get("metric_contract") != contract:
-                    raise ValueError("Cannot mix metric contracts in one leaderboard; use a fresh results root")
-    run_dir = root / RUNS_DIR / submission.run_subpath()
-    run_dir.mkdir(parents=True, exist_ok=True)
-
-    metrics_path = run_dir / "metrics.json"
-
-    if per_sample is not None:
-        npz_path = run_dir / "per_sample.npz"
-        np.savez_compressed(npz_path, **{k: np.asarray(v) for k, v in per_sample.items()})
-        submission.per_sample_path = str(npz_path.relative_to(root))
-
-    if sidecar is not None:
-        sc_path = run_dir / "sidecar.json"
-        payload = sidecar.to_dict() if hasattr(sidecar, "to_dict") else dict(sidecar)
-        _write_json(sc_path, payload)
-        submission.sidecar_path = str(sc_path.relative_to(root))
-
-    if trustworthiness is not None:
-        tr_path = run_dir / "trustworthiness.json"
-        payload = [(axis.as_dict() if hasattr(axis, "as_dict") else dict(axis)) for axis in trustworthiness]
-        _write_json(tr_path, payload)
-        submission.trustworthiness_path = str(tr_path.relative_to(root))
-
-    csv_path = root / LEADERBOARD_CSV
-    row = submission.to_row()
-    _write_json(
-        metrics_path,
-        {
-            "method_name": submission.method_name,
-            "family": submission.family,
-            "resolution": submission.resolution,
-            "cost_model": submission.cost_model,
-            "seed": submission.seed,
-            "metrics": submission.metrics,
-            "submission": row,
-        },
-    )
-
-    fieldnames = list(row.keys())
-    _atomic_append_csv(csv_path, row, fieldnames)
+    # Build generated pointers on a copy: failure must not mutate caller metadata.
+    stored = dataclasses.replace(submission, per_sample_path=None, sidecar_path=None, trustworthiness_path=None)
+    contract = stored.extra.get("metric_contract")
+    if per_sample is not None and "metric_contract" in per_sample:
+        array_contract = np.asarray(per_sample["metric_contract"])
+        if array_contract.ndim != 0 or not isinstance(array_contract.item(), str):
+            raise ValueError("per_sample metric_contract must be a scalar string")
+        if array_contract.item() != contract:
+            raise ValueError("per_sample metric contract differs from submission metadata")
+    run_dir = root / RUNS_DIR / stored.run_subpath()
+    with _store_lock(root):
+        if run_dir.exists():
+            raise FileExistsError(f"Submission run already exists: {run_dir}")
+        if csv_path.exists():
+            with csv_path.open(newline="", encoding="utf-8") as store:
+                for row in csv.DictReader(store):
+                    existing = json.loads(row.get("extra_json") or "{}")
+                    if existing.get("metric_contract") != contract:
+                        raise ValueError("Cannot mix metric contracts in one leaderboard; use a fresh results root")
+        # The CSV is only an index: a missing/stale index cannot hide runs from
+        # contract validation (including a run committed before interruption).
+        for metrics_path in _run_metrics_paths(root):
+            payload = json.loads(metrics_path.read_text(encoding="utf-8"))
+            if "submission" in payload:
+                existing = json.loads(payload["submission"].get("extra_json") or "{}")
+            else:
+                sidecar_path = metrics_path.parent / "sidecar.json"
+                existing = (
+                    json.loads(sidecar_path.read_text(encoding="utf-8")).get("extra", {})
+                    if sidecar_path.exists()
+                    else {}
+                )
+            if existing.get("metric_contract") != contract:
+                raise ValueError("Cannot mix metric contracts in one leaderboard; use a fresh results root")
+        # Staging lives outside runs/, so rebuild never indexes incomplete work.
+        with tempfile.TemporaryDirectory(prefix=".submission-", dir=root) as temporary:
+            staged = Path(temporary) / "run"
+            staged.mkdir()
+            if per_sample is not None:
+                np.savez_compressed(staged / "per_sample.npz", **{k: np.asarray(v) for k, v in per_sample.items()})
+                stored.per_sample_path = str((run_dir / "per_sample.npz").relative_to(root))
+            if sidecar is not None:
+                payload = sidecar.to_dict() if hasattr(sidecar, "to_dict") else dict(sidecar)
+                if "metric_contract" in payload.get("extra", {}) and payload["extra"]["metric_contract"] != contract:
+                    raise ValueError("sidecar metric contract differs from submission metadata")
+                _write_json(staged / "sidecar.json", payload)
+                stored.sidecar_path = str((run_dir / "sidecar.json").relative_to(root))
+            if trustworthiness is not None:
+                payload = [(axis.as_dict() if hasattr(axis, "as_dict") else dict(axis)) for axis in trustworthiness]
+                _write_json(staged / "trustworthiness.json", payload)
+                stored.trustworthiness_path = str((run_dir / "trustworthiness.json").relative_to(root))
+            row = stored.to_row()
+            _write_json(
+                staged / "metrics.json",
+                {
+                    "method_name": stored.method_name,
+                    "family": stored.family,
+                    "resolution": stored.resolution,
+                    "cost_model": stored.cost_model,
+                    "seed": stored.seed,
+                    "metrics": stored.metrics,
+                    "submission": row,
+                },
+            )
+            run_dir.parent.mkdir(parents=True, exist_ok=True)
+            os.replace(staged, run_dir)
+            try:
+                _atomic_append_csv(csv_path, row, list(row))
+            except BaseException:
+                # A signal can arrive after os.replace committed the index but
+                # before the call returned. Never remove a published row's run.
+                try:
+                    published = _index_contains_row(csv_path, row)
+                except (OSError, csv.Error):
+                    # Preserve authoritative artifacts if index state is unknown;
+                    # an explicit rebuild can recover them after the failure.
+                    published = True
+                if not published:
+                    shutil.rmtree(run_dir)
+                raise
+        submission.per_sample_path = stored.per_sample_path
+        submission.sidecar_path = stored.sidecar_path
+        submission.trustworthiness_path = stored.trustworthiness_path
     return run_dir
 
 
@@ -385,33 +489,33 @@ def load_leaderboard(root: str | Path = "results") -> Leaderboard:
 
 
 def rebuild_leaderboard(root: str | Path = "results") -> Path:
-    """Rebuild `<root>/leaderboard.csv` from the `runs/` tree."""
-    import pandas as pd
-
+    """Atomically rebuild the index while excluding concurrent submissions."""
     root = Path(root)
-    runs_root = root / RUNS_DIR
+    with _store_lock(root):
+        return _rebuild_leaderboard(root)
+
+
+def _rebuild_leaderboard(root: Path) -> Path:
     rows: list[dict[str, Any]] = []
-    if runs_root.exists():
-        for metrics_path in sorted(runs_root.rglob("metrics.json")):
-            run_dir = metrics_path.parent
-            payload = json.loads(metrics_path.read_text())
-            row = {key: None for key in _csv_fieldnames()}
-            if "submission" in payload:
-                row.update(payload["submission"])
-            else:
-                # Historical bundles have fewer fields. Preserve unknowns;
-                # recover contract provenance from a sidecar when available.
-                row.update({k: payload.get(k) for k in row if k in payload})
-                sidecar_path = run_dir / "sidecar.json"
-                if sidecar_path.exists():
-                    sidecar = json.loads(sidecar_path.read_text())
-                    row["extra_json"] = json.dumps(sidecar.get("extra", {}), sort_keys=True)
-                    row["sidecar_path"] = str(sidecar_path.relative_to(root))
-                row.update({k: payload.get("metrics", {}).get(k, float("nan")) for k in PRIMARY_METRIC_KEYS})
-            rows.append({key: row.get(key) for key in _csv_fieldnames()})
+    for metrics_path in _run_metrics_paths(root):
+        run_dir = metrics_path.parent
+        payload = json.loads(metrics_path.read_text())
+        row = {key: None for key in _csv_fieldnames()}
+        if "submission" in payload:
+            row.update(payload["submission"])
+        else:
+            # Historical bundles have fewer fields. Preserve unknowns;
+            # recover contract provenance from a sidecar when available.
+            row.update({k: payload.get(k) for k in row if k in payload})
+            sidecar_path = run_dir / "sidecar.json"
+            if sidecar_path.exists():
+                sidecar = json.loads(sidecar_path.read_text())
+                row["extra_json"] = json.dumps(sidecar.get("extra", {}), sort_keys=True)
+                row["sidecar_path"] = str(sidecar_path.relative_to(root))
+            row.update({k: payload.get("metrics", {}).get(k, float("nan")) for k in PRIMARY_METRIC_KEYS})
+        rows.append({key: row.get(key) for key in _csv_fieldnames()})
     csv_path = root / LEADERBOARD_CSV
-    csv_path.parent.mkdir(parents=True, exist_ok=True)
-    pd.DataFrame(rows, columns=_csv_fieldnames()).to_csv(csv_path, index=False)
+    _replace_csv(csv_path, rows, _csv_fieldnames())
     return csv_path
 
 
@@ -667,36 +771,207 @@ def _accel_order(values: Iterable[str]) -> list[str]:
     return sorted(set(values), key=lambda v: (priority.get(v, 99), v))
 
 
-def summarise_leaderboard(df, metric: str = "cost_regret_median") -> "DataFrame":
-    """Three-seed mean/std table grouped by (method, accelerator)."""
+def summarise_leaderboard(
+    df,
+    metric: str = "cost_regret_median",
+    *,
+    replicate_policy: Literal["error", "mean"] = "error",
+) -> "DataFrame":
+    """Mean/std across distinct seeds within identical benchmark conditions.
+
+    Conditions include the method/decoder, data revision and cohort, objective,
+    split, runtime, hardware and metric contract. Additional ``extra`` settings
+    are retained in ``comparison_extra_json``. Measured timings, per-seed
+    checkpoint identities and run pointers are provenance, not conditions;
+    every source row is retained in ``provenance_json``. Checkpoint/bundle and
+    seed keys in ``inference_kwargs``, and ``component_control.checkpoint_id``,
+    are treated as per-seed identities.
+
+    Repeated seeds raise by default. With the explicit ``"mean"`` policy,
+    first average replicates within each seed, then weight distinct seeds
+    equally. ``n_runs`` counts submitted rows; ``n_seeds`` counts unique seeds;
+    ``n_metric_seeds`` counts seeds with a finite estimate. Missing estimates
+    remain missing. Timing is the median of per-seed median timings.
+    """
     import pandas as pd
 
+    if replicate_policy not in {"error", "mean"}:
+        raise ValueError("replicate_policy must be 'error' or 'mean'")
     if df.empty:
         return pd.DataFrame()
+    df = df.copy().reset_index(drop=True)
+    if "seed" not in df:
+        raise ValueError("A seed is required for every leaderboard row")
+    seeds = pd.to_numeric(df["seed"], errors="raise")
+    if not np.isfinite(seeds).all() or (seeds % 1 != 0).any():
+        raise ValueError("Every leaderboard seed must be a finite integer")
+    df["seed"] = seeds.astype("int64")
+    df[metric] = pd.to_numeric(df[metric], errors="raise").replace([np.inf, -np.inf], np.nan)
+    if "latency_e2e_ms_p50" not in df:
+        df["latency_e2e_ms_p50"] = np.nan
     # Recompute the slug column from host + edge_accelerator if missing.
     if "host_accelerator_slug" not in df.columns:
-        df = df.copy()
         df["host_accelerator_slug"] = df.apply(
             lambda r: (
-                str(r["edge_accelerator"]).lower()
+                _slug(str(r["edge_accelerator"])).lower()
                 if isinstance(r.get("edge_accelerator"), str) and r["edge_accelerator"]
-                else f"{str(r.get('host', 'unknown')).lower()}-cpu"
+                else f"{_slug(str(r.get('host', 'unknown'))).lower()}-cpu"
             ),
             axis=1,
         )
-    grp = (
-        df.groupby(["method_name", "family", "host_accelerator_slug"])
-        .agg(
-            mean=(metric, "mean"),
-            std=(metric, "std"),
-            n_seeds=(metric, "count"),
-            latency_e2e_ms_p50=("latency_e2e_ms_p50", "median"),
-            n_samples=("n_samples", "max"),
+    conditions = [
+        "method_name",
+        "family",
+        "architecture",
+        "decoder_variant",
+        "resolution",
+        "cost_model",
+        "cost_weight",
+        "split",
+        "dataset_version",
+        "package_version",
+        "commit_sha",
+        "host",
+        "host_accelerator_slug",
+        "batch_size",
+        "dtype",
+        "n_samples",
+        "metric_contract",
+        "task_variant",
+        "dataset_repo",
+        "dataset_revision",
+        "comparison_extra_json",
+    ]
+    extra_columns = {"metric_contract", "task_variant", "dataset_repo", "dataset_revision"}
+    # These vary by seed/run, or are measured outcomes rather than settings.
+    provenance_keys = {
+        "seed",
+        "seeds",
+        "seed_set",
+        "procedure_id",
+        "checkpoint_hashes",
+        "throughput_samples_per_s",
+        "latency_e2e_ms_p50",
+        "latency_e2e_ms_p95",
+        "latency_e2e_ms_p99",
+        "latency_fwd_ms_p50",
+        "latency_decoder_ms_p50",
+    }
+    for name in conditions:
+        if name not in df:
+            df[name] = None
+    provenance = []
+    for index, row in df.iterrows():
+        value = row.get("extra_json")
+        extra = json.loads(value) if isinstance(value, str) and value else {}
+        if not isinstance(extra, dict):
+            raise ValueError("extra_json must encode an object")
+        comparison = {key: value for key, value in extra.items() if key not in provenance_keys | extra_columns}
+        if isinstance(comparison.get("inference_kwargs"), dict):
+            comparison["inference_kwargs"] = {
+                key: value
+                for key, value in comparison["inference_kwargs"].items()
+                if "checkpoint" not in key
+                and "bundle" not in key
+                and key not in {"seed", "random_seed", "training_seed"}
+            }
+        if isinstance(comparison.get("component_control"), dict):
+            comparison["component_control"] = {
+                key: value for key, value in comparison["component_control"].items() if key != "checkpoint_id"
+            }
+        for name in extra_columns:
+            df.at[index, name] = extra.get(name, row.get(name))
+        df.at[index, "comparison_extra_json"] = json.dumps(comparison, sort_keys=True, default=_json_default)
+        provenance.append(
+            {
+                "seed": int(row["seed"]),
+                "timestamp_utc": row.get("timestamp_utc"),
+                "per_sample_path": row.get("per_sample_path"),
+                "sidecar_path": row.get("sidecar_path"),
+                "trustworthiness_path": row.get("trustworthiness_path"),
+                "extra": extra,
+            }
         )
-        .reset_index()
+    df["_provenance"] = provenance
+    rows = []
+    for keys, group in df.groupby(conditions, dropna=False, sort=False):
+        if group.seed.duplicated().any() and replicate_policy == "error":
+            raise ValueError(
+                "Repeated seed within identical benchmark conditions; "
+                "select runs or explicitly set replicate_policy='mean'"
+            )
+        estimates = group.groupby("seed", sort=False)[metric].mean()
+        timings = group.groupby("seed", sort=False).latency_e2e_ms_p50.median()
+        rows.append(
+            dict(
+                zip(conditions, keys),
+                mean=float(estimates.mean()),
+                std=float(estimates.std()),
+                n_seeds=int(group.seed.nunique()),
+                n_runs=len(group),
+                n_metric_seeds=int(estimates.count()),
+                latency_e2e_ms_p50=float(timings.median()) if timings.notna().any() else float("nan"),
+                provenance_json=json.dumps(group._provenance.tolist(), sort_keys=True, default=_json_default),
+            )
+        )
+    return pd.DataFrame(rows).sort_values(["family", "method_name", "host_accelerator_slug"], kind="stable")
+
+
+def _require_unique_plot_conditions(summary: "DataFrame") -> None:
+    if summary.duplicated(["method_name", "host_accelerator_slug"]).any():
+        raise ValueError(
+            "Filter benchmark conditions before plotting: multiple conditions occupy the same method/accelerator cell"
+        )
+    shared = [
+        "resolution",
+        "cost_model",
+        "cost_weight",
+        "split",
+        "dataset_version",
+        "package_version",
+        "n_samples",
+        "metric_contract",
+        "task_variant",
+        "dataset_repo",
+        "dataset_revision",
+    ]
+    if len(summary[shared].drop_duplicates()) > 1:
+        raise ValueError(
+            "Filter benchmark conditions before plotting: benchmark populations or metric contracts differ"
+        )
+    stats_and_hardware = {
+        "host",
+        "host_accelerator_slug",
+        "mean",
+        "std",
+        "n_seeds",
+        "n_runs",
+        "n_metric_seeds",
+        "latency_e2e_ms_p50",
+        "provenance_json",
+    }
+    conditions = summary.drop(columns=list(stats_and_hardware)).copy()
+    conditions["comparison_extra_json"] = conditions.comparison_extra_json.map(
+        lambda value: json.dumps(
+            {key: item for key, item in json.loads(value).items() if key != "hardware_stack"}, sort_keys=True
+        )
     )
-    grp = grp.sort_values(["family", "method_name", "host_accelerator_slug"])
-    return grp
+    for _, group in conditions.groupby("method_name", sort=False):
+        if len(group.drop_duplicates()) > 1:
+            raise ValueError("Filter benchmark conditions before plotting: method settings differ across accelerators")
+    # Cohort identities can be carried in extra rather than Submission fields.
+    for key in (
+        "sample_ids",
+        "dataset_content_hash",
+        "reference_identity",
+        "evaluator_source_hash",
+        "reference_policy",
+        "reference_cohort_id",
+        "quality_repeat_index",
+    ):
+        values = {json.dumps(json.loads(value).get(key), sort_keys=True) for value in summary.comparison_extra_json}
+        if len(values) > 1:
+            raise ValueError(f"Filter benchmark conditions before plotting: {key} differs")
 
 
 def plot_grouped_bars_by_accelerator(
@@ -718,6 +993,7 @@ def plot_grouped_bars_by_accelerator(
         return ax
 
     summary = summarise_leaderboard(df, metric=metric)
+    _require_unique_plot_conditions(summary)
     methods = list(summary.method_name.unique())
     accels = _accel_order(summary.host_accelerator_slug.unique())
     n_methods = len(methods)
@@ -778,6 +1054,7 @@ def plot_latency_heatmap(
         return ax
 
     summary = summarise_leaderboard(df, metric=latency_column)
+    _require_unique_plot_conditions(summary)
     methods = sorted(summary.method_name.unique())
     accels = _accel_order(summary.host_accelerator_slug.unique())
     matrix = np.full((len(methods), len(accels)), np.nan, dtype=np.float64)
@@ -843,6 +1120,7 @@ def plot_metric_vs_accelerator(
         return ax
 
     summary = summarise_leaderboard(df, metric=metric)
+    _require_unique_plot_conditions(summary)
     accels = _accel_order(summary.host_accelerator_slug.unique())
     method_styles = {
         m: dict(marker=mk, color=_family_colour(fam))
@@ -904,15 +1182,41 @@ def scoreboard_markdown(df, *, metric: str = "cost_regret_median", higher_is_bet
             continue
         lines.append(f"## family: `{family}`")
         lines.append("")
-        lines.append(f"| method | host / accel | seeds | {metric} (mean ± std) | latency_e2e_ms_p50 | n_samples |")
-        lines.append("|---|---|---:|---:|---:|---:|")
+        lines.append(
+            f"| method | host / accel | metric seeds (available / total) | {metric} (mean ± std) | latency_e2e_ms_p50 | n_samples | runs | conditions | sources |"
+        )
+        lines.append("|---|---|---:|---:|---:|---:|---:|---|---|")
         for _, r in sub.iterrows():
             std = r["std"]
             std_str = f"± {std:.4f}" if pd.notna(std) and std > 0 else ""
+            estimate = f"{r['mean']:.4f} {std_str}".strip() if r.n_metric_seeds else "unavailable"
+            conditions = {
+                key: (None if pd.isna(value) else value)
+                for key, value in r.items()
+                if key
+                not in {
+                    "method_name",
+                    "family",
+                    "host_accelerator_slug",
+                    "mean",
+                    "std",
+                    "n_seeds",
+                    "n_runs",
+                    "n_metric_seeds",
+                    "latency_e2e_ms_p50",
+                    "provenance_json",
+                }
+            }
+            condition_text = json.dumps(conditions, sort_keys=True, default=_json_default).replace("|", "\\|")
+            sources = json.dumps(json.loads(r.provenance_json), sort_keys=True).replace("|", "\\|")
             lines.append(
                 f"| `{r.method_name}` | `{r.host_accelerator_slug}` | "
-                f"{int(r.n_seeds)} | {r['mean']:.4f} {std_str} | "
-                f"{r['latency_e2e_ms_p50']:.2f} | {int(r['n_samples'])} |"
+                f"{int(r.n_metric_seeds)}/{int(r.n_seeds)} | {estimate} | "
+                f"{r['latency_e2e_ms_p50']:.2f} | {int(r['n_samples'])} | {int(r.n_runs)} | "
+                f"`{condition_text}` | `{sources}` |"
             )
         lines.append("")
+    lines.append(
+        "Metric seed coverage is available estimates / total distinct seeds; missing estimates are excluded from the mean and standard deviation."
+    )
     return "\n".join(lines)

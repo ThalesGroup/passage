@@ -69,8 +69,10 @@ def _setup_minimal_export_tree(tmp_path: Path) -> tuple[Path, Path, Path]:
     notebooks_dir.mkdir()
     import nbformat
     from passage.notebook_export import TEMPLATES, PAPER_REPORTS, VISION_REPORTS
-    fixture_notebook = nbformat.v4.new_notebook(cells=[nbformat.v4.new_code_cell(
-        "resolution = 64\noutput_dir = None", metadata={"tags": ["parameters"]})])
+
+    fixture_notebook = nbformat.v4.new_notebook(
+        cells=[nbformat.v4.new_code_cell("resolution = 64\noutput_dir = None", metadata={"tags": ["parameters"]})]
+    )
     for kind in TEMPLATES:
         nbformat.write(fixture_notebook, notebooks_dir / f"_{kind}.ipynb")
     for group, names in (("paper", PAPER_REPORTS), ("vision/paper", VISION_REPORTS)):
@@ -241,7 +243,9 @@ def test_export_and_upload_passes_num_cpus_to_notebook(tmp_path):
             with patch("passage.export.HfApi") as api_mock:
                 api_instance = MagicMock()
                 api_mock.return_value = api_instance
-                with patch("passage.export._execute_notebook_with_retries", side_effect=_mock_executed_notebook) as exec_mock:
+                with patch(
+                    "passage.export._execute_notebook_with_retries", side_effect=_mock_executed_notebook
+                ) as exec_mock:
                     with patch("passage.export._process_meta_for_prepare", new=_mock_prepare_row):
                         with patch("passage.export._features", new=_mock_features):
                             ok = export_and_upload(
@@ -287,7 +291,9 @@ def test_export_and_upload_uses_explicit_calibration_filepath(tmp_path):
             with patch("passage.export.HfApi") as api_mock:
                 api_instance = MagicMock()
                 api_mock.return_value = api_instance
-                with patch("passage.export._execute_notebook_with_retries", side_effect=_mock_executed_notebook) as exec_mock:
+                with patch(
+                    "passage.export._execute_notebook_with_retries", side_effect=_mock_executed_notebook
+                ) as exec_mock:
                     with patch("passage.export._process_meta_for_prepare", new=_mock_prepare_row):
                         with patch("passage.export._features", new=_mock_features):
                             ok = export_and_upload(
@@ -565,23 +571,46 @@ def test_export_and_upload_stages_release_metadata(tmp_path):
 def test_prepare_export_rejects_missing_display_template_after_other_jobs_execute(tmp_path):
     dataset, notebooks, calibration = _setup_minimal_export_tree(tmp_path)
     _write_dummy_metadata(dataset, 64)
-    (notebooks / '_display.ipynb').unlink()
-    with patch('passage.export._process_meta_for_prepare', side_effect=_mock_prepare_row), \
-         patch('passage.export._features', side_effect=_mock_features), \
-         patch('passage.export._execute_notebook_with_retries', side_effect=_mock_executed_notebook):
-        assert export_and_upload(dataset_dirpath=dataset, calibrate_dirpath=calibration,
-            notebooks_dirpath=notebooks, resolutions=[64], execute_notebooks=True,
-            skip_upload=True, num_cpus=0) is False
+    (notebooks / "_display.ipynb").unlink()
+    with (
+        patch("passage.export._process_meta_for_prepare", side_effect=_mock_prepare_row),
+        patch("passage.export._features", side_effect=_mock_features),
+        patch("passage.export._execute_notebook_with_retries", side_effect=_mock_executed_notebook),
+    ):
+        assert (
+            export_and_upload(
+                dataset_dirpath=dataset,
+                calibrate_dirpath=calibration,
+                notebooks_dirpath=notebooks,
+                resolutions=[64],
+                execute_notebooks=True,
+                skip_upload=True,
+                num_cpus=0,
+            )
+            is False
+        )
 
 
 def test_prepare_export_rejects_absent_global_report_source_directory(tmp_path):
     import shutil
+
     dataset, notebooks, calibration = _setup_minimal_export_tree(tmp_path)
     _write_dummy_metadata(dataset, 64)
-    shutil.rmtree(tmp_path / 'paper/notebooks')
-    with patch('passage.export._process_meta_for_prepare', side_effect=_mock_prepare_row), \
-         patch('passage.export._features', side_effect=_mock_features), \
-         patch('passage.export._execute_notebook_with_retries', side_effect=_mock_executed_notebook):
-        assert export_and_upload(dataset_dirpath=dataset, calibrate_dirpath=calibration,
-            notebooks_dirpath=notebooks, resolutions=[64], execute_notebooks=True,
-            skip_upload=True, num_cpus=0) is False
+    shutil.rmtree(tmp_path / "paper/notebooks")
+    with (
+        patch("passage.export._process_meta_for_prepare", side_effect=_mock_prepare_row),
+        patch("passage.export._features", side_effect=_mock_features),
+        patch("passage.export._execute_notebook_with_retries", side_effect=_mock_executed_notebook),
+    ):
+        assert (
+            export_and_upload(
+                dataset_dirpath=dataset,
+                calibrate_dirpath=calibration,
+                notebooks_dirpath=notebooks,
+                resolutions=[64],
+                execute_notebooks=True,
+                skip_upload=True,
+                num_cpus=0,
+            )
+            is False
+        )

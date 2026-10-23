@@ -18,10 +18,19 @@ def local_spec(tmp_path, release_row, **changes):
     split = tmp_path / "data" / "3x3" / "validation"
     split.mkdir(parents=True, exist_ok=True)
     pq.write_table(pa.Table.from_pylist([release_row]), split / "data-00000.parquet")
-    spec = BenchSpec("prototype", "classical", "bounded_dijkstra",
-                     inference="passage_eval.baselines.classical:BoundedExactPlanner",
-                     resolution=3, n_samples=1, seeds=[1234], dataset_path=str(tmp_path / "data"),
-                     latency_repeats=2, latency_warmup=1, results_root=str(tmp_path / "results"))
+    spec = BenchSpec(
+        "prototype",
+        "classical",
+        "bounded_dijkstra",
+        inference="passage_eval.baselines.classical:BoundedExactPlanner",
+        resolution=3,
+        n_samples=1,
+        seeds=[1234],
+        dataset_path=str(tmp_path / "data"),
+        latency_repeats=2,
+        latency_warmup=1,
+        results_root=str(tmp_path / "results"),
+    )
     spec = replace(spec, **changes)
     path = tmp_path / "spec.json"
     path.write_text(json.dumps(spec.to_dict()))
@@ -33,10 +42,10 @@ def test_conform_run_score_local_roundtrip(tmp_path, release_row):
     assert main(["conform", "--spec", str(spec_path), "--output", str(tmp_path / "conform")]) == 0
     receipt = json.loads((tmp_path / "conform" / "conformance.json").read_text())
     assert receipt["status"] == "passed"
-    assert receipt['harness_checks']['absolute_deadline'] == 'passed'
-    assert receipt['harness_checks']['ordinary_input_no_reference_fields'] == 'passed'
-    assert receipt['harness_checks']['terminal_failure_accounting'] == 'passed'
-    assert receipt['claim_scope'] == 'cpu_contract_checks_not_device_or_population_certification'
+    assert receipt["harness_checks"]["absolute_deadline"] == "passed"
+    assert receipt["harness_checks"]["ordinary_input_no_reference_fields"] == "passed"
+    assert receipt["harness_checks"]["terminal_failure_accounting"] == "passed"
+    assert receipt["claim_scope"] == "cpu_contract_checks_not_device_or_population_certification"
     run_root = tmp_path / "run"
     assert main(["run", "--spec", str(spec_path), "--output", str(run_root)]) == 0
     seed_root = run_root / "seed-1234"
@@ -67,9 +76,22 @@ def test_compare_report_cli_actual_scored_artifacts(tmp_path, release_row):
         assert main(["run", "--spec", str(spec_path), "--output", str(root)]) == 0
         assert main(["score", "--run", str(root)]) == 0
     comparison = tmp_path / "comparison.json"
-    assert main(["compare", "--score", str(roots[0] / "seed-1234"),
-                 "--score", str(roots[1] / "seed-1234"), "--output", str(comparison),
-                 "--bootstrap-resamples", "10"]) == 0
+    assert (
+        main(
+            [
+                "compare",
+                "--score",
+                str(roots[0] / "seed-1234"),
+                "--score",
+                str(roots[1] / "seed-1234"),
+                "--output",
+                str(comparison),
+                "--bootstrap-resamples",
+                "10",
+            ]
+        )
+        == 0
+    )
     data = json.loads(comparison.read_text())
     assert data["n_tasks"] == 1
     assert data["primary_repeat_index"] == 0
@@ -81,14 +103,30 @@ def test_compare_report_cli_actual_scored_artifacts(tmp_path, release_row):
     json_report = tmp_path / "report.json"
     assert main(["report", "--compare", str(comparison), "--output", str(json_report), "--format", "json"]) == 0
     assert json.loads(json_report.read_text()) == data
-    odd_spec = {"axes": ["elev_std", "endpoint_separation_normalized", "obstacle_fraction"],
-                "edges": {"elev_std": [0, 1], "endpoint_separation_normalized": [0, 1],
-                          "obstacle_fraction": [0, 0.5, 1]}}
+    odd_spec = {
+        "axes": ["elev_std", "endpoint_separation_normalized", "obstacle_fraction"],
+        "edges": {"elev_std": [0, 1], "endpoint_separation_normalized": [0, 1], "obstacle_fraction": [0, 0.5, 1]},
+    }
     odd_path = tmp_path / "odd.json"
     odd_path.write_text(json.dumps(odd_spec))
-    assert main(["compare", "--score", str(roots[0] / "seed-1234"),
-                 "--score", str(roots[1] / "seed-1234"), "--output", str(comparison),
-                 "--odd-spec", str(odd_path), "--bootstrap-resamples", "10"]) == 0
+    assert (
+        main(
+            [
+                "compare",
+                "--score",
+                str(roots[0] / "seed-1234"),
+                "--score",
+                str(roots[1] / "seed-1234"),
+                "--output",
+                str(comparison),
+                "--odd-spec",
+                str(odd_path),
+                "--bootstrap-resamples",
+                "10",
+            ]
+        )
+        == 0
+    )
     coverage = json.loads(comparison.read_text())["joint_odd_coverage"]
     assert coverage["spec"] == odd_spec
     assert len(coverage["spec_sha256"]) == 64
@@ -135,15 +173,21 @@ def test_unqualified_reference_rejected_before_candidate_construction(tmp_path, 
     release_row["path_astar_elevation_obstacles"] = [[0, 0], [1, 0], [2, 1], [2, 2]]
     release_row["metadata"]["paths"]["astar_elevation"]["obstacles"]["cost"] = 60 + 30 * np.sqrt(2)
     spec, _ = local_spec(tmp_path, release_row)
-    monkeypatch.setattr(cli, "_materialise_planner", lambda spec: pytest.fail("candidate admission must follow qualification"))
+    monkeypatch.setattr(
+        cli, "_materialise_planner", lambda spec: pytest.fail("candidate admission must follow qualification")
+    )
     with pytest.raises(ValueError, match="stored_path_suboptimal"):
         cmd_run(spec, tmp_path / "run")
 
 
 def test_fresh_named_cohort_preserves_source_label_defect(tmp_path, release_row):
     release_row["metadata"]["paths"]["astar_elevation"]["obstacles"]["cost"] += 1
-    _, spec_path = local_spec(tmp_path, release_row, reference_policy="independent_analytic_reference",
-                              reference_cohort_id="tiny-fresh-reference-v1")
+    _, spec_path = local_spec(
+        tmp_path,
+        release_row,
+        reference_policy="independent_analytic_reference",
+        reference_cohort_id="tiny-fresh-reference-v1",
+    )
     run = tmp_path / "fresh"
     assert main(["run", "--spec", str(spec_path), "--output", str(run)]) == 0
     assert main(["score", "--run", str(run)]) == 0
@@ -185,7 +229,10 @@ def test_procedure_identity_binds_external_entrypoint_source(tmp_path, metre_sce
     after = _manifest(spec, [metre_scene], {})
     assert before["procedure_id"] != after["procedure_id"]
     files = before["candidate_identity"]["module_files"]
-    assert files["external_candidate"]["sha256"] != after["candidate_identity"]["module_files"]["external_candidate"]["sha256"]
+    assert (
+        files["external_candidate"]["sha256"]
+        != after["candidate_identity"]["module_files"]["external_candidate"]["sha256"]
+    )
     assert before["candidate_identity"]["loaded_code_sha256"] != after["candidate_identity"]["loaded_code_sha256"]
 
 
@@ -211,12 +258,25 @@ def test_runtime_bundle_dependencies_are_verified_and_change_identity(tmp_path, 
     helper = tmp_path / "helper.bin"
     helper.write_bytes(b"first runtime")
     bundle = tmp_path / "bundle.json"
+
     def write_bundle():
-        bundle.write_text(json.dumps({"schema": "passage-runtime-bundle-v1", "files": [
-            {"path": helper.name, "sha256": hashlib.sha256(helper.read_bytes()).hexdigest()}]}))
+        bundle.write_text(
+            json.dumps(
+                {
+                    "schema": "passage-runtime-bundle-v1",
+                    "files": [{"path": helper.name, "sha256": hashlib.sha256(helper.read_bytes()).hexdigest()}],
+                }
+            )
+        )
+
     write_bundle()
-    spec = BenchSpec("bounded", "classical", "prototype",
-                     inference="passage_eval.baselines.classical:BoundedExactPlanner", runtime_bundle_manifest=str(bundle))
+    spec = BenchSpec(
+        "bounded",
+        "classical",
+        "prototype",
+        inference="passage_eval.baselines.classical:BoundedExactPlanner",
+        runtime_bundle_manifest=str(bundle),
+    )
     before = _manifest(spec, [metre_scene], {})
     helper.write_bytes(b"second runtime")
     with pytest.raises(ValueError, match="runtime bundle file identity mismatch"):
@@ -242,11 +302,14 @@ def test_rescore_uses_frozen_candidate_identity_without_import(tmp_path, release
         main(["score", "--run", str(root)])
 
 
-@pytest.mark.parametrize("changes,message", [
-    ({"batch_size": 2}, "batch_size=1"),
-    ({"quality_repeat_index": 2}, "quality_repeat_index"),
-    ({"budget": {"max_expansions": 0}}, "positive integer"),
-])
+@pytest.mark.parametrize(
+    "changes,message",
+    [
+        ({"batch_size": 2}, "batch_size=1"),
+        ({"quality_repeat_index": 2}, "quality_repeat_index"),
+        ({"budget": {"max_expansions": 0}}, "positive integer"),
+    ],
+)
 def test_invalid_procedure_rejected_before_loading(tmp_path, changes, message, monkeypatch):
     import passage_eval.cli as cli
 
@@ -269,70 +332,96 @@ def test_remote_revision_and_missing_local_root_fail_explicitly(tmp_path):
 def test_console_cli_imports_candidate_module_from_working_directory(tmp_path, monkeypatch):
     import sys
     from passage_eval.cli import _import_entry
-    (tmp_path / 'cwd_algorithm_fixture.py').write_text('class Algorithm:\n    pass\n')
+
+    (tmp_path / "cwd_algorithm_fixture.py").write_text("class Algorithm:\n    pass\n")
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setattr(sys, 'path', [item for item in sys.path if item not in ('', str(tmp_path))])
-    assert _import_entry('cwd_algorithm_fixture:Algorithm').__name__ == 'Algorithm'
+    monkeypatch.setattr(sys, "path", [item for item in sys.path if item not in ("", str(tmp_path))])
+    assert _import_entry("cwd_algorithm_fixture:Algorithm").__name__ == "Algorithm"
 
 
 def test_callable_route_snapshot_waits_for_completion(metre_scene):
     from passage_eval.cli import _CallablePlanner
     from passage_eval.execution import run_requests
+
     pending = np.zeros((3, 2), dtype=np.int64)
     planner = _CallablePlanner(lambda **kwargs: pending)
     calls = [0]
+
     def sync():
         calls[0] += 1
         if calls[0] == 2:
             pending[:] = [[0, 0], [1, 1], [2, 2]]
+
     artifact = run_requests(planner, [PlanRequest.from_scene(metre_scene)], synchronize=sync)
-    assert artifact.records[0]['status'] == 'ok'
+    assert artifact.records[0]["status"] == "ok"
     np.testing.assert_array_equal(artifact.paths[0], pending)
 
 
 def test_checkpoint_identity_is_rechecked_after_construction(tmp_path, metre_scene, monkeypatch):
     import sys
     from passage_eval.cli import _execute_series
-    checkpoint = tmp_path / 'weights.bin'
-    checkpoint.write_bytes(b'frozen checkpoint')
-    module = ModuleType('mutating_checkpoint_fixture')
+
+    checkpoint = tmp_path / "weights.bin"
+    checkpoint.write_bytes(b"frozen checkpoint")
+    module = ModuleType("mutating_checkpoint_fixture")
     source = "from pathlib import Path\nclass Candidate:\n    def __init__(self, checkpoint):\n        Path(checkpoint).write_bytes(b'changed checkpoint')\n    def plan(self, request):\n        return []\n"
-    source_path = tmp_path / 'mutating_checkpoint_fixture.py'
+    source_path = tmp_path / "mutating_checkpoint_fixture.py"
     source_path.write_text(source)
     module.__file__ = str(source_path)
-    exec(compile(source, str(source_path), 'exec'), module.__dict__)
+    exec(compile(source, str(source_path), "exec"), module.__dict__)
     monkeypatch.setitem(sys.modules, module.__name__, module)
-    spec = BenchSpec('mutable', 'classical', 'fixture', inference='mutating_checkpoint_fixture:Candidate',
-                     inference_kwargs={'checkpoint': str(checkpoint)}, seeds=[1234], measure_latency=False)
-    with pytest.raises(ValueError, match='checkpoint.*construction'):
-        _execute_series(spec, [metre_scene], {}, tmp_path / 'run')
+    spec = BenchSpec(
+        "mutable",
+        "classical",
+        "fixture",
+        inference="mutating_checkpoint_fixture:Candidate",
+        inference_kwargs={"checkpoint": str(checkpoint)},
+        seeds=[1234],
+        measure_latency=False,
+    )
+    with pytest.raises(ValueError, match="checkpoint.*construction"):
+        _execute_series(spec, [metre_scene], {}, tmp_path / "run")
 
 
-@pytest.mark.parametrize("budget", [BudgetSpec(max_expansions=1), BudgetSpec(max_queue_operations=1),
-                                   BudgetSpec(max_live_states=1)])
+@pytest.mark.parametrize(
+    "budget", [BudgetSpec(max_expansions=1), BudgetSpec(max_queue_operations=1), BudgetSpec(max_live_states=1)]
+)
 def test_classical_work_limits_are_observed(metre_scene, budget):
     result = BoundedExactPlanner().plan(PlanRequest.from_scene(metre_scene, budget=budget))
     assert result.status == "budget_exhausted"
     assert result.path == []
-    for key, limit in (("expansions", budget.max_expansions),
-                       ("queue_operations", budget.max_queue_operations),
-                       ("live_states", budget.max_live_states)):
+    for key, limit in (
+        ("expansions", budget.max_expansions),
+        ("queue_operations", budget.max_queue_operations),
+        ("live_states", budget.max_live_states),
+    ):
         if limit is not None:
             assert result.work[key] <= limit
 
 
-@pytest.mark.parametrize('model,terrain', [
-    ('elevation', [[0., 1.]]),
-    ('energy', [[0., 1., 2.]]),
-])
+@pytest.mark.parametrize(
+    "model,terrain",
+    [
+        ("elevation", [[0.0, 1.0]]),
+        ("energy", [[0.0, 1.0, 2.0]]),
+    ],
+)
 def test_classical_prototype_cannot_label_arithmetic_overflow_unreachable(model, terrain, metre_scene):
     from passage_eval.execution import run_requests
+
     terrain = np.asarray(terrain, dtype=float)
-    scene = replace(metre_scene, elevation=terrain, obstacles=np.zeros_like(terrain, dtype=bool),
-                    start=(0, 0), goal=(0, terrain.shape[1] - 1), cost_model=model, cost_weight=1e308)
+    scene = replace(
+        metre_scene,
+        elevation=terrain,
+        obstacles=np.zeros_like(terrain, dtype=bool),
+        start=(0, 0),
+        goal=(0, terrain.shape[1] - 1),
+        cost_model=model,
+        cost_weight=1e308,
+    )
     artifact = run_requests(BoundedExactPlanner(), [PlanRequest.from_scene(scene)])
-    assert artifact.records[0]['status'] == 'runtime_error'
-    assert artifact.records[0]['legal_path'] is False
+    assert artifact.records[0]["status"] == "runtime_error"
+    assert artifact.records[0]["legal_path"] is False
 
 
 @pytest.mark.parametrize("model", ["distance", "elevation", "absolute_elevation", "slope_uphill", "energy"])
@@ -343,20 +432,24 @@ def test_classical_prototype_matches_bounded_exact_reference(model, metre_scene)
     scene = replace(metre_scene, cost_model=model, elevation=np.arange(9, dtype=float).reshape(3, 3))
     request = PlanRequest.from_scene(scene)
     output = BoundedExactPlanner().plan(request)
-    reference = exact_reference(scene.elevation, scene.obstacles, scene.start, scene.goal,
-                                cost_model=model, weight=scene.cost_weight)
+    reference = exact_reference(
+        scene.elevation, scene.obstacles, scene.start, scene.goal, cost_model=model, weight=scene.cost_weight
+    )
     assert output.status == "ok"
-    assert path_cost(scene.elevation, output.path, cost_model=model, weight=scene.cost_weight) == pytest.approx(reference["cost"])
+    assert path_cost(scene.elevation, output.path, cost_model=model, weight=scene.cost_weight) == pytest.approx(
+        reference["cost"]
+    )
 
 
 def test_canonical_astar_uses_ordinary_inputs_and_retains_censored_work(metre_scene):
     from passage_eval.baselines.classical import CanonicalAStarPlanner
     from passage_eval.execution import run_requests
+
     request = PlanRequest.from_scene(metre_scene)
     exact = run_requests(CanonicalAStarPlanner(), [request]).records[0]
-    assert exact['status'] == 'ok'
-    assert exact['recost'] == pytest.approx(metre_scene.oracle_cost)
-    assert exact['work']['expansions'] > 0
+    assert exact["status"] == "ok"
+    assert exact["recost"] == pytest.approx(metre_scene.oracle_cost)
+    assert exact["work"]["expansions"] > 0
     bounded = run_requests(CanonicalAStarPlanner(), [replace(request, budget=BudgetSpec(max_expansions=1))]).records[0]
-    assert bounded['status'] == 'budget_exhausted'
-    assert bounded['work']['expansions'] == 1
+    assert bounded["status"] == "budget_exhausted"
+    assert bounded["work"]["expansions"] == 1

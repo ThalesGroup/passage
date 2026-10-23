@@ -141,7 +141,7 @@ def parse_path_csv(csv_path: Path, *, expected_sha256: str | None = None) -> lis
     content = csv_path.read_bytes()
     if expected_sha256 is not None and hashlib.sha256(content).hexdigest() != expected_sha256:
         raise ValueError(f"Release admitted artifact content hash mismatch: {csv_path}")
-    with io.StringIO(content.decode('utf-8'), newline='') as fh:
+    with io.StringIO(content.decode("utf-8"), newline="") as fh:
         reader = csv.reader(fh)
         for row in reader:
             if len(row) != 2:
@@ -154,7 +154,7 @@ def parse_path_csv(csv_path: Path, *, expected_sha256: str | None = None) -> lis
 
 def _load_export_metadata(content: str) -> dict:
     """Use the installed safe C parser, preserving SafeLoader types and fallback."""
-    return yaml.load(content, Loader=getattr(yaml, 'CSafeLoader', yaml.SafeLoader))
+    return yaml.load(content, Loader=getattr(yaml, "CSafeLoader", yaml.SafeLoader))
 
 
 def _save_png(image_path: Path, image_bgr) -> None:
@@ -195,9 +195,15 @@ def _ensure_preview_image_for_prepare(
     return tensor
 
 
-def _process_meta_for_prepare(resolution: int, sample: bool, solver_names: list[str], metadata_filepath: str,
-                              *, preview_root: Path | None = None,
-                              verified_receipt_sha256: str | None = None) -> dict:
+def _process_meta_for_prepare(
+    resolution: int,
+    sample: bool,
+    solver_names: list[str],
+    metadata_filepath: str,
+    *,
+    preview_root: Path | None = None,
+    verified_receipt_sha256: str | None = None,
+) -> dict:
     """Process a single metadata file into a serializable dict for HF dataset rows."""
 
     metadata_filepath = Path(metadata_filepath)
@@ -211,7 +217,7 @@ def _process_meta_for_prepare(resolution: int, sample: bool, solver_names: list[
         raise FileNotFoundError(f"Missing required tensor for export: {tensor_filepath}")
 
     metadata_content = metadata_filepath.read_bytes()
-    metadata = _load_export_metadata(metadata_content.decode('utf-8')) or {}
+    metadata = _load_export_metadata(metadata_content.decode("utf-8")) or {}
     if not isinstance(metadata, dict):
         raise ValueError("Export metadata must be a mapping")
     expected_identity = {"index": int(stem), "resolution": resolution, "split": split_dirpath.name}
@@ -220,6 +226,7 @@ def _process_meta_for_prepare(resolution: int, sample: bool, solver_names: list[
     receipt = None
     if metadata.get("dataset_version"):
         from passage.successor_generation import validate_scene_receipt
+
         if metadata.get("units") != "metres":
             raise ValueError("Release export requires canonical metres units")
         if verified_receipt_sha256 is None:
@@ -228,21 +235,24 @@ def _process_meta_for_prepare(resolution: int, sample: bool, solver_names: list[
             # Admission already validates all receipt contracts in a worker. Bind
             # this load to that exact receipt, and hash the actual bytes used to
             # build the row so a concurrent raw change cannot cross that boundary.
-            receipt_content = (split_dirpath / 'receipts' / f'{stem}.json').read_bytes()
+            receipt_content = (split_dirpath / "receipts" / f"{stem}.json").read_bytes()
             if hashlib.sha256(receipt_content).hexdigest() != verified_receipt_sha256:
-                raise ValueError('Release admitted receipt content hash mismatch')
+                raise ValueError("Release admitted receipt content hash mismatch")
             receipt = json.loads(receipt_content)
-            if hashlib.sha256(metadata_content).hexdigest() != receipt['artifacts']['metadata']['sha256']:
-                raise ValueError('Release admitted metadata content hash mismatch')
+            if hashlib.sha256(metadata_content).hexdigest() != receipt["artifacts"]["metadata"]["sha256"]:
+                raise ValueError("Release admitted metadata content hash mismatch")
         if receipt["scene_status"] != "complete":
             raise ValueError("Only complete scene receipts can supply tensor rows")
     elif verified_receipt_sha256 is not None:
-        raise ValueError('Release admitted metadata lacks dataset identity')
+        raise ValueError("Release admitted metadata lacks dataset identity")
     tensor = None
 
     tensor_content = tensor_filepath.read_bytes()
-    if verified_receipt_sha256 is not None and hashlib.sha256(tensor_content).hexdigest() != receipt['artifacts']['tensor']['sha256']:
-        raise ValueError('Release admitted tensor content hash mismatch')
+    if (
+        verified_receipt_sha256 is not None
+        and hashlib.sha256(tensor_content).hexdigest() != receipt["artifacts"]["tensor"]["sha256"]
+    ):
+        raise ValueError("Release admitted tensor content hash mismatch")
 
     sample_dict = {
         "id": str(stem),
@@ -253,7 +263,8 @@ def _process_meta_for_prepare(resolution: int, sample: bool, solver_names: list[
     }
     if sample and verified_receipt_sha256 is not None:
         from passage.dataset import decode_scene_inputs
-        tensor = decode_scene_inputs(sample_dict, resolution=resolution, split=split_dirpath.name)['input_tensor']
+
+        tensor = decode_scene_inputs(sample_dict, resolution=resolution, split=split_dirpath.name)["input_tensor"]
 
     # Load paths dynamically for each solver and per-solver images (if sample)
     for solver_name in solver_names:
@@ -264,9 +275,13 @@ def _process_meta_for_prepare(resolution: int, sample: bool, solver_names: list[
         for path_filepath in (path_free_filepath, path_obstacles_filepath):
             if not path_filepath.is_file():
                 raise FileNotFoundError(f"Missing required path CSV for export: {path_filepath}")
-        hashes = receipt['artifacts'] if verified_receipt_sha256 is not None else {}
-        path_free = parse_path_csv(path_free_filepath, expected_sha256=hashes.get(f'path:{solver_name}:free', {}).get('sha256'))
-        path_obstacles = parse_path_csv(path_obstacles_filepath, expected_sha256=hashes.get(f'path:{solver_name}:obstacles', {}).get('sha256'))
+        hashes = receipt["artifacts"] if verified_receipt_sha256 is not None else {}
+        path_free = parse_path_csv(
+            path_free_filepath, expected_sha256=hashes.get(f"path:{solver_name}:free", {}).get("sha256")
+        )
+        path_obstacles = parse_path_csv(
+            path_obstacles_filepath, expected_sha256=hashes.get(f"path:{solver_name}:obstacles", {}).get("sha256")
+        )
         for variant, path in (("free", path_free), ("obstacles", path_obstacles)):
             stats = metadata.get("paths", {}).get(solver_name, {}).get(variant, {})
             if not path and stats.get("status") not in ("infeasible", "failed"):
@@ -275,7 +290,9 @@ def _process_meta_for_prepare(resolution: int, sample: bool, solver_names: list[
                 raise ValueError("Terminal route status requires empty path and null cost")
 
         # Per-solver image file (sample-only)
-        solver_image_filepath = (preview_root or split_dirpath / "images") / solver_name / lat_dir / lon_dir / f"{stem}.png"
+        solver_image_filepath = (
+            (preview_root or split_dirpath / "images") / solver_name / lat_dir / lon_dir / f"{stem}.png"
+        )
         if sample:
             if not solver_image_filepath.exists():
                 tensor = _ensure_preview_image_for_prepare(
@@ -312,6 +329,7 @@ def _validate_canonical_export_row(row: dict, resolution: int, split: str, solve
         config = metadata["solvers"][solver]
         graph = GraphSpec(**config["graph_spec"])
         from passage_eval.metrics.cost import canonical_cost_model
+
         if graph.cost_model != canonical_cost_model(config["cost_model"]) or graph.cost_weight != config["weight"]:
             raise ValueError("Release export graph/objective mismatch")
         for variant in ("free", "obstacles"):
@@ -348,10 +366,15 @@ def _solver_feature() -> dict:
         "solver": Value("string"),
         "max_marker_retries": Value("int32"),
         "graph_spec": {
-            "connectivity": Value("int32"), "diagonal_policy": Value("string"),
-            "pixel_size_m": Value("float64"), "obstacle_policy": Value("string"),
-            "coordinate_order": Value("string"), "cost_model": Value("string"),
-            "cost_weight": Value("float64"), "rtol": Value("float64"), "atol": Value("float64"),
+            "connectivity": Value("int32"),
+            "diagonal_policy": Value("string"),
+            "pixel_size_m": Value("float64"),
+            "obstacle_policy": Value("string"),
+            "coordinate_order": Value("string"),
+            "cost_model": Value("string"),
+            "cost_weight": Value("float64"),
+            "rtol": Value("float64"),
+            "atol": Value("float64"),
         },
     }
 
@@ -522,10 +545,15 @@ def _execute_notebook_with_papermill(
         from passage.notebook_export import execute_notebook
 
         try:
-            execute_notebook(input_notebook, output_notebook, parameters,
-                             cwd=cwd or Path.cwd(), cell_timeout=cell_timeout or 300,
-                             job_timeout=job_timeout or 1800,
-                             offline=parameters.get("dataset_path") is not None)
+            execute_notebook(
+                input_notebook,
+                output_notebook,
+                parameters,
+                cwd=cwd or Path.cwd(),
+                cell_timeout=cell_timeout or 300,
+                job_timeout=job_timeout or 1800,
+                offline=parameters.get("dataset_path") is not None,
+            )
             return True
         except (OSError, RuntimeError, TimeoutError) as exc:
             logger.error(f"Notebook execution failed: {exc}")
@@ -586,8 +614,8 @@ def _execute_notebook_with_retries(
         try:
             if cell_timeout is not None or job_timeout is not None:
                 success = _execute_notebook_with_papermill(
-                    input_notebook, output_notebook, parameters, cwd,
-                    cell_timeout=cell_timeout, job_timeout=job_timeout)
+                    input_notebook, output_notebook, parameters, cwd, cell_timeout=cell_timeout, job_timeout=job_timeout
+                )
             else:
                 success = _execute_notebook_with_papermill(input_notebook, output_notebook, parameters, cwd)
         except Exception as exc:  # pragma: no cover - papermill errors vary
@@ -1656,8 +1684,12 @@ def _export_row_budget(resolution: int, requested: int) -> int:
     if requested <= 0:
         raise ValueError("Export row/shard size must be positive")
     from passage.dataset import DatasetSource
-    return min(requested, DatasetSource.batch_size_for(resolution, ["tensor"]),
-               max(1, (128 * 1024 * 1024) // (resolution * resolution * 12)))
+
+    return min(
+        requested,
+        DatasetSource.batch_size_for(resolution, ["tensor"]),
+        max(1, (128 * 1024 * 1024) // (resolution * resolution * 12)),
+    )
 
 
 def _file_sha256(path: Path) -> str:
@@ -1668,10 +1700,20 @@ def _file_sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _stream_scene_shards(context: ReleaseContext, resolution: int, sample: bool, split: str,
-                         metadata_paths: list[Path], output_path: Path, *, prefix: str = "data",
-                         cpus: int = 0, preview_root: Path | None = None,
-                         first_shard: int = 0, receipt_hashes: list[str] | None = None) -> list[dict]:
+def _stream_scene_shards(
+    context: ReleaseContext,
+    resolution: int,
+    sample: bool,
+    split: str,
+    metadata_paths: list[Path],
+    output_path: Path,
+    *,
+    prefix: str = "data",
+    cpus: int = 0,
+    preview_root: Path | None = None,
+    first_shard: int = 0,
+    receipt_hashes: list[str] | None = None,
+) -> list[dict]:
     """Write bounded Arrow groups while preserving configured rows per physical shard."""
     shard_size = context.chunk_sizes.get(resolution)
     if shard_size is None:
@@ -1684,7 +1726,7 @@ def _stream_scene_shards(context: ReleaseContext, resolution: int, sample: bool,
     source = metadata_paths
     if receipt_hashes is not None:
         if len(receipt_hashes) != len(metadata_paths):
-            raise ValueError('Release admission receipt roster mismatch')
+            raise ValueError("Release admission receipt roster mismatch")
         source = zip(metadata_paths, receipt_hashes)
         processor = partial(_process_admitted_meta, resolution, sample, context.solver_names, preview_root=preview_root)
     if worker_count:
@@ -1696,6 +1738,7 @@ def _stream_scene_shards(context: ReleaseContext, resolution: int, sample: bool,
     writer = None
     shard_rows = 0
     shard_path = None
+
     def flush():
         nonlocal writer, shard_rows, shard_path, rows
         if not rows:
@@ -1703,18 +1746,26 @@ def _stream_scene_shards(context: ReleaseContext, resolution: int, sample: bool,
         table = Dataset.from_list(rows, features=_features(sample, context.solver_names)).data.table
         if writer is None:
             shard_path = output_path / f"{prefix}-{first_shard + len(shards):05d}.parquet"
-            writer = pq.ParquetWriter(shard_path, table.schema, compression="zstd",
-                                      compression_level=context.compression_level)
+            writer = pq.ParquetWriter(
+                shard_path, table.schema, compression="zstd", compression_level=context.compression_level
+            )
         writer.write_table(table)
         shard_rows += len(rows)
         rows = []
         if shard_rows == shard_size:
             writer.close()
-            shards.append({"path": shard_path.name, "rows": shard_rows, "sha256": _file_sha256(shard_path),
-                           "size_bytes": shard_path.stat().st_size,
-                           "schema_sha256": hashlib.sha256(pq.read_schema(shard_path).serialize().to_pybytes()).hexdigest()})
+            shards.append(
+                {
+                    "path": shard_path.name,
+                    "rows": shard_rows,
+                    "sha256": _file_sha256(shard_path),
+                    "size_bytes": shard_path.stat().st_size,
+                    "schema_sha256": hashlib.sha256(pq.read_schema(shard_path).serialize().to_pybytes()).hexdigest(),
+                }
+            )
             writer = None
             shard_rows = 0
+
     try:
         for row in iterable:
             rows.append(row)
@@ -1724,9 +1775,15 @@ def _stream_scene_shards(context: ReleaseContext, resolution: int, sample: bool,
         if writer is not None:
             writer.close()
             writer = None
-            shards.append({"path": shard_path.name, "rows": shard_rows, "sha256": _file_sha256(shard_path),
-                           "size_bytes": shard_path.stat().st_size,
-                           "schema_sha256": hashlib.sha256(pq.read_schema(shard_path).serialize().to_pybytes()).hexdigest()})
+            shards.append(
+                {
+                    "path": shard_path.name,
+                    "rows": shard_rows,
+                    "sha256": _file_sha256(shard_path),
+                    "size_bytes": shard_path.stat().st_size,
+                    "schema_sha256": hashlib.sha256(pq.read_schema(shard_path).serialize().to_pybytes()).hexdigest(),
+                }
+            )
     except BaseException:
         if pool is not None:
             pool.terminate()
@@ -1740,11 +1797,18 @@ def _stream_scene_shards(context: ReleaseContext, resolution: int, sample: bool,
     return shards
 
 
-def _process_admitted_meta(resolution: int, sample: bool, solver_names: list[str], admitted: tuple[Path, str],
-                           *, preview_root: Path | None = None) -> dict:
+def _process_admitted_meta(
+    resolution: int,
+    sample: bool,
+    solver_names: list[str],
+    admitted: tuple[Path, str],
+    *,
+    preview_root: Path | None = None,
+) -> dict:
     path, receipt_hash = admitted
-    return _process_meta_for_prepare(resolution, sample, solver_names, path,
-                                     preview_root=preview_root, verified_receipt_sha256=receipt_hash)
+    return _process_meta_for_prepare(
+        resolution, sample, solver_names, path, preview_root=preview_root, verified_receipt_sha256=receipt_hash
+    )
 
 
 def _bounded_executor_map(executor: Executor | None, function, jobs, *, max_inflight: int):
@@ -1771,6 +1835,7 @@ def _bounded_executor_map(executor: Executor | None, function, jobs, *, max_infl
         # already been popped from pending. Native work cannot cancel through a
         # Future; stop and join every owned process before staging is removed.
         from passage.successor_generation import _stop_executor
+
         for future in pending:
             future.cancel()
         _stop_executor(executor, cancel=True)
@@ -1783,50 +1848,76 @@ def _bounded_executor_map(executor: Executor | None, function, jobs, *, max_infl
 def _admit_successor_scenes(job: tuple[Path, int, tuple[str, ...], list[int]]) -> list[dict]:
     """Validate a bounded scene roster locally; return receipt records, never tensors."""
     from passage.successor_generation import validate_scene_receipt
+
     raw, resolution, split_names, indices = job
     scenes = []
     for index in indices:
-        found = [(split, raw / str(resolution) / split / 'receipts' / f'{index:010d}.json')
-                 for split in split_names if (raw / str(resolution) / split / 'receipts' / f'{index:010d}.json').is_file()]
+        found = [
+            (split, raw / str(resolution) / split / "receipts" / f"{index:010d}.json")
+            for split in split_names
+            if (raw / str(resolution) / split / "receipts" / f"{index:010d}.json").is_file()
+        ]
         if len(found) != 1:
-            raise ValueError(f'Requested scene {index} requires exactly one terminal receipt')
+            raise ValueError(f"Requested scene {index} requires exactly one terminal receipt")
         split, path = found[0]
         before = _file_sha256(path)
         receipt = validate_scene_receipt(path.parent.parent, index)
         after = path.read_bytes()
         if hashlib.sha256(after).hexdigest() != before or json.loads(after) != receipt:
-            raise ValueError('Release scene receipt changed during admission')
-        scenes.append({'index': index, 'split': split, 'receipt': receipt,
-                       'receipt_file_sha256': before,
-                       'receipt_semantic_sha256': hashlib.sha256(json.dumps(receipt, sort_keys=True,
-                           separators=(',', ':'), default=str).encode()).hexdigest()})
+            raise ValueError("Release scene receipt changed during admission")
+        scenes.append(
+            {
+                "index": index,
+                "split": split,
+                "receipt": receipt,
+                "receipt_file_sha256": before,
+                "receipt_semantic_sha256": hashlib.sha256(
+                    json.dumps(receipt, sort_keys=True, separators=(",", ":"), default=str).encode()
+                ).hexdigest(),
+            }
+        )
     return scenes
 
 
 def _write_successor_shard(job: tuple) -> dict:
     """Own one physical shard, its bounded row groups, compression and byte hashes."""
     context, resolution, sample, split, paths, hashes, output, prefix, shard_number, previews = job
-    shards = _stream_scene_shards(context, resolution, sample, split, paths, output,
-        prefix=prefix, preview_root=previews, first_shard=shard_number, receipt_hashes=hashes)
+    shards = _stream_scene_shards(
+        context,
+        resolution,
+        sample,
+        split,
+        paths,
+        output,
+        prefix=prefix,
+        preview_root=previews,
+        first_shard=shard_number,
+        receipt_hashes=hashes,
+    )
     if len(shards) != 1:
-        raise ValueError('Release physical shard job produced an invalid shard count')
-    return {**shards[0], 'samples': sample, 'split': split,
-            'path': (Path(_config_name(resolution, sample)) / split / shards[0]['path']).as_posix()}
+        raise ValueError("Release physical shard job produced an invalid shard count")
+    return {
+        **shards[0],
+        "samples": sample,
+        "split": split,
+        "path": (Path(_config_name(resolution, sample)) / split / shards[0]["path"]).as_posix(),
+    }
 
 
-def _successor_export_workers(resolution: int, shard_size: int, executor: Executor | None,
-                              num_cpus: int, memory_budget_bytes: int) -> tuple[int, int]:
+def _successor_export_workers(
+    resolution: int, shard_size: int, executor: Executor | None, num_cpus: int, memory_budget_bytes: int
+) -> tuple[int, int]:
     if isinstance(num_cpus, bool) or not isinstance(num_cpus, int) or num_cpus < 0:
-        raise ValueError('num_cpus must be a nonnegative integer (0 is serial)')
+        raise ValueError("num_cpus must be a nonnegative integer (0 is serial)")
     if isinstance(memory_budget_bytes, bool) or not isinstance(memory_budget_bytes, int) or memory_budget_bytes <= 0:
-        raise ValueError('Export memory budget must be a positive integer')
+        raise ValueError("Export memory budget must be a positive integer")
     group_rows = _export_row_budget(resolution, shard_size)
     # Compressed row payloads, Arrow conversion, decoded canonical terrain and
     # Python metadata all exist in the producer, without crossing process IPC.
     per_worker = group_rows * resolution**2 * 12 * 3 + resolution**2 * 96 + 64 * 1024**2
     if memory_budget_bytes < per_worker:
-        raise ValueError('Export memory budget cannot contain one shard producer')
-    capacity = getattr(executor, '_max_workers', num_cpus or 1) if executor is not None else num_cpus or 1
+        raise ValueError("Export memory budget cannot contain one shard producer")
+    capacity = getattr(executor, "_max_workers", num_cpus or 1) if executor is not None else num_cpus or 1
     requested = min(capacity, num_cpus) if num_cpus else capacity
     return max(1, min(requested, memory_budget_bytes // per_worker)), per_worker
 
@@ -1843,9 +1934,15 @@ def _write_split_parquets(context: ReleaseContext, resolution: int, sample: bool
     with tempfile.TemporaryDirectory(prefix=f".{split}-export-", dir=output.parent) as directory:
         temporary = Path(directory)
         shards = _stream_scene_shards(context, resolution, sample, split, metadata_paths, temporary, cpus=cpus)
-        manifest = {"schema_version": 1, "resolution": resolution, "split": split,
-                    "population": "samples" if sample else "core", "rows": count, "shards": shards,
-                    "config_sha256": _file_sha256(context.config_file)}
+        manifest = {
+            "schema_version": 1,
+            "resolution": resolution,
+            "split": split,
+            "population": "samples" if sample else "core",
+            "rows": count,
+            "shards": shards,
+            "config_sha256": _file_sha256(context.config_file),
+        }
         (temporary / "export-manifest.json").write_text(json.dumps(manifest, sort_keys=True, indent=2))
         backup = output.with_name(f".{split}.previous")
         if backup.exists():
@@ -1863,45 +1960,56 @@ def _write_split_parquets(context: ReleaseContext, resolution: int, sample: bool
     return len(shards)
 
 
-
 def _successor_history_roster(scenes: list[dict], resolution: int) -> list[dict]:
     records = []
     for scene in scenes:
-        for item in scene['receipt'].get('attempt_history', []):
-            source = item['receipt']
+        for item in scene["receipt"].get("attempt_history", []):
+            source = item["receipt"]
             if not re.fullmatch(rf"failed-attempts/{scene['index']:010d}/[0-9]{{4}}\.json", source):
-                raise ValueError('Release failure history path identity mismatch')
-            records.append({'path': f"{resolution}/{scene['split']}/{source}", 'source_path': source,
-                            'split': scene['split'], 'index': scene['index'], 'sha256': item['sha256']})
-    if len({item['path'] for item in records}) != len(records):
-        raise ValueError('Duplicate release failure history receipt')
+                raise ValueError("Release failure history path identity mismatch")
+            records.append(
+                {
+                    "path": f"{resolution}/{scene['split']}/{source}",
+                    "source_path": source,
+                    "split": scene["split"],
+                    "index": scene["index"],
+                    "sha256": item["sha256"],
+                }
+            )
+    if len({item["path"] for item in records}) != len(records):
+        raise ValueError("Duplicate release failure history receipt")
     return records
 
 
 def _verify_successor_history(root: Path, scenes: list[dict], resolution: int, records: list[dict]) -> None:
     expected = _successor_history_roster(scenes, resolution)
-    keys = ('path', 'source_path', 'split', 'index', 'sha256')
+    keys = ("path", "source_path", "split", "index", "sha256")
     if [{key: record.get(key) for key in keys} for record in records] != expected:
-        raise ValueError('Release failure history roster mismatch')
-    by_identity = {(scene['split'], scene['index']): scene['receipt'] for scene in scenes}
+        raise ValueError("Release failure history roster mismatch")
+    by_identity = {(scene["split"], scene["index"]): scene["receipt"] for scene in scenes}
     for record in records:
-        path = (root / record['path']).resolve()
-        if root not in path.parents or not path.is_file() or _file_sha256(path) != record['sha256']:
-            raise ValueError('Release failure history content hash mismatch')
-        if path.stat().st_size != record['size_bytes']:
-            raise ValueError('Release failure history size mismatch')
+        path = (root / record["path"]).resolve()
+        if root not in path.parents or not path.is_file() or _file_sha256(path) != record["sha256"]:
+            raise ValueError("Release failure history content hash mismatch")
+        if path.stat().st_size != record["size_bytes"]:
+            raise ValueError("Release failure history size mismatch")
         archived = json.loads(path.read_text())
-        current = by_identity[(record['split'], record['index'])]
-        history = current.get('attempt_history', [])
-        position = next(i for i, item in enumerate(history) if item['receipt'] == record['source_path'])
-        if (any(archived.get(key) != current.get(key) for key in
-                ('schema_version', 'dataset_version', 'index', 'split', 'resolution', 'provenance_id'))
-                or archived.get('scene_status') != 'failed' or archived.get('artifacts')
-                or len(archived.get('variants', {})) != 6
-                or any(v.get('status') != 'failed' for v in archived['variants'].values())
-                or archived.get('attempt_history', []) != history[:position]
-                or archived.get('infrastructure_attempt', 1) != history[position].get('attempt', 1)):
-            raise ValueError('Release failure history archived identity mismatch')
+        current = by_identity[(record["split"], record["index"])]
+        history = current.get("attempt_history", [])
+        position = next(i for i, item in enumerate(history) if item["receipt"] == record["source_path"])
+        if (
+            any(
+                archived.get(key) != current.get(key)
+                for key in ("schema_version", "dataset_version", "index", "split", "resolution", "provenance_id")
+            )
+            or archived.get("scene_status") != "failed"
+            or archived.get("artifacts")
+            or len(archived.get("variants", {})) != 6
+            or any(v.get("status") != "failed" for v in archived["variants"].values())
+            or archived.get("attempt_history", []) != history[:position]
+            or archived.get("infrastructure_attempt", 1) != history[position].get("attempt", 1)
+        ):
+            raise ValueError("Release failure history archived identity mismatch")
 
 
 def verify_successor_batch(export_root: str | Path, batch_id: str) -> dict:
@@ -1915,15 +2023,22 @@ def verify_successor_batch(export_root: str | Path, batch_id: str) -> dict:
         raise ValueError("Release batch manifest identity mismatch")
     indices = manifest.get("scene_indices", [])
     scenes = manifest.get("scenes", [])
-    if (not indices or indices != sorted(set(indices))
-            or [scene.get("index") for scene in scenes] != indices
-            or batch_id != f"{manifest.get('resolution')}-{indices[0]:010d}-{indices[-1]:010d}"):
+    if (
+        not indices
+        or indices != sorted(set(indices))
+        or [scene.get("index") for scene in scenes] != indices
+        or batch_id != f"{manifest.get('resolution')}-{indices[0]:010d}-{indices[-1]:010d}"
+    ):
         raise ValueError("Release batch scene identity mismatch")
     expected_core, expected_samples = Counter(), Counter()
     expected_scene_statuses, expected_variant_statuses = Counter(), Counter()
     for scene in scenes:
         receipt = scene["receipt"]
-        if receipt.get("index") != scene["index"] or receipt.get("split") != scene["split"] or receipt.get("resolution") != manifest["resolution"]:
+        if (
+            receipt.get("index") != scene["index"]
+            or receipt.get("split") != scene["split"]
+            or receipt.get("resolution") != manifest["resolution"]
+        ):
             raise ValueError("Release batch receipt identity mismatch")
         if receipt["scene_status"] == "complete":
             expected_core[scene["split"]] += 1
@@ -1932,9 +2047,12 @@ def verify_successor_batch(export_root: str | Path, batch_id: str) -> dict:
             raise ValueError("Release batch variant denominator mismatch")
         for variant in receipt["variants"].values():
             expected_variant_statuses[f"{scene['split']}:{variant['status']}"] += 1
-    if (manifest.get("requested_scenes") != len(indices) or manifest.get("requested_variants") != 6 * len(indices)
-            or Counter(manifest.get("scene_status_counts", {})) != expected_scene_statuses
-            or Counter(manifest.get("variant_status_counts", {})) != expected_variant_statuses):
+    if (
+        manifest.get("requested_scenes") != len(indices)
+        or manifest.get("requested_variants") != 6 * len(indices)
+        or Counter(manifest.get("scene_status_counts", {})) != expected_scene_statuses
+        or Counter(manifest.get("variant_status_counts", {})) != expected_variant_statuses
+    ):
         raise ValueError("Release batch terminal status denominator mismatch")
     for split, ids in manifest["sample_ids"].items():
         expected_samples[split] = len(ids)
@@ -1946,7 +2064,10 @@ def verify_successor_batch(export_root: str | Path, batch_id: str) -> dict:
         with pq.ParquetFile(path) as parquet:
             if parquet.metadata.num_rows != record["rows"]:
                 raise ValueError("Release batch row count mismatch")
-            if "schema_sha256" in record and hashlib.sha256(parquet.schema_arrow.serialize().to_pybytes()).hexdigest() != record["schema_sha256"]:
+            if (
+                "schema_sha256" in record
+                and hashlib.sha256(parquet.schema_arrow.serialize().to_pybytes()).hexdigest() != record["schema_sha256"]
+            ):
                 raise ValueError("Release batch schema identity mismatch")
             (actual_samples if record["samples"] else actual_core)[record["split"]] += record["rows"]
             if not record["samples"] and any(name.startswith("image_") for name in parquet.schema_arrow.names):
@@ -1960,14 +2081,20 @@ def verify_successor_batch(export_root: str | Path, batch_id: str) -> dict:
         content = json.dumps(receipt, sort_keys=True, separators=(",", ":"), default=str).encode()
         if hashlib.sha256(content).hexdigest() != scene["receipt_semantic_sha256"]:
             raise ValueError("Release scene receipt content mismatch")
-    _verify_successor_history(root, scenes, manifest['resolution'], manifest.get('history_files', []))
+    _verify_successor_history(root, scenes, manifest["resolution"], manifest.get("history_files", []))
     return {**manifest, "manifest_sha256": _file_sha256(manifest_path), "raw_cleanup_safe": True}
 
 
-def export_successor_batch(context: ReleaseContext, resolution: int, scene_indices: list[int], *,
-                           batch_id: str | None = None, executor: Executor | None = None,
-                           num_cpus: int = 0,
-                           memory_budget_bytes: int = DEFAULT_EXPORT_MEMORY_BUDGET_BYTES) -> dict:
+def export_successor_batch(
+    context: ReleaseContext,
+    resolution: int,
+    scene_indices: list[int],
+    *,
+    batch_id: str | None = None,
+    executor: Executor | None = None,
+    num_cpus: int = 0,
+    memory_budget_bytes: int = DEFAULT_EXPORT_MEMORY_BUDGET_BYTES,
+) -> dict:
     """Commit one bounded ascending global-index batch with replay and cleanup evidence.
 
     ``context.dataset_path`` is the raw batch root (containing resolution/split);
@@ -1989,13 +2116,21 @@ def export_successor_batch(context: ReleaseContext, resolution: int, scene_indic
         raise ValueError("Unsupported release resolution")
     shard_size = context.chunk_sizes.get(resolution)
     if shard_size is None:
-        raise ValueError(f'Missing export.chunk_size entry for resolution {resolution}')
-    worker_count, worker_bytes = _successor_export_workers(resolution, shard_size, executor,
-                                                          num_cpus, memory_budget_bytes)
+        raise ValueError(f"Missing export.chunk_size entry for resolution {resolution}")
+    worker_count, worker_bytes = _successor_export_workers(
+        resolution, shard_size, executor, num_cpus, memory_budget_bytes
+    )
     if executor is None and num_cpus:
-        with ProcessPoolExecutor(max_workers=worker_count, mp_context=mp.get_context('spawn')) as owned_executor:
-            return export_successor_batch(context, resolution, scene_indices, batch_id=batch_id,
-                executor=owned_executor, num_cpus=num_cpus, memory_budget_bytes=memory_budget_bytes)
+        with ProcessPoolExecutor(max_workers=worker_count, mp_context=mp.get_context("spawn")) as owned_executor:
+            return export_successor_batch(
+                context,
+                resolution,
+                scene_indices,
+                batch_id=batch_id,
+                executor=owned_executor,
+                num_cpus=num_cpus,
+                memory_budget_bytes=memory_budget_bytes,
+            )
     expected_batch_id = f"{resolution}-{scene_indices[0]:010d}-{scene_indices[-1]:010d}"
     if batch_id is not None and batch_id != expected_batch_id:
         raise ValueError("Batch identity must match resolution and global index bounds")
@@ -2006,18 +2141,24 @@ def export_successor_batch(context: ReleaseContext, resolution: int, scene_indic
         raise ValueError("Raw batch and release must be separate trees")
     config_hash = _file_sha256(context.config_file)
     calibration_hash = _file_sha256(context.calibration_file)
-    package_root = Path(__file__).parent.parent
-    code_hashes = {p.relative_to(package_root).as_posix(): _file_sha256(p)
-                   for directory in (package_root / "passage", package_root / "passage-eval")
-                   for p in directory.rglob("*.py")}
+    package_root = Path(__file__).resolve().parent.parent
+    code_hashes = {
+        p.relative_to(package_root).as_posix(): _file_sha256(p)
+        for directory in (package_root / "passage", package_root / "passage-eval")
+        for p in directory.rglob("*.py")
+    }
     for path in (package_root.parent / "pyproject.toml", package_root.parent / "uv.lock"):
         if path.is_file():
             code_hashes[path.name] = _file_sha256(path)
     manifest_path = root / "release-receipts" / f"batch-{batch_id}.json"
     if manifest_path.is_file():
         previous = verify_successor_batch(root, batch_id)
-        if (previous["scene_indices"] != scene_indices or previous["config_sha256"] != config_hash
-                or previous["calibration_sha256"] != calibration_hash or previous["producer_code_sha256"] != code_hashes):
+        if (
+            previous["scene_indices"] != scene_indices
+            or previous["config_sha256"] != config_hash
+            or previous["calibration_sha256"] != calibration_hash
+            or previous["producer_code_sha256"] != code_hashes
+        ):
             raise ValueError("Release batch resume provenance mismatch")
         _advance_successor_export_state(root, previous)
         return previous
@@ -2030,8 +2171,11 @@ def export_successor_batch(context: ReleaseContext, resolution: int, scene_indic
         previous_path = root / "release-receipts" / state["last_manifest"]
         if _file_sha256(previous_path) != state["last_manifest_sha256"]:
             raise ValueError("Release continuation manifest content mismatch")
-        if (state["config_sha256"] != config_hash or state["calibration_sha256"] != calibration_hash
-                or state["producer_code_sha256"] != code_hashes):
+        if (
+            state["config_sha256"] != config_hash
+            or state["calibration_sha256"] != calibration_hash
+            or state["producer_code_sha256"] != code_hashes
+        ):
             raise ValueError("Release provenance changed between batches")
         if state["last_index"] >= scene_indices[0]:
             raise ValueError("Release batches must advance global indices without overlap")
@@ -2049,15 +2193,21 @@ def export_successor_batch(context: ReleaseContext, resolution: int, scene_indic
     denominator, variants = Counter(), Counter()
     provenance_ids = set()
     expected_variants = {f"{solver}:{variant}" for solver in context.solver_names for variant in ("free", "obstacles")}
-    admission_jobs = ((raw, resolution, context.split_names, scene_indices[start:start + 128])
-                      for start in range(0, len(scene_indices), 128))
+    admission_jobs = (
+        (raw, resolution, context.split_names, scene_indices[start : start + 128])
+        for start in range(0, len(scene_indices), 128)
+    )
     for admitted in _bounded_executor_map(executor, _admit_successor_scenes, admission_jobs, max_inflight=worker_count):
         for scene in admitted:
-            split, receipt = scene['split'], scene['receipt']
-            if receipt.get("resolution") != resolution or receipt.get("split") != split or not receipt.get("provenance_id"):
+            split, receipt = scene["split"], scene["receipt"]
+            if (
+                receipt.get("resolution") != resolution
+                or receipt.get("split") != split
+                or not receipt.get("provenance_id")
+            ):
                 raise ValueError("Release scene receipt identity or provenance mismatch")
-            if receipt['scene_status'] == 'complete' and receipt.get('calibration_sha256') != calibration_hash:
-                raise ValueError('Release scene calibration identity mismatch')
+            if receipt["scene_status"] == "complete" and receipt.get("calibration_sha256") != calibration_hash:
+                raise ValueError("Release scene calibration identity mismatch")
             if set(receipt["variants"]) != expected_variants:
                 raise ValueError("Release terminal variant solver identity mismatch")
             provenance_ids.add(receipt["provenance_id"])
@@ -2071,18 +2221,19 @@ def export_successor_batch(context: ReleaseContext, resolution: int, scene_indic
             scenes.append(scene)
             if receipt["scene_status"] == "complete":
                 metadata_path = raw / str(resolution) / split / receipt["artifacts"]["metadata"]["path"]
-                grouped[split].append((metadata_path, scene['receipt_file_sha256']))
+                grouped[split].append((metadata_path, scene["receipt_file_sha256"]))
     files, new_samples = [], {split: [] for split in context.split_names}
     history_files = _successor_history_roster(scenes, resolution)
     with tempfile.TemporaryDirectory(prefix=f".batch-{batch_id}-", dir=root) as temporary:
         temporary_root = Path(temporary)
         for record in history_files:
-            source = raw / str(resolution) / record['split'] / record['source_path']
-            destination = temporary_root / record['path']
+            source = raw / str(resolution) / record["split"] / record["source_path"]
+            destination = temporary_root / record["path"]
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(source, destination)
-            record['size_bytes'] = destination.stat().st_size
+            record["size_bytes"] = destination.stat().st_size
         _verify_successor_history(temporary_root, scenes, resolution, history_files)
+
         def shard_jobs():
             for split, paths in grouped.items():
                 remaining = max(0, min(context.sample_size, 64) - len(sample_ids[split]))
@@ -2090,32 +2241,56 @@ def export_successor_batch(context: ReleaseContext, resolution: int, scene_indic
                     if sample:
                         new_samples[split] = [path.stem for path, _ in selected]
                     for start in range(0, len(selected), shard_size):
-                        roster = selected[start:start + shard_size]
+                        roster = selected[start : start + shard_size]
                         relative = Path(_config_name(resolution, sample)) / split
-                        yield (context, resolution, sample, split, [path for path, _ in roster],
-                               [digest for _, digest in roster], temporary_root / relative,
-                               f'data-{batch_id}', start // shard_size, temporary_root / 'previews' / split)
+                        yield (
+                            context,
+                            resolution,
+                            sample,
+                            split,
+                            [path for path, _ in roster],
+                            [digest for _, digest in roster],
+                            temporary_root / relative,
+                            f"data-{batch_id}",
+                            start // shard_size,
+                            temporary_root / "previews" / split,
+                        )
+
         files.extend(_bounded_executor_map(executor, _write_successor_shard, shard_jobs(), max_inflight=worker_count))
         # On interruption an uncommitted deterministic shard is replaced on retry.
         for record in files + history_files:
             destination = root / record["path"]
             destination.parent.mkdir(parents=True, exist_ok=True)
             os.replace(temporary_root / record["path"], destination)
-    manifest = {"schema_version": "passage-export-batch-v1", "batch_id": batch_id,
-                "resolution": resolution, "scene_indices": scene_indices, "scenes": scenes,
-                "scene_status_counts": dict(denominator), "variant_status_counts": dict(variants),
-                "requested_scenes": len(scene_indices), "requested_variants": len(scene_indices) * len(context.solver_names) * 2,
-                "files": files, "history_files": history_files, "sample_ids": new_samples,
-                "sample_ids_total": {split: sample_ids[split] + new_samples[split] for split in context.split_names},
-                "sample_size_per_split": min(context.sample_size, 64),
-                "config_sha256": config_hash, "calibration_sha256": calibration_hash,
-                "generation_provenance_id": next(iter(provenance_ids)),
-                "producer_code_sha256": code_hashes, "previous_manifest_sha256": previous_manifests}
-    manifest['execution'] = {'producer_max_inflight': worker_count,
-                             'producer_workspace_estimate_bytes': worker_bytes,
-                             'memory_budget_bytes': memory_budget_bytes,
-                             'row_group_rows': _export_row_budget(resolution, shard_size)}
+    manifest = {
+        "schema_version": "passage-export-batch-v1",
+        "batch_id": batch_id,
+        "resolution": resolution,
+        "scene_indices": scene_indices,
+        "scenes": scenes,
+        "scene_status_counts": dict(denominator),
+        "variant_status_counts": dict(variants),
+        "requested_scenes": len(scene_indices),
+        "requested_variants": len(scene_indices) * len(context.solver_names) * 2,
+        "files": files,
+        "history_files": history_files,
+        "sample_ids": new_samples,
+        "sample_ids_total": {split: sample_ids[split] + new_samples[split] for split in context.split_names},
+        "sample_size_per_split": min(context.sample_size, 64),
+        "config_sha256": config_hash,
+        "calibration_sha256": calibration_hash,
+        "generation_provenance_id": next(iter(provenance_ids)),
+        "producer_code_sha256": code_hashes,
+        "previous_manifest_sha256": previous_manifests,
+    }
+    manifest["execution"] = {
+        "producer_max_inflight": worker_count,
+        "producer_workspace_estimate_bytes": worker_bytes,
+        "memory_budget_bytes": memory_budget_bytes,
+        "row_group_rows": _export_row_budget(resolution, shard_size),
+    }
     from passage.notebook_export import write_staged_bytes
+
     write_staged_bytes(manifest_path, (json.dumps(manifest, sort_keys=True, indent=2, default=str) + "\n").encode())
     verified = verify_successor_batch(root, batch_id)
     _advance_successor_export_state(root, verified)
@@ -2129,13 +2304,20 @@ def _advance_successor_export_state(root: Path, manifest: dict) -> None:
         state = json.loads(path.read_text())
         if state["last_index"] >= manifest["scene_indices"][-1]:
             return
-    state = {"schema_version": "passage-export-state-v1", "resolution": manifest["resolution"],
-             "last_index": manifest["scene_indices"][-1],
-             "last_manifest": f"batch-{manifest['batch_id']}.json",
-             "last_manifest_sha256": manifest["manifest_sha256"],
-             "sample_ids_total": manifest["sample_ids_total"],
-             **{key: manifest[key] for key in ("config_sha256", "calibration_sha256", "producer_code_sha256", "generation_provenance_id")}}
+    state = {
+        "schema_version": "passage-export-state-v1",
+        "resolution": manifest["resolution"],
+        "last_index": manifest["scene_indices"][-1],
+        "last_manifest": f"batch-{manifest['batch_id']}.json",
+        "last_manifest_sha256": manifest["manifest_sha256"],
+        "sample_ids_total": manifest["sample_ids_total"],
+        **{
+            key: manifest[key]
+            for key in ("config_sha256", "calibration_sha256", "producer_code_sha256", "generation_provenance_id")
+        },
+    }
     from passage.notebook_export import write_staged_bytes
+
     write_staged_bytes(path, (json.dumps(state, sort_keys=True, indent=2) + "\n").encode())
 
 
@@ -2243,7 +2425,9 @@ def compress_release(
                     if wrote_any_split:
                         produced_config_names.add(_config_name(resolution, sample))
             if not produced_config_names:
-                raise FileNotFoundError(f"No metadata files found for selected resolutions under {context.dataset_path}")
+                raise FileNotFoundError(
+                    f"No metadata files found for selected resolutions under {context.dataset_path}"
+                )
             backups, committed = {}, []
             try:
                 for config_name in _sort_config_names(produced_config_names):
@@ -2329,10 +2513,12 @@ def prepare_export(
             else set()
         )
         export_dir.mkdir(parents=True, exist_ok=True)
-        successor = any((export_dir / 'release-receipts').glob('batch-*.json')) or (
-            export_dir / 'release-receipts/release-verification.json').is_file()
+        successor = (
+            any((export_dir / "release-receipts").glob("batch-*.json"))
+            or (export_dir / "release-receipts/release-verification.json").is_file()
+        )
         if successor and not execute_notebooks:
-            raise ValueError('Release publication requires executed publication notebooks')
+            raise ValueError("Release publication requires executed publication notebooks")
         logger.info(f"Preparing export at {export_dir}")
         logger.info(f"Selected resolutions: {selected_resolutions}")
 
@@ -2358,8 +2544,10 @@ def prepare_export(
             logger.info(f"[4/9] strip notebook outputs ({stripped}/{scanned} touched)")
 
         # Step 5 — root metadata (LICENSE, croissant, datasheet, citation, ...)
-        statuses = {} if successor else _copy_release_metadata_idempotent(
-            export_dir, repo_id_resolved, force=steps.force("force_metadata")
+        statuses = (
+            {}
+            if successor
+            else _copy_release_metadata_idempotent(export_dir, repo_id_resolved, force=steps.force("force_metadata"))
         )
         refreshed = [name for name, s in statuses.items() if s == "run"]
         skipped = [name for name, s in statuses.items() if s == "skip"]
@@ -2377,15 +2565,20 @@ def prepare_export(
 
         def execute_publication(input_path, output_path, parameters, **options):
             if not _execute_notebook_with_retries(
-                input_path, output_path, parameters,
-                cwd=options["cwd"], max_retries=max_notebook_retries,
+                input_path,
+                output_path,
+                parameters,
+                cwd=options["cwd"],
+                max_retries=max_notebook_retries,
                 retry_delay=notebook_retry_delay,
-                cell_timeout=options["cell_timeout"], job_timeout=options["job_timeout"],
+                cell_timeout=options["cell_timeout"],
+                job_timeout=options["job_timeout"],
             ):
                 raise RuntimeError(f"Notebook execution failed: {input_path.name}")
 
         notebook_manifest = prepare_snapshot_notebooks(
-            export_dir, export_dir,
+            export_dir,
+            export_dir,
             notebooks_dirpath=context.notebooks_path,
             resolutions=selected_resolutions,
             repo_id=repo_id_resolved,
@@ -2406,10 +2599,14 @@ def prepare_export(
         )
         if execute_notebooks:
             notebook_manifest["publication_admission"] = validate_publication_notebooks(
-                notebook_manifest, export_dir, resolutions=selected_resolutions)
+                notebook_manifest, export_dir, resolutions=selected_resolutions
+            )
             from passage.notebook_export import MANIFEST_NAME, write_staged_bytes
-            write_staged_bytes(export_dir / MANIFEST_NAME,
-                (json.dumps(notebook_manifest, sort_keys=True, indent=2, default=str) + "\n").encode())
+
+            write_staged_bytes(
+                export_dir / MANIFEST_NAME,
+                (json.dumps(notebook_manifest, sort_keys=True, indent=2, default=str) + "\n").encode(),
+            )
         executed = sum(e["execution"]["status"] == "executed" for e in notebook_manifest["notebooks"])
         logger.info(f"[6/9] notebook matrix ({executed} executed, complete source inventory copied)")
 
@@ -2422,11 +2619,13 @@ def prepare_export(
         prepared_config_names |= existing_config_names
         if successor:
             from passage.successor_publication import write_successor_publication_metadata
+
             write_successor_publication_metadata(context, repo_id=repo_id_resolved)
-            status = 'run'
+            status = "run"
         else:
             status = _write_export_readme(
-                context, repo_id_resolved, prepared_config_names, force=steps.force("force_readme"))
+                context, repo_id_resolved, prepared_config_names, force=steps.force("force_readme")
+            )
         logger.info(f"[7/9] README.md {'(refreshed)' if status == 'run' else '(unchanged, skipped)'}")
 
         # Step 8 — .gitattributes (LFS rules)
@@ -2481,6 +2680,7 @@ def prepare_export(
         logger.info(f"Prepared export directory at {export_dir}")
         if successor:
             from passage.successor_publication import verify_successor_publication_metadata
+
             verify_successor_publication_metadata(export_dir)
         return True
     except (FileNotFoundError, RuntimeError, ValueError) as exc:

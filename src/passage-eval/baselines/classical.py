@@ -193,7 +193,11 @@ class BoundedExactPlanner:
     name: str = "bounded_exact_dijkstra_prototype"
 
     def __post_init__(self):
-        if isinstance(self.max_expansions, bool) or not isinstance(self.max_expansions, int) or self.max_expansions <= 0:
+        if (
+            isinstance(self.max_expansions, bool)
+            or not isinstance(self.max_expansions, int)
+            or self.max_expansions <= 0
+        ):
             raise ValueError("max_expansions must be a positive integer")
 
     def plan(self, request: PlanRequest) -> PlanResult:
@@ -201,6 +205,7 @@ class BoundedExactPlanner:
         import time
 
         from passage_eval.metrics.cost import MODEL_CODES, directed_edge_cost
+
         started = time.perf_counter()
         deadline = request.deadline_monotonic
         if deadline is None and request.budget.wall_time_ms is not None:
@@ -216,9 +221,16 @@ class BoundedExactPlanner:
 
         def result(path, status):
             work = {"expansions": expansions, "queue_operations": operations, "live_states": live_peak}
-            return PlanResult(path, status=status, work=work, precision="float64",
-                              diagnostics={"algorithm": "bounded_dijkstra_prototype",
-                                           "configured_max_expansions": self.max_expansions})
+            return PlanResult(
+                path,
+                status=status,
+                work=work,
+                precision="float64",
+                diagnostics={
+                    "algorithm": "bounded_dijkstra_prototype",
+                    "configured_max_expansions": self.max_expansions,
+                },
+            )
 
         height, width = request.elevation.shape
         while queue:
@@ -243,9 +255,16 @@ class BoundedExactPlanner:
                 if not (0 <= nxt[0] < height and 0 <= nxt[1] < width) or request.obstacles[nxt]:
                     continue
                 metres = 30.0 * length
-                edge = directed_edge_cost(float(terrain[current]), float(terrain[nxt]), metres,
-                                          float(request.cost_weight), MODEL_CODES[request.cost_model],
-                                          minimum, elevation_range, absolute_max)
+                edge = directed_edge_cost(
+                    float(terrain[current]),
+                    float(terrain[nxt]),
+                    metres,
+                    float(request.cost_weight),
+                    MODEL_CODES[request.cost_model],
+                    minimum,
+                    elevation_range,
+                    absolute_max,
+                )
                 proposal = distance + edge
                 if not np.isfinite(edge) or not np.isfinite(proposal):
                     raise ValueError("nonfinite physical edge or accumulated path cost")
@@ -271,18 +290,34 @@ class CanonicalAStarPlanner:
     Native calls remain cooperatively bounded and cannot be forcibly cancelled.
     Historical ``AStarPlanner`` remains a separate legacy procedure.
     """
-    name: str = 'canonical_exact_astar'
+
+    name: str = "canonical_exact_astar"
 
     def plan(self, request: PlanRequest) -> PlanResult:
         from passage.reference import solve_reference
+
         remaining = request.remaining_wall_ms()
         if remaining is not None and remaining <= 0:
-            return PlanResult([], status='timeout', precision='float64',
-                              work={'expansions': 0, 'queue_operations': 0, 'max_live_states': 0})
-        result = solve_reference(request.elevation, request.obstacles, request.start, request.goal,
-                                 graph=request.graph, max_expansions=request.budget.max_expansions,
-                                 algorithm='astar')
-        return PlanResult(result.path, status={'exact': 'ok', 'no_path': 'no_path',
-                                              'censored': 'budget_exhausted'}[result.status],
-                          work=result.work, stage_work={'primary': result.work}, precision='float64',
-                          diagnostics={'algorithm': 'canonical_astar', 'native_call': 'cooperative_safe_completion'})
+            return PlanResult(
+                [],
+                status="timeout",
+                precision="float64",
+                work={"expansions": 0, "queue_operations": 0, "max_live_states": 0},
+            )
+        result = solve_reference(
+            request.elevation,
+            request.obstacles,
+            request.start,
+            request.goal,
+            graph=request.graph,
+            max_expansions=request.budget.max_expansions,
+            algorithm="astar",
+        )
+        return PlanResult(
+            result.path,
+            status={"exact": "ok", "no_path": "no_path", "censored": "budget_exhausted"}[result.status],
+            work=result.work,
+            stage_work={"primary": result.work},
+            precision="float64",
+            diagnostics={"algorithm": "canonical_astar", "native_call": "cooperative_safe_completion"},
+        )

@@ -128,7 +128,7 @@ Publish the prepared tree to a Hugging Face dataset repository that you name.
 
 | Item | Value |
 | --- | --- |
-| Version | 1.0, verified on the Hub at commit `2ab44d8` |
+| Version | 1.0, Hub tag `v1.0` at commit `c09cc5a21a55a93e7c09d47368d5f5bf75cb8fae` |
 | Core scenes | 4,400,000 at seven resolutions, from 64×64 to 4096×4096 cells |
 | Route variants | 26,400,000, all exact routes (six per scene) |
 | Splits | train / calibration / validation / test = 90 / 2 / 4 / 4 % |
@@ -232,7 +232,7 @@ import numpy as np
 import zstandard
 from datasets import load_dataset
 
-REVISION = "2ab44d899652c7fb99c425488e84a7d565963547"  # verified PASSAGE v1.0 upload
+REVISION = "c09cc5a21a55a93e7c09d47368d5f5bf75cb8fae"  # verified PASSAGE v1.0 upload
 
 rows = load_dataset("thalesgroup/passage", "256x256_samples",
                     split="validation", revision=REVISION)

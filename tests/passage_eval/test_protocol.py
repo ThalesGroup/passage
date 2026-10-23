@@ -108,7 +108,7 @@ def test_paired_bootstrap_delta_detects_a_better():
     assert rec.favours_a is True  # lower-is-better, delta < 0 => A wins
 
 
-def test_multiseed_pooling_produces_3x_resamples():
+def test_multiseed_returns_one_seed_mean_per_shared_resample():
     rng = np.random.default_rng(0)
     n = 50
     by_seed_a = {s: rng.uniform(0, 0.1, size=n) for s in DEFAULT_SEEDS}
@@ -122,8 +122,8 @@ def test_multiseed_pooling_produces_3x_resamples():
         seeds=DEFAULT_SEEDS,
         return_draws=True,
     )
-    assert draws.shape[0] == 1500
-    assert rec.n_bootstrap == 1500
+    assert draws.shape[0] == 500
+    assert rec.n_bootstrap == 500
     assert rec.n == 3 * n
 
 
@@ -195,25 +195,26 @@ def test_decide_pairwise_treats_holm_failure_as_tie():
     assert votes == {"cost_regret_median": "tie"}
 
 
-def test_geometry_bootstrap_retains_jointly_valid_pairs():
+def test_geometry_bootstrap_uses_each_methods_valid_subset():
     rec, draws = paired_bootstrap_delta(
         np.array([0.1, np.nan, 0.9]),
         np.array([0.2, 0.3, np.nan]),
         metric="path_assd",
         n_bootstrap=20,
         return_draws=True,
+        nan_policy="omit",
     )
-    assert rec.n == 1
-    assert rec.delta == pytest.approx(-0.1)
-    assert draws.tolist() == pytest.approx([-0.1] * 20)
+    assert (rec.n, rec.n_a, rec.n_b) == (3, 2, 2)
+    assert rec.delta == pytest.approx(0.25)
+    assert draws.shape == (20,)
 
 
-def test_multiseed_geometry_counts_only_valid_paired_samples():
+def test_multiseed_geometry_reports_each_methods_sample_count():
     a = {s: np.array([0.1, np.nan]) for s in DEFAULT_SEEDS}
     b = {s: np.array([0.2, 0.3]) for s in DEFAULT_SEEDS}
-    rec = multiseed_paired_bootstrap(a, b, metric="path_assd", n_bootstrap_per_seed=20)
-    assert rec.n == 3
-    assert rec.delta == pytest.approx(-0.1)
+    rec = multiseed_paired_bootstrap(a, b, metric="path_assd", n_bootstrap_per_seed=20, nan_policy="omit")
+    assert (rec.n, rec.n_a, rec.n_b) == (6, 3, 6)
+    assert rec.delta == pytest.approx(-0.15)
 
 
 def test_unavailable_metric_does_not_allow_full_pareto_claim():
@@ -222,20 +223,22 @@ def test_unavailable_metric_does_not_allow_full_pareto_claim():
         BootstrapDelta("geometry", 0, -0.1, 0.1, 10, 20, False),
     ]
     decision, _ = decide_pairwise(deltas)
-    assert decision is PairwiseDecision.TRADE_OFF
+    assert decision is PairwiseDecision.PARTIAL_EVIDENCE
 
 
 @pytest.mark.parametrize("a,b", [([], []), ([np.nan], [1.0])])
 def test_unavailable_pairs_report_no_statistical_evidence(a, b):
-    rec, draws = paired_bootstrap_delta(a, b, return_draws=True, n_bootstrap=20)
-    assert rec.n == 0
+    rec, draws = paired_bootstrap_delta(a, b, return_draws=True, n_bootstrap=20, nan_policy="omit")
+    assert rec.n == len(a)
     assert np.isnan(rec.delta)
     assert not rec.excludes_zero
-    assert draws.size == 0
+    assert draws.size == (20 if len(a) else 0)
     assert np.isnan(rec.two_sided_p_value(draws))
-    pooled, draws = multiseed_paired_bootstrap([a] * 3, [b] * 3, return_draws=True, n_bootstrap_per_seed=20)
-    assert pooled.n == pooled.n_bootstrap == 0
-    assert draws.size == 0
+    pooled, draws = multiseed_paired_bootstrap(
+        [a] * 3, [b] * 3, return_draws=True, n_bootstrap_per_seed=20, nan_policy="omit"
+    )
+    assert pooled.n == 3 * len(a)
+    assert pooled.n_bootstrap == draws.size == (20 if len(a) else 0)
 
 
 @pytest.mark.parametrize("a,b", [([1], [1, 2]), ([[1]], [[2]])])

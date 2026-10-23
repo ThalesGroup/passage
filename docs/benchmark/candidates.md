@@ -42,9 +42,7 @@ split, for each grid size, and frozen before the test pass.
 
 The per-task results of the two finalists reported in the paper are released
 under `src/passage-eval/results/paper-results/`: three training seeds of 1,024
-validation tasks at 256² with the `elevation` objective. They are historical
-results of the original study, reported as obtained; not re-run on the released
-dataset. They are not leaderboard entries. The
+validation tasks at 256² with the `elevation` objective. They are not leaderboard entries. The
 [paper-results notebook](notebooks/02-paper-results.md) tabulates them.
 
 [Evaluate your planner](contributing-a-method.md) describes how to wrap and

@@ -29,11 +29,11 @@ that every headline number is
  (ii) computed under a pre-registered set of primary metrics
       (``PRIMARY_METRICS``),
 (iii) aggregated over the seeds ``DEFAULT_SEEDS = (1234, 2026, 3407)``,
- (iv) tested via a paired bootstrap on the mean of paired differences,
+ (iv) estimated via shared geographic-block draws of aggregate contrasts,
   (v) corrected across the primary-metric family by Holm–Bonferroni at
       family-wise alpha = 0.05, and
  (vi) reduced to a categorical pairwise decision: Pareto-dominant /
-      Trade-off / Indistinguishable.
+      Trade-off / Partial evidence / No demonstrated difference.
 
 This module is the canonical implementation of points (iii) - (vi). It is
 deliberately small and depends only on numpy so a third-party submission
@@ -45,7 +45,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Callable, Iterable, Mapping, Sequence
+from typing import Callable, Iterable, Literal, Mapping, Sequence
 
 import numpy as np
 
@@ -141,7 +141,7 @@ def apply_censored_penalty(
 
 
 # ---------------------------------------------------------------------------
-# Paired bootstrap on the mean of paired differences
+# Paired bootstrap on differences of aggregates
 # ---------------------------------------------------------------------------
 
 
@@ -149,10 +149,10 @@ def apply_censored_penalty(
 class BootstrapDelta:
     """Paired-bootstrap result on a single primary metric.
 
-    ``delta`` is the point estimate of $\\Delta_m = \\operatorname{mean}(m_A - m_B)$
-    (paired by sample index); ``ci_low`` and ``ci_high`` are the central
-    paired-bootstrap interval at the requested confidence level. ``n`` is
-    the number of (paired) samples and ``n_bootstrap`` the resample count.
+    ``delta`` estimates ``T(A) - T(B)``. ``n`` counts the frozen task roster
+    (summed across seeds for a seed mean); ``n_a`` and ``n_b`` count each
+    method's finite outcomes. ``n_bootstrap`` counts shared draws, not seeds
+    times draws. An undefined draw makes the interval unavailable (NaN).
     """
 
     metric: str
@@ -162,6 +162,10 @@ class BootstrapDelta:
     n: int
     n_bootstrap: int
     higher_is_better: bool
+    n_a: int | None = None
+    n_b: int | None = None
+    n_blocks: int | None = None
+    per_seed: Mapping[int, BootstrapDelta] | None = None
 
     @property
     def excludes_zero(self) -> bool:
@@ -183,17 +187,21 @@ class BootstrapDelta:
         return self.ci_high < 0.0
 
     def two_sided_p_value(self, draws: np.ndarray | None = None) -> float:
-        """Two-sided p-value associated with the directional test.
+        """Legacy descriptive tail proxy; not a declared confirmatory test.
 
         When ``draws`` (the resampled $\\Delta$ trajectory) is supplied the
         p-value is the empirical fraction of draws on the wrong side of
         zero, doubled for two-sided. With no draws available we fall back
         to a CI-coverage proxy: ``2 * Phi(-|delta| / se)`` where ``se`` is
-        approximated from the symmetric CI half-width.
+        approximated from the symmetric 95% CI half-width. Neither proxy
+        specifies a null-resampling test or its assumptions. The canonical
+        comparison requires separately supplied, declared paired-test p-values.
         """
         if draws is not None:
             d = np.asarray(draws, dtype=np.float64)
-            if d.size == 0:
+            if d.ndim != 1:
+                raise ValueError("Bootstrap draws must be one-dimensional")
+            if d.size == 0 or not np.isfinite(d).all():
                 return float("nan")
             # Empirical two-sided p: 2 * min(P(Δ <= 0), P(Δ >= 0)).
             p_lo = float(np.mean(d <= 0.0))
@@ -213,9 +221,89 @@ class BootstrapDelta:
         return float(erfc(z / sqrt(2.0)))
 
 
-def _resample_indices(n: int, n_bootstrap: int, rng: np.random.Generator) -> np.ndarray:
-    """Return an ``(n_bootstrap, n)`` matrix of sample-paired resample indices."""
-    return rng.integers(low=0, high=n, size=(n_bootstrap, n))
+def _validate_bootstrap(n_bootstrap: int, alpha: float, nan_policy: str, seed: int) -> None:
+    if isinstance(n_bootstrap, bool) or not isinstance(n_bootstrap, (int, np.integer)) or n_bootstrap < 1:
+        raise ValueError("n_bootstrap must be a positive integer")
+    if not np.isfinite(alpha) or not 0 < alpha < 1:
+        raise ValueError("alpha must lie strictly between zero and one")
+    if nan_policy not in {"raise", "omit"}:
+        raise ValueError("nan_policy must be 'raise' or 'omit'")
+    if isinstance(seed, bool) or not isinstance(seed, (int, np.integer)) or seed < 0:
+        raise ValueError("The resampling seed must be a fixed nonnegative integer")
+
+
+def _block_groups(blocks: Sequence[str] | np.ndarray | None, n: int) -> list[np.ndarray] | None:
+    if blocks is None:
+        return None
+    labels = np.asarray(blocks, dtype=object)
+    if labels.shape != (n,) or any(not isinstance(label, str) or not label.strip() for label in labels):
+        raise ValueError("Geographic blocks must be nonempty strings aligned with the task roster")
+    names = list(dict.fromkeys(labels))
+    if len(names) < 2:
+        raise ValueError("At least two geographic blocks are required to estimate geographic uncertainty")
+    return [np.flatnonzero(labels == name) for name in names]
+
+
+def _paired_arrays(a, b, nan_policy: str) -> tuple[np.ndarray, np.ndarray]:
+    a, b = np.asarray(a, dtype=np.float64), np.asarray(b, dtype=np.float64)
+    if a.shape != b.shape:
+        raise ValueError(f"Paired shape mismatch: {a.shape} vs {b.shape}.")
+    if a.ndim != 1:
+        raise ValueError("Paired arrays must be one-dimensional")
+    if (
+        np.isinf(a).any()
+        or np.isinf(b).any()
+        or (nan_policy == "raise" and (not np.isfinite(a).all() or not np.isfinite(b).all()))
+    ):
+        raise ValueError("Paired arrays must be finite; use nan_policy='omit' for each method's defined subset")
+    return a, b
+
+
+def _contrast(a: np.ndarray, b: np.ndarray, statistic: Callable[[np.ndarray], float]) -> float:
+    a, b = a[np.isfinite(a)], b[np.isfinite(b)]
+    if not a.size or not b.size:
+        return float("nan")
+    value = float(statistic(a)) - float(statistic(b))
+    if not np.isfinite(value):
+        raise ValueError("statistic must return a finite scalar on finite nonempty arrays")
+    return value
+
+
+def _delta_record(metric, point, draws, n, higher_is_better, a, b, groups, alpha, *, per_seed=None):
+    lo = hi = float("nan")
+    # Do not condition on the subset of defined draws by silently dropping NaNs.
+    if np.isfinite(point) and draws.size and np.isfinite(draws).all():
+        lo, hi = (float(value) for value in np.quantile(draws, [alpha / 2, 1 - alpha / 2]))
+    return BootstrapDelta(
+        metric,
+        float(point),
+        lo,
+        hi,
+        n,
+        len(draws),
+        higher_is_better,
+        n_a=int(np.isfinite(a).sum()),
+        n_b=int(np.isfinite(b).sum()),
+        n_blocks=len(groups) if groups is not None else None,
+        per_seed=per_seed,
+    )
+
+
+def _shared_bootstrap(a_arrays, b_arrays, statistic, n_bootstrap, rng, groups):
+    """Compute unsorted seed trajectories using the same complete task draw."""
+    n = len(a_arrays[0])
+    if not n:
+        return np.empty((len(a_arrays), 0), dtype=np.float64)
+    draws = np.empty((len(a_arrays), n_bootstrap), dtype=np.float64)
+    for index in range(n_bootstrap):
+        if groups is None:
+            rows = rng.integers(0, n, size=n)
+        else:
+            selected = rng.integers(0, len(groups), size=len(groups))
+            rows = np.concatenate([groups[group] for group in selected])
+        for seed_index, (a, b) in enumerate(zip(a_arrays, b_arrays)):
+            draws[seed_index, index] = _contrast(a[rows], b[rows], statistic)
+    return draws
 
 
 def paired_bootstrap_delta(
@@ -229,69 +317,43 @@ def paired_bootstrap_delta(
     alpha: float = 0.05,
     seed: int = DEFAULT_SEEDS[0],
     return_draws: bool = False,
+    blocks: Sequence[str] | np.ndarray | None = None,
+    nan_policy: Literal["raise", "omit"] = "raise",
 ) -> BootstrapDelta | tuple[BootstrapDelta, np.ndarray]:
-    """Paired bootstrap on $\\Delta = T(\\hat{m}_A - \\hat{m}_B)$.
+    """Paired bootstrap on ``T(A) - T(B)``, preserving draw order.
 
     Pairs are anchored on the same sample index: the pairing cancels
     sample-difficulty variance because both methods are evaluated on the
-    same indices. Each resample picks ``n`` indices
-    *with replacement* and recomputes ``statistic`` on the per-sample
-    differences.
+    same indices. With ``blocks``, each draw samples the observed number
+    of whole geographic blocks with replacement, retaining task weights.
+    Without blocks this lower-level helper uses independent task resampling.
 
     For ``cost_regret_median`` and friends pass ``statistic=np.median``.
-    The default ``statistic=np.mean`` is the paper's $\\Delta_m$.
+    The mean default agrees with the historical mean of paired differences.
+    Nonlinear reductions intentionally use the difference of aggregates.
 
     Parameters
     ----------
     per_sample_a, per_sample_b : array_like, shape (N,)
         Per-sample metric values, paired by index.
     statistic : callable
-        Reduction applied to the per-sample difference vector. Defaults
-        to ``np.mean`` for the paper's $\\Delta_m = \\mathrm{mean}(m_A - m_B)$.
+        Reduction applied separately to each method, including inside draws.
     n_bootstrap, alpha, seed
         Bootstrap parameters; ``alpha = 0.05`` is the paper's default.
     return_draws : bool
         If ``True`` also return the ``(n_bootstrap,)`` draw vector for
-        downstream Holm–Bonferroni p-value computation.
+        descriptive inspection. Ordinary bootstrap tails alone do not define
+        the valid paired null test required for confirmatory Holm correction.
+    nan_policy : {"raise", "omit"}
+        Missing values raise by default. Explicit omission draws the complete
+        roster first, then reduces each method's finite subset separately.
+        An empty subset in any draw makes its CI unavailable; draws are retained.
     """
-    a = np.asarray(per_sample_a, dtype=np.float64)
-    b = np.asarray(per_sample_b, dtype=np.float64)
-    if a.shape != b.shape:
-        raise ValueError(f"Paired shape mismatch: {a.shape} vs {b.shape}.")
-    if a.ndim != 1:
-        raise ValueError("Paired arrays must be one-dimensional")
-    paired = np.isfinite(a) & np.isfinite(b)
-    a, b = a[paired], b[paired]
-    n = a.shape[0]
-    if n == 0:
-        rec = BootstrapDelta(
-            metric=metric,
-            delta=float("nan"),
-            ci_low=float("nan"),
-            ci_high=float("nan"),
-            n=0,
-            n_bootstrap=n_bootstrap,
-            higher_is_better=higher_is_better,
-        )
-        return (rec, np.zeros((0,), dtype=np.float64)) if return_draws else rec
-
-    diff = a - b
-    point = float(statistic(diff))
-    rng = np.random.default_rng(seed)
-    idx = _resample_indices(n, n_bootstrap, rng)
-    draws = np.asarray([statistic(diff[row]) for row in idx], dtype=np.float64)
-    draws.sort()
-    lo = float(np.quantile(draws, alpha / 2.0))
-    hi = float(np.quantile(draws, 1.0 - alpha / 2.0))
-    rec = BootstrapDelta(
-        metric=metric,
-        delta=point,
-        ci_low=lo,
-        ci_high=hi,
-        n=n,
-        n_bootstrap=n_bootstrap,
-        higher_is_better=higher_is_better,
-    )
+    _validate_bootstrap(n_bootstrap, alpha, nan_policy, seed)
+    a, b = _paired_arrays(per_sample_a, per_sample_b, nan_policy)
+    groups = _block_groups(blocks, len(a))
+    draws = _shared_bootstrap([a], [b], statistic, n_bootstrap, np.random.default_rng(seed), groups)[0]
+    rec = _delta_record(metric, _contrast(a, b, statistic), draws, len(a), higher_is_better, a, b, groups, alpha)
     if return_draws:
         return rec, draws
     return rec
@@ -308,76 +370,59 @@ def multiseed_paired_bootstrap(
     alpha: float = 0.05,
     seeds: Sequence[int] = DEFAULT_SEEDS,
     return_draws: bool = False,
+    seed: int = DEFAULT_SEEDS[0],
+    blocks: Sequence[str] | np.ndarray | None = None,
+    nan_policy: Literal["raise", "omit"] = "raise",
 ) -> BootstrapDelta | tuple[BootstrapDelta, np.ndarray]:
-    """Three-seed aggregation: pool $S \\times B$ paired-bootstrap draws.
+    """Average seed contrasts *within* each shared task/block bootstrap draw.
 
-    Each seed contributes ``n_bootstrap_per_seed`` resamples on its own
-    paired arrays; the composite CI is the central interval over the
-    pooled draws (the paper's three-seed aggregation). The point estimate
-    is the across-seed mean of per-seed point estimates.
+    The result contains ``B = n_bootstrap_per_seed`` draws of the seed mean,
+    and per-seed estimates/CIs in ``per_seed``. ``seed`` controls geographic
+    resampling; ``seeds`` identifies fitted training seeds. This intentionally
+    replaces the historical seed-union mixture of ``S * B`` draws.
 
-    Inputs may be a dict ``{seed: (N_seed,) array}`` or a list aligned
-    with ``seeds``.
+    Inputs are mappings keyed by exactly ``seeds``, or sequences in that order.
+    All arrays must represent the identical ordered task roster. Use
+    ``compare_primary_metrics`` to validate explicit task identities and the
+    complete preregistered seed/metric family.
     """
+    _validate_bootstrap(n_bootstrap_per_seed, alpha, nan_policy, seed)
+    if not len(seeds) or len(set(seeds)) != len(seeds):
+        raise ValueError("seeds must be nonempty and distinct")
+    if isinstance(per_sample_a_by_seed, Mapping) != isinstance(per_sample_b_by_seed, Mapping):
+        raise ValueError("per-seed arrays must align in the same input representation")
     if isinstance(per_sample_a_by_seed, Mapping):
-        a_arrays = [np.asarray(per_sample_a_by_seed[s], dtype=np.float64) for s in seeds]
-        b_arrays = [np.asarray(per_sample_b_by_seed[s], dtype=np.float64) for s in seeds]
+        if set(per_sample_a_by_seed) != set(seeds) or set(per_sample_b_by_seed) != set(seeds):
+            raise ValueError("per-seed mapping keys must align exactly with seeds")
+        pairs = [(per_sample_a_by_seed[s], per_sample_b_by_seed[s]) for s in seeds]
     else:
         if len(per_sample_a_by_seed) != len(seeds) or len(per_sample_b_by_seed) != len(seeds):
             raise ValueError("per-seed arrays must align with seeds.")
-        a_arrays = [np.asarray(x, dtype=np.float64) for x in per_sample_a_by_seed]
-        b_arrays = [np.asarray(x, dtype=np.float64) for x in per_sample_b_by_seed]
-
-    pooled: list[np.ndarray] = []
-    point_estimates: list[float] = []
-    n_total = 0
-    for s, a, b in zip(seeds, a_arrays, b_arrays):
-        if a.shape != b.shape:
-            raise ValueError(f"Paired shape mismatch on seed {s}: {a.shape} vs {b.shape}.")
-        if a.size == 0:
-            continue
-        rec, draws = paired_bootstrap_delta(
-            a,
-            b,
-            metric=metric,
-            higher_is_better=higher_is_better,
-            statistic=statistic,
-            n_bootstrap=n_bootstrap_per_seed,
-            alpha=alpha,
-            seed=int(s),
-            return_draws=True,
-        )
-        if rec.n == 0:
-            continue
-        pooled.append(draws)
-        point_estimates.append(rec.delta)
-        n_total += rec.n
-
-    if not pooled:
-        rec = BootstrapDelta(
-            metric=metric,
-            delta=float("nan"),
-            ci_low=float("nan"),
-            ci_high=float("nan"),
-            n=0,
-            n_bootstrap=0,
-            higher_is_better=higher_is_better,
-        )
-        return (rec, np.zeros((0,), dtype=np.float64)) if return_draws else rec
-
-    all_draws = np.concatenate(pooled, axis=0)
-    all_draws.sort()
-    lo = float(np.quantile(all_draws, alpha / 2.0))
-    hi = float(np.quantile(all_draws, 1.0 - alpha / 2.0))
-    point = float(np.mean(point_estimates))
-    rec = BootstrapDelta(
-        metric=metric,
-        delta=point,
-        ci_low=lo,
-        ci_high=hi,
-        n=n_total,
-        n_bootstrap=int(all_draws.shape[0]),
-        higher_is_better=higher_is_better,
+        pairs = list(zip(per_sample_a_by_seed, per_sample_b_by_seed))
+    validated = [_paired_arrays(a, b, nan_policy) for a, b in pairs]
+    a_arrays, b_arrays = zip(*validated)
+    if any(a.shape != a_arrays[0].shape for a in a_arrays):
+        raise ValueError("All seeds must align with the same ordered task roster shape")
+    groups = _block_groups(blocks, len(a_arrays[0]))
+    trajectories = _shared_bootstrap(
+        a_arrays, b_arrays, statistic, n_bootstrap_per_seed, np.random.default_rng(seed), groups
+    )
+    records = {
+        s: _delta_record(metric, _contrast(a, b, statistic), draws, len(a), higher_is_better, a, b, groups, alpha)
+        for s, a, b, draws in zip(seeds, a_arrays, b_arrays, trajectories)
+    }
+    all_draws = np.mean(trajectories, axis=0)
+    rec = _delta_record(
+        metric,
+        np.mean([record.delta for record in records.values()]),
+        all_draws,
+        sum(len(a) for a in a_arrays),
+        higher_is_better,
+        np.concatenate(a_arrays),
+        np.concatenate(b_arrays),
+        groups,
+        alpha,
+        per_seed=records,
     )
     if return_draws:
         return rec, all_draws
@@ -415,10 +460,17 @@ def holm_bonferroni(
 
     The order of the input mapping is ignored; results are returned in
     the original metric order (Python 3.11+ dicts preserve insertion).
+    A NaN represents an unavailable test: it remains NaN and cannot reject,
+    while still counting in the declared family size. Other values outside
+    [0, 1], including infinities, raise instead of becoming evidence.
     """
+    if not np.isfinite(alpha) or not 0 < alpha < 1:
+        raise ValueError("alpha must lie strictly between zero and one")
     if not p_values:
         return {}
-    items = list(p_values.items())
+    items = [(name, float(value)) for name, value in p_values.items()]
+    if any(not np.isnan(p) and (not np.isfinite(p) or not 0 <= p <= 1) for _, p in items):
+        raise ValueError("Each p-value must be in [0, 1] or NaN for an unavailable test")
     m = len(items)
     # Stable sort by p-value ascending; tie-break on original order.
     order = sorted(range(m), key=lambda i: (float(items[i][1]) if np.isfinite(items[i][1]) else float("inf"), i))
@@ -429,6 +481,11 @@ def holm_bonferroni(
     for rank, idx in enumerate(order):
         name, p = items[idx]
         p = float(p)
+        if np.isnan(p):
+            # max(previous, NaN) would otherwise relabel missing evidence with
+            # the previous test's adjusted probability.
+            rejected_so_far = False
+            continue
         factor = m - rank
         adj = min(1.0, factor * p) if np.isfinite(p) else float("nan")
         cumulative_max = max(cumulative_max, adj)
@@ -456,11 +513,14 @@ def holm_bonferroni(
 
 
 class PairwiseDecision(str, Enum):
-    """Three possible overall outcomes of the paper's decision rule."""
+    """Primary-metric outcomes; no-difference does not establish equivalence."""
 
     PARETO_DOMINANT_A = "pareto_dominant_a"
     PARETO_DOMINANT_B = "pareto_dominant_b"
     TRADE_OFF = "trade_off"
+    PARTIAL_EVIDENCE = "partial_evidence"
+    # Historical name/value retained for callers. This means only that the
+    # declared superiority criteria were not met, never statistical equivalence.
     INDISTINGUISHABLE = "indistinguishable"
 
 
@@ -479,7 +539,10 @@ def decide_pairwise(
 
     Pareto-dominant: every metric votes the same direction.
     Indistinguishable: no metric votes either way.
-    Trade-off: a mix of votes.
+    Trade-off: demonstrated wins in both directions. Partial evidence:
+    demonstrated wins in one direction with inconclusive remaining metrics.
+    This generic helper judges only the supplied family; use
+    ``compare_primary_metrics`` for all six preregistered primary metrics.
     """
     votes: dict[str, str] = {}
     for d in deltas:
@@ -502,5 +565,159 @@ def decide_pairwise(
     if has_b and all(v == "win_b" for v in votes.values()):
         return PairwiseDecision.PARETO_DOMINANT_B, votes
     if has_a or has_b:
-        return PairwiseDecision.TRADE_OFF, votes
+        return PairwiseDecision.PARTIAL_EVIDENCE, votes
     return PairwiseDecision.INDISTINGUISHABLE, votes
+
+
+@dataclass(frozen=True)
+class PrimaryMetricComparison:
+    """Six-metric, three-seed comparison conditional on the fitted procedures.
+
+    A Pareto label concerns primary metrics only. Deployment latency and
+    footprint must still be assessed separately before an overall claim.
+    ``inference_status`` records availability, not qualification of a caller's
+    declared paired test or scientific eligibility of these inputs.
+    """
+
+    deltas: Mapping[str, BootstrapDelta]
+    holm: Mapping[str, HolmBonferroniResult]
+    decision: PairwiseDecision
+    votes: Mapping[str, str]
+    inference_status: str
+    paired_test: str | None
+    test_assumptions: str | None
+    task_ids: tuple[str, ...]
+    blocks: tuple[str, ...]
+    resampling_seed: int
+    alpha: float
+
+
+def compare_primary_metrics(
+    per_sample_a_by_seed: Mapping[int, Mapping[str, np.ndarray]],
+    per_sample_b_by_seed: Mapping[int, Mapping[str, np.ndarray]],
+    *,
+    blocks: Sequence[str] | np.ndarray,
+    n_bootstrap: int = 10_000,
+    alpha: float = 0.05,
+    seed: int = DEFAULT_SEEDS[0],
+    p_values: Mapping[str, float] | None = None,
+    paired_test: str | None = None,
+    test_assumptions: str | None = None,
+) -> PrimaryMetricComparison:
+    """Compare all primary metrics on an explicit, frozen three-seed roster.
+
+    Each seed supplies ``task_id``, ``regret``, ``assd``, ``h95``, ``success``,
+    ``obstacle_violation`` and ``valid_path`` arrays in identical task order.
+    Regret must already retain censored failures; reliability uses all tasks.
+    Geometry reduces each method's own successful, obstacle-free subset.
+    The caller is responsible for matching data, operating conditions, work
+    limits and frozen checkpoints; this function never loads or evaluates one.
+
+    Geographic blocks are sampled identically for both methods, every seed
+    and every metric. Within each draw, compute each seed's prescribed
+    aggregate contrast and then average the three contrasts. Per-seed CIs and
+    method-specific denominators accompany the seed-mean interval. A geometry
+    draw with an empty subset makes the CI unavailable; no draw is discarded.
+
+    Holm uses only the six explicitly supplied p-values from a predeclared
+    paired test of this same block/seed-mean contrast. The test name and its
+    assumptions are required metadata, not automatic evidence of validity.
+    The legacy bootstrap-tail proxy is never used. Without a declared test,
+    estimates/CIs are available but no confirmatory win is returned. NaN tests
+    remain unavailable and retain their place in the six-test family. Claims
+    across more method pairs require a larger prespecified correction family.
+    """
+    _validate_bootstrap(n_bootstrap, alpha, "raise", seed)
+    if blocks is None:
+        raise ValueError("Canonical comparisons require known geographic blocks")
+    for method in (per_sample_a_by_seed, per_sample_b_by_seed):
+        if not isinstance(method, Mapping) or set(method) != set(DEFAULT_SEEDS):
+            raise ValueError("Canonical comparisons require exactly the three declared seeds")
+    names = [name for name, _, _ in PRIMARY_METRICS]
+    if p_values is not None:
+        if not paired_test or not paired_test.strip() or not test_assumptions or not test_assumptions.strip():
+            raise ValueError("Supplied p-values require a declared paired test and its assumptions")
+        if set(p_values) != set(names):
+            raise ValueError("The declared paired test must supply all six primary p-values (NaN if unavailable)")
+        # Validate before bootstrapping, rather than failing after expensive work.
+        holm_bonferroni(p_values, alpha=alpha)
+
+    prepared = []
+    task_ids = None
+    for method in (per_sample_a_by_seed, per_sample_b_by_seed):
+        metric_columns = {name: {} for name in names}
+        for training_seed in DEFAULT_SEEDS:
+            columns = method[training_seed]
+            required = {"task_id", "regret", "assd", "h95", "success", "obstacle_violation", "valid_path"}
+            if not required <= columns.keys():
+                raise ValueError(f"Seed {training_seed} requires task identities and complete primary outcome columns")
+            ids = np.asarray(columns["task_id"], dtype=object)
+            if ids.ndim != 1 or not ids.size or any(not isinstance(item, str) or not item.strip() for item in ids):
+                raise ValueError("task_id must be a nonempty one-dimensional array of nonempty strings")
+            if len(set(ids)) != len(ids):
+                raise ValueError("task_id values must be unique within the frozen roster")
+            if task_ids is None:
+                task_ids = tuple(ids)
+                _block_groups(blocks, len(ids))
+            elif tuple(ids) != task_ids:
+                raise ValueError("Both methods and all seeds must have identical ordered task identities")
+            values = {key: np.asarray(columns[key], dtype=np.float64) for key in required - {"task_id"}}
+            if any(array.shape != ids.shape for array in values.values()):
+                raise ValueError("Primary outcome arrays must align with task identities")
+            for key in ("success", "obstacle_violation", "valid_path"):
+                if not np.isin(values[key], [0, 1]).all():
+                    raise ValueError(f"{key} must contain a complete binary outcome for every task")
+            valid = values["valid_path"].astype(bool)
+            if not np.array_equal(valid, values["success"].astype(bool) & ~values["obstacle_violation"].astype(bool)):
+                raise ValueError("valid_path must equal success AND NOT obstacle_violation")
+            if not np.isfinite(values["regret"]).all():
+                raise ValueError("Regret must be finite on every task, including censored failures")
+            for key in ("assd", "h95"):
+                if not np.isfinite(values[key][valid]).all() or np.any(values[key][valid] < 0):
+                    raise ValueError("Geometry must be finite and nonnegative on each method's valid subset")
+                values[key] = np.where(valid, values[key], np.nan)
+            for name, key in (
+                ("cost_regret_median", "regret"),
+                ("cost_regret_p90", "regret"),
+                ("path_assd", "assd"),
+                ("path_hausdorff_p95", "h95"),
+                ("success_rate", "success"),
+                ("obstacle_violation_rate", "obstacle_violation"),
+            ):
+                metric_columns[name][training_seed] = values[key]
+        prepared.append(metric_columns)
+
+    statistics = {"cost_regret_median": np.median, "cost_regret_p90": lambda array: np.quantile(array, 0.9)}
+    deltas = {}
+    for name, family, higher_is_better in PRIMARY_METRICS:
+        deltas[name] = multiseed_paired_bootstrap(
+            prepared[0][name],
+            prepared[1][name],
+            metric=name,
+            higher_is_better=higher_is_better,
+            statistic=statistics.get(name, np.mean),
+            n_bootstrap_per_seed=n_bootstrap,
+            alpha=alpha,
+            seed=seed,
+            blocks=blocks,
+            nan_policy="omit" if family is MetricFamily.GEOMETRIC else "raise",
+        )
+    unavailable = p_values is None
+    holm = holm_bonferroni({name: float("nan") for name in names} if unavailable else p_values, alpha=alpha)
+    decision, votes = decide_pairwise(deltas.values(), holm)
+    complete = all(np.isfinite(record.p_value) for record in holm.values()) and all(
+        np.isfinite(record.ci_low) and np.isfinite(record.ci_high) for record in deltas.values()
+    )
+    return PrimaryMetricComparison(
+        deltas,
+        holm,
+        decision,
+        votes,
+        "test_not_provided" if unavailable else "available" if complete else "incomplete",
+        paired_test,
+        test_assumptions,
+        task_ids,
+        tuple(blocks),
+        seed,
+        alpha,
+    )

@@ -71,8 +71,14 @@ def main(argv: list[str] | None = None) -> None:
         default="outputs/download",
         help="Directory for output files (default: outputs/download)",
     )
-    download_parser.add_argument('--archive', type=int, nargs=2, action='append', metavar=('LAT', 'LON'),
-        help='Download only these geographic archives (repeat for each latitude/longitude pair)')
+    download_parser.add_argument(
+        "--archive",
+        type=int,
+        nargs=2,
+        action="append",
+        metavar=("LAT", "LON"),
+        help="Download only these geographic archives (repeat for each latitude/longitude pair)",
+    )
     download_parser.add_argument(
         "--no-resume",
         action="store_true",
@@ -477,11 +483,17 @@ def main(argv: list[str] | None = None) -> None:
     qualification_parser.add_argument("--dataset-revision", required=True, help="Immutable source commit SHA")
     qualification_parser.add_argument("--output", default="outputs/qualification")
     qualification_parser.add_argument(
-        "--phase", choices=["all", "authenticate", "census", "routes"], default="all",
+        "--phase",
+        choices=["all", "authenticate", "census", "routes"],
+        default="all",
         help="Run the complete campaign or one resumable phase",
     )
-    qualification_parser.add_argument("--workers", type=_positive_int, default=4, help="Bounded hashing/audit workers (1–8)")
-    qualification_parser.add_argument("--batch-size", type=_positive_int, default=2048, help="Projected metadata batch size")
+    qualification_parser.add_argument(
+        "--workers", type=_positive_int, default=4, help="Bounded hashing/audit workers (1–8)"
+    )
+    qualification_parser.add_argument(
+        "--batch-size", type=_positive_int, default=2048, help="Projected metadata batch size"
+    )
 
     analysis_parser = subparsers.add_parser(
         "analyze", help="Prepare or execute complete release notebooks in separate staging"
@@ -499,7 +511,8 @@ def main(argv: list[str] | None = None) -> None:
     analysis_parser.add_argument("--notebooks-dirpath", default="notebooks")
     analysis_parser.add_argument("--result-root", default=None)
     analysis_parser.add_argument(
-        "--qualification-root", default=None,
+        "--qualification-root",
+        default=None,
         help="Bound qualification receipts to reuse a complete census and publish its evidence",
     )
     analysis_parser.add_argument(
@@ -523,23 +536,46 @@ def main(argv: list[str] | None = None) -> None:
     analysis_parser.add_argument("--job-timeout", type=_positive_int, default=1800)
     analysis_parser.add_argument("--force", action="store_true", help="Replace stale executed notebook outputs")
 
-    regenerate_parser = subparsers.add_parser('regenerate', help='Generate, export and verify the dataset in bounded, resumable batches; never uploads')
-    regenerate_parser.add_argument('--config', default='config/config.yaml')
-    regenerate_parser.add_argument('--dataset-dirpath', default='outputs/release/dataset')
-    regenerate_parser.add_argument('--scratch-dirpath', default='outputs/release/scratch')
-    regenerate_parser.add_argument('--tiles-dirpath', default='outputs/download/tiles')
-    regenerate_parser.add_argument('--calibration-filepath', default='outputs/calibrate/calibrate.json')
-    regenerate_parser.add_argument('--notebooks-dirpath', default='notebooks')
-    regenerate_parser.add_argument('--resolution', type=_positive_int, nargs='+', default=None)
-    regenerate_parser.add_argument('--num-cpus', type=_nonnegative_int, default=None, help='Worker ceiling; default floor(75%% of process CPU affinity), 0 serial')
-    regenerate_parser.add_argument('--pilot', type=_positive_int, default=None, metavar='SCENES', help='Separately identified pilot scenes per resolution; full count/split seeds preserved')
-    regenerate_parser.add_argument('--dry-run', action='store_true', help='Validate inputs, counts and storage without writing files')
-    regenerate_parser.add_argument('--max-raw-bytes', type=_positive_int, default=16 * 1024**3)
-    regenerate_parser.add_argument('--min-free-bytes', type=_nonnegative_int, default=64 * 1024**3)
-    regenerate_parser.add_argument('--batch-scenes', type=_positive_int, default=None,
-                                   help='Optional generation stage ceiling; export shard sizes remain configured separately')
-    regenerate_parser.add_argument('--export-memory-bytes', type=_positive_int, default=8 * 1024**3,
-                                   help='Total admitted parallel export workspace; default 8 GiB')
+    regenerate_parser = subparsers.add_parser(
+        "regenerate", help="Generate, export and verify the dataset in bounded, resumable batches; never uploads"
+    )
+    regenerate_parser.add_argument("--config", default="config/config.yaml")
+    regenerate_parser.add_argument("--dataset-dirpath", default="outputs/release/dataset")
+    regenerate_parser.add_argument("--scratch-dirpath", default="outputs/release/scratch")
+    regenerate_parser.add_argument("--tiles-dirpath", default="outputs/download/tiles")
+    regenerate_parser.add_argument("--calibration-filepath", default="outputs/calibrate/calibrate.json")
+    regenerate_parser.add_argument("--notebooks-dirpath", default="notebooks")
+    regenerate_parser.add_argument("--resolution", type=_positive_int, nargs="+", default=None)
+    regenerate_parser.add_argument(
+        "--num-cpus",
+        type=_nonnegative_int,
+        default=None,
+        help="Worker ceiling; default floor(75%% of process CPU affinity), 0 serial",
+    )
+    regenerate_parser.add_argument(
+        "--pilot",
+        type=_positive_int,
+        default=None,
+        metavar="SCENES",
+        help="Separately identified pilot scenes per resolution; full count/split seeds preserved",
+    )
+    regenerate_parser.add_argument(
+        "--dry-run", action="store_true", help="Validate inputs, counts and storage without writing files"
+    )
+    regenerate_parser.add_argument("--max-raw-bytes", type=_positive_int, default=16 * 1024**3)
+    regenerate_parser.add_argument("--min-free-bytes", type=_nonnegative_int, default=64 * 1024**3)
+    regenerate_parser.add_argument(
+        "--batch-scenes",
+        type=_positive_int,
+        default=None,
+        help="Optional generation stage ceiling; export shard sizes remain configured separately",
+    )
+    regenerate_parser.add_argument(
+        "--export-memory-bytes",
+        type=_positive_int,
+        default=8 * 1024**3,
+        help="Total admitted parallel export workspace; default 8 GiB",
+    )
 
     args = parser.parse_args(argv)
 
@@ -547,18 +583,30 @@ def main(argv: list[str] | None = None) -> None:
     logger.remove()
     logger.add(sys.stderr, level=level.upper())
 
-    if args.command == 'regenerate':
+    if args.command == "regenerate":
         if run_regenerate is None:
             from passage.regenerate import run_regenerate as _rr
-            globals()['run_regenerate'] = _rr
-        result = run_regenerate(config_filepath=args.config, dataset_dirpath=args.dataset_dirpath,
-            scratch_dirpath=args.scratch_dirpath, tiles_dirpath=args.tiles_dirpath,
-            calibration_filepath=args.calibration_filepath, notebooks_dirpath=args.notebooks_dirpath,
-            resolution=args.resolution, num_cpus=args.num_cpus, pilot=args.pilot, dry_run=args.dry_run,
-            max_raw_bytes=args.max_raw_bytes, min_free_bytes=args.min_free_bytes, batch_scenes=args.batch_scenes,
-            export_memory_bytes=args.export_memory_bytes)
+
+            globals()["run_regenerate"] = _rr
+        result = run_regenerate(
+            config_filepath=args.config,
+            dataset_dirpath=args.dataset_dirpath,
+            scratch_dirpath=args.scratch_dirpath,
+            tiles_dirpath=args.tiles_dirpath,
+            calibration_filepath=args.calibration_filepath,
+            notebooks_dirpath=args.notebooks_dirpath,
+            resolution=args.resolution,
+            num_cpus=args.num_cpus,
+            pilot=args.pilot,
+            dry_run=args.dry_run,
+            max_raw_bytes=args.max_raw_bytes,
+            min_free_bytes=args.min_free_bytes,
+            batch_scenes=args.batch_scenes,
+            export_memory_bytes=args.export_memory_bytes,
+        )
         if args.dry_run:
             import json
+
             print(json.dumps(result, indent=2, sort_keys=True))
     elif args.command == "audit":
         import json
@@ -601,13 +649,16 @@ def main(argv: list[str] | None = None) -> None:
             raise ValueError("Qualification workers must be between 1 and 8")
         source_auth = output / "source-authentication"
         if args.phase in {"all", "authenticate"}:
-            authentication = authenticate_snapshot(root, args.dataset_repo, args.dataset_revision,
-                                                   source_auth, workers=args.workers)
+            authentication = authenticate_snapshot(
+                root, args.dataset_repo, args.dataset_revision, source_auth, workers=args.workers
+            )
             if not authentication["content_verified"]:
                 raise RuntimeError("Source authentication remains incomplete; inspect its receipt")
         if args.phase in {"all", "census"}:
             result = run_metadata_census(
-                source, output / "metadata", batch_size=args.batch_size,
+                source,
+                output / "metadata",
+                batch_size=args.batch_size,
                 authentication_manifest=source_auth / "manifest.json",
                 progress=lambda event: print(json.dumps(event), flush=True),
             )
@@ -615,6 +666,7 @@ def main(argv: list[str] | None = None) -> None:
                 raise RuntimeError("Full census is incomplete; inspect its summary")
         if args.phase in {"all", "routes"}:
             from passage.qualification_runner import run_route_audit
+
             run_route_audit(source, output / "metadata", output / "route-audit", workers=args.workers)
         logger.info(f"Qualification phase {args.phase} completed; receipts: {output}")
     elif args.command == "analyze":
@@ -646,9 +698,9 @@ def main(argv: list[str] | None = None) -> None:
             from passage.download import run_download as _rd
 
             globals()["run_download"] = _rd
-        download_options = {'resume': not args.no_resume, 'num_cpus': args.num_cpus}
+        download_options = {"resume": not args.no_resume, "num_cpus": args.num_cpus}
         if args.archive:
-            download_options['archive_pairs'] = [tuple(pair) for pair in args.archive]
+            download_options["archive_pairs"] = [tuple(pair) for pair in args.archive]
         run_download(args.outputs_dirpath, **download_options)
     elif args.command == "generate":
         if run_generate is None:

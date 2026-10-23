@@ -7,67 +7,26 @@ icon: material/format-list-numbered
 
 | Author | Date | Version |
 |---|---|---|
-| Geoffrey Delhomme | 2026-10-20 | 1.0 |
+| Geoffrey Delhomme | 2026-10-24 | 1.1 |
 
-The evaluator implements the terrain task and the decoded-path metrics of the
-accepted paper. This page identifies the paper, explains the executable
-contract, and states how the evaluator reads points that the paper leaves open.
-Training a candidate and measuring hardware produce their own records; a
-successful CLI run alone does not reproduce a paper headline.
+The evaluator implements the paper's terrain task and decoded-path metrics.
+This page defines the executable contract, reference costs, path metrics,
+calibration procedure and statistical comparisons.
 
-## 1. Reference paper and alignment
+## 1. Reference paper and evaluation
 
-The reference is the accepted paper *PASSAGE: A Real-Terrain Benchmark for
-Trustworthy Constrained Path Planning*, NeurIPS 2026, Track on Evaluations and
-Datasets ([citation](../index.md#cite-passage)). Learned-model figures quoted
-from the paper are historical results of the original study, reported as
-obtained; not re-run on the released dataset.
+The reference is **Passage: A Real-Terrain Benchmark for Trustworthy Constrained
+Path Planning**. The benchmark scores a candidate's final route under the
+specified terrain, obstacle and cost model. Each result identifies its inputs,
+procedure, reference paths and metric contract.
 
-Every per-sample array carries a metric-contract label. `evaluate_planner` and
-`score_planner` label their arrays `neurips-2026-submission-v1`. The
-complete-request workflow (`passage-eval run`, then `passage-eval score`) labels
-its scored arrays `passage-qualified-complete-v1`, or
-`passage-stored-diagnostic-v1` when the scoring API is explicitly told to use
-unqualified stored labels. Results produced under another metric contract must
-be evaluated again before comparison.
-
-> **Complete-request workflow**
->
-> The `passage-eval` CLI first qualifies the reference route of every task,
-> then times each planner call and saves its route, then scores every saved
-> route offline. It writes to its own result folder. The terms *complete
-> request*, *qualified* and *cohort* are defined on the
-> [Benchmark overview](index.md).
-> [Evaluate your planner](contributing-a-method.md) gives the commands, the
-> deadline rules, how the primary repeat is chosen and the reference policies.
-
-### 1.A. How the evaluator reads the paper
-
-- **Censored costs:** a route that does not connect start and goal, or that
-  crosses an obstacle, receives the censored cost of 10⁶ times the reference
-  cost. The evaluator keeps every such failure in the regret statistics.
-  Geometry uses the valid routes only, and `n_path_valid` reports how many
-  there are.
-- **Geometry units:** ASSD is divided by the number of reference waypoints;
-  percentile-Hausdorff is in pixels (grid cells). The geometry values in the
-  released paper results follow the original study's normalization; do not
-  compare them directly with new results.
-- **Worked geometry example:** for the worked example in the paper's appendix,
-  the reference has six waypoints and the route seven. Two route waypoints lie
-  one pixel from the reference, and one reference waypoint lies one pixel from
-  the route. The evaluator returns ASSD `(2/7 + 1/6)/2/6` = **0.0376984** and
-  Hausdorff p95 = **1 pixel**; the test suite checks both values.
-- **Sample seeding and obstacles:** each sample's random seed is a BLAKE2b
-  hash of `(generation_seed, resolution, index, split)`. Obstacle placement
-  makes up to 50 mask attempts, each with up to 200 candidate shapes; 50 counts
-  attempts, not shapes. With the same configuration, regenerating a sample
-  index gives the same sample.
+The complete-request workflow qualifies references, persists each timed route,
+then scores every repeat offline. The
+[candidate guide](contributing-a-method.md) documents the runnable commands,
+deadline handling, primary-repeat selection and reference-cohort policies.
 
 ## 2. Released scenes and analytic costs
 
-The paper's learned-model results are historical results of the original
-study, reported as obtained; not re-run on the released dataset (see
-[paper results](leaderboard.md#paper-results)).
 The loader reads PASSAGE v1.0 from
 [thalesgroup/passage](https://huggingface.co/datasets/thalesgroup/passage) by default.
 Use the full `<N>x<N>` configuration and pin a dataset commit, or supply a local
@@ -115,14 +74,16 @@ loops with legal moves are allowed. Coordinates are never rounded or clipped.
 | `cost_regret_p90` | 90th percentile of the same per-sample regrets |
 | `path_assd` | Mean of each valid pair's symmetric nearest-waypoint distance divided by oracle waypoint count |
 | `path_hausdorff_p95` | Mean of each valid pair's maximum directional 95th-percentile nearest-waypoint distance, in pixels |
-| `success_rate` | Fraction connecting the prescribed endpoints with legal grid moves |
+| `success_rate` | Fraction connecting the prescribed endpoints with legal grid moves; complete requests also require terminal status `ok` |
 | `obstacle_violation_rate` | Fraction containing at least one forbidden cell |
 
 An obstacle crossing can be connected but remains invalid for cost/geometry
 scoring. Failed connection, invalid coordinates, or an obstacle violation receive
-`predicted_cost = 1e6 * oracle_cost`, hence regret `999999`. Geometry is NaN
-for invalid paths and aggregated over valid paths. Report both reliability rates
-and `n_path_valid`; never hide the reduced geometry coverage.
+`predicted_cost = 1e6 * oracle_cost`, hence regret `999999`. Complete requests
+with a non-`ok` terminal status also fail, even if their recorded route connects;
+`connected_path` preserves the connection-only outcome separately. Geometry is
+NaN for invalid or failed requests and aggregated over valid paths. Report both
+reliability rates and `n_path_valid`; never hide the reduced geometry coverage.
 
 Use `score_planner` or `evaluate_planner` to evaluate paths. The lower-level
 `compute_primary_metrics` assumes its supplied costs already use the analytic
@@ -137,20 +98,42 @@ and training seeds **1234, 2026, 3407**. The test pass is performed once per see
 repeated inference seeds do not replace three independently trained checkpoints.
 
 Pair candidate and baseline arrays by sample ID, split, dataset hash, task
-variant, cost model, and weight. For the paper's mean paired-difference test,
-bootstrap each seed with 10,000 resamples and pool the 30,000 draws. Correct the
-six empirical two-sided p-values with Holm–Bonferroni at family-wise alpha 0.05.
-CI overlap alone does not establish a win. Use the API's returned draws for
-empirical p-values; its CI-only fallback is an approximation.
+variant, cost model, and weight. For each metric, the contrast is
+`T(candidate) - T(baseline)`: median and p90 for the two regret metrics, and
+mean for geometry and reliability. Recompute each method's aggregate inside
+every resample. Failed paths remain in regret and reliability; geometry uses
+each method's own valid-path subset, with both retained counts reported.
 
-Report per-seed estimates, confidence intervals, and the across-seed mean.
-Different reductions of regret, such as medians and p90s, need their own explicitly
-declared estimator. The `passage-eval compare` command recomputes each selected statistic
-under paired whole-geographic-block resampling. Missing cluster identities leave
-uncertainty unknown; seeds remain separate descriptive conditions. These intervals
-are distinct from the paper's pooled mean-difference procedure.
-[Paired statistics (paper)](walkthrough.md) shows the paper's mean-difference
-functions.
+`compare_primary_metrics` requires all six primary metrics, exactly the three
+training seeds, identical ordered task IDs, and known geographic blocks. It
+uses 10,000 shared whole-block draws by default. Each draw selects the same
+blocks for both methods and all three seeds, computes the per-seed contrasts,
+then averages those three contrasts. The confidence interval therefore uses
+10,000 draws of the seed mean. Per-seed estimates and intervals are also
+returned. If a geometry draw has no valid path for either method, its interval
+is unavailable; undefined draws are not discarded. These intervals describe
+geographic sampling uncertainty conditional on the three fitted checkpoints.
+
+Confirmatory decisions additionally need six p-values from a predeclared valid
+paired test of the same block-resampled, seed-mean contrast. Supply the test
+name and assumptions with those measured p-values. The API applies
+Holm–Bonferroni at family-wise alpha 0.05, but cannot establish the validity of
+the caller's test from its name. Bootstrap tail fractions and confidence-interval
+proxies do not supply this evidence. Without the test, estimates and intervals
+remain descriptive and no confirmatory win is returned. An unavailable test
+stays in the six-test family. More method pairs require a prespecified larger
+correction family.
+
+The decision distinguishes demonstrated wins on every primary metric,
+demonstrated trade-offs in both directions, partial evidence in one direction,
+and no demonstrated difference. No demonstrated difference does not establish
+equivalence. Primary-metric decisions also do not establish deployment speed
+or footprint. [Paired statistics](walkthrough.md) shows the complete API flow.
+The `passage-eval compare` command reports matched-task geographic-block
+intervals for each selected statistic and condition; it does not perform this
+three-checkpoint confirmatory campaign. Missing block identities leave
+uncertainty unknown. Released paper results are reported separately and are
+unchanged by these API examples.
 
 ## 5. Trustworthiness and deployment
 

@@ -17,7 +17,6 @@ from passage_eval.protocol.planner import Scene
 PAPER_DATASET_REPO = "thalesgroup/passage"
 
 
-
 def scene_from_row(
     row: Mapping[str, Any],
     *,

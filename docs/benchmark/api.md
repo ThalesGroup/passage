@@ -10,7 +10,7 @@ Auto-generated documentation for every public symbol exported by the
 sub-package. The narrative usage guide lives at the
 [`passage-eval` package page](passage-eval.md); the formal protocol
 sits at [Evaluation protocol](protocol.md); the paper's paired statistics
-are at [Paired statistics (paper)](walkthrough.md). This page is the
+are at [Paired statistics](walkthrough.md). This page is the
 canonical docstring view.
 
 ---
@@ -116,9 +116,10 @@ Holm–Bonferroni correction.
 
 ## Statistical discipline — `passage_eval.protocol`
 
-Pre-registered seed set, paired-bootstrap CI on the mean of paired
-differences, three-seed pooled aggregation, Holm–Bonferroni step-down
-correction, and the family-wise decision rule.
+Six primary metrics and three declared training seeds. The canonical
+comparison estimates contrasts of metric aggregates with shared geographic-block
+draws, then applies Holm–Bonferroni only to separately supplied paired-test
+p-values. It reports partial evidence when remaining metrics are inconclusive.
 
 ::: passage_eval.protocol.discipline
     options:

@@ -54,12 +54,12 @@
   "@id": "https://huggingface.co/datasets/thalesgroup/passage",
   "name": "PASSAGE",
   "alternateName": "PASSAGE v1.0",
-  "description": "PASSAGE v1.0 contains 4,400,000 core scenes and 26,400,000 objective/obstacle variants; 1,792 separate preview rows do not add independent training observations. Terrain and labels use persisted float32 inputs decoded before authoritative float64 graph solves. Missing/nodata source crops are rejected. All 26,400,000 variants are exact routes; start and goal cells that the obstacles disconnect are rejected by the generator. No learned-model result on PASSAGE v1.0 has been published yet.",
+  "description": "PASSAGE v1.0 contains 4,400,000 core scenes and 26,400,000 objective/obstacle variants; 1,792 separate preview rows do not add independent training observations. Terrain and labels use persisted float32 inputs decoded before authoritative float64 graph solves. Missing/nodata source crops are rejected. All 26,400,000 variants are exact routes; start and goal cells that the obstacles disconnect are rejected by the generator.",
   "version": "1.0.0",
   "url": "https://huggingface.co/datasets/thalesgroup/passage",
   "sameAs": "https://github.com/ThalesGroup/passage",
   "license": [
-    "https://huggingface.co/datasets/thalesgroup/passage/blob/main/DATASET_LICENSE.md",
+    "https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/DATASET_LICENSE.md",
     "https://earth.jaxa.jp/en/data/policy/"
   ],
   "creditText": "The original data used for this product have been supplied by JAXA's ALOS World 3D–30m (AW3D30). AW3D30 fills voids with third-party elevation data. JAXA's AW3D30 Version 4.1 Product Description (https://www.eorc.jaxa.jp/ALOS/en/dataset/aw3d30/data/aw3d30v4.1_product_e_1.0.pdf) (checked on 19 October 2026; Table 1, mask file; Section 4, Related URLs) lists GSI Digital Topographic Map 5 m and 10 m mesh data (Geospatial Information Authority of Japan), SRTM-1 v3 (NASA/JPL), Viewfinder Panoramas DEM (Jonathan de Ferranti), ASTER GDEM v2 and v3 (NASA/METI), ArcticDEM v2 and v3 (NGA/NSF) and ArcticDEM v4, TanDEM-X 90m DEM (DLR), REMA v1.1 (PGC, University of Minnesota) and Copernicus DEM GLO-30 (ESA). For the Copernicus DEM it states: \"AW3D30 is produced using Copernicus DEM GLO-30-F © DLR e.V. 2014-2018 and © Airbus Defence and Space GmbH 2014-2018 provided under COPERNICUS by the European Union and ESA, all rights reserved\". Retain these credits in derived works.",
@@ -110,8 +110,8 @@
       "@id": "hf-repository",
       "@type": "cr:FileObject",
       "name": "hf-repository",
-      "description": "Hugging Face dataset repository thalesgroup/passage. Use the release tag v1.0. The sha256 value is the documented Hugging Face git-container sentinel, not a content digest; per-file identities are recorded in release-receipts/.",
-      "contentUrl": "https://huggingface.co/datasets/thalesgroup/passage",
+      "description": "Hugging Face dataset repository thalesgroup/passage, pinned to release tag v1.0. The sha256 value is the documented Hugging Face git-container sentinel, not a content digest; per-file identities are recorded in release-receipts/.",
+      "contentUrl": "https://huggingface.co/datasets/thalesgroup/passage/tree/refs%2Ftags%2Fv1.0",
       "encodingFormat": "git+https",
       "sha256": "https://github.com/mlcommons/croissant/issues/80"
     },
@@ -59930,7 +59930,7 @@
   ],
   "rai:dataAnnotationProtocol": "Labels are computed, not human-made. For each scene, an exact float64 A* reference (passage.reference.solve_reference, no expansion budget) solves three objectives (elevation weight 62.4, energy weight 1125.3, slope_uphill weight 8886.2) on an 8-connected grid with destination-only diagonals and 30 m edges, once without and once with blocked obstacles. Every variant ends as \"ok\" (exact optimum), because start/goal pairs that the obstacles disconnect are rejected by the generator. Release admission accepts only exact routes; every variant is also listed in separate supervision rosters.",
   "rai:dataAnnotationPlatform": "None: annotation is fully computational, run on CPU by the PASSAGE generator.",
-  "rai:dataAnnotationAnalysis": "Release verification status verified; admission qualified with 0 unresolved variants. All 26,400,000 variants are exact routes (by resolution: 64, 128, 256 and 512: 6,000,000 each; 1024: 1,500,000; 2048: 600,000; 4096: 300,000). A bounded replay of 56 selected scenes reproduced 84 scientific records and 84 preview images byte-identically; it does not certify every row or cross-platform reproducibility. Tied optima can have different geometry (tie policy float64-priority-then-row-major-node-strict-improvement-v1).",
+  "rai:dataAnnotationAnalysis": "Release verification status verified; admission qualified with 0 unresolved variants. All 26,400,000 variants are exact routes (by resolution: 64, 128, 256 and 512: 6,000,000 each; 1024: 1,500,000; 2048: 600,000; 4096: 300,000). Release verification checks counts, statuses and cohort/supervision identities; it does not independently re-solve every graph or certify cross-platform reproducibility. Tied optima can have different geometry (tie policy float64-priority-then-row-major-node-strict-improvement-v1).",
   "rai:annotationsPerItem": "Six route variants per core scene (3 objectives x free/obstacle-aware), 26,400,000 in total; they share terrain and endpoints and are not independent observations. One deterministic reference solve per variant; no multi-annotator redundancy.",
   "rai:annotatorDemographics": "Not applicable: no human annotators.",
   "rai:machineAnnotationTools": [
@@ -59948,7 +59948,6 @@
     "Static 2D grid tasks with procedural obstacles and endpoints; no vehicle dynamics, clearance, weather, airspace, regulation or mission demand is modelled.",
     "Labels are exact only under the frozen graph contract (8-connectivity, destination-only diagonals, fixed 30 m edges, float64 solves on decoded float32 inputs). Other conventions change optima; tied optima can differ in geometry.",
     "Six variants per scene and scenes from the same 5x5 degree block or across resolutions can share terrain; treat them as correlated, not independent, samples. The 1,792 preview rows duplicate admitted scenes.",
-    "No learned-model result on PASSAGE v1.0 has been published yet. The paper's learned-model results are historical results of the original study, reported as obtained; not re-run on the released dataset.",
     "Not suitable for operational flight planning, search-and-rescue dispatch or other safety-of-life decisions; the dataset does not certify deployment or replace certification processes."
   ],
   "rai:dataUseCases": [
@@ -59959,7 +59958,7 @@
   "rai:dataSocialImpact": "PASSAGE supports research on verifiable planners for safety-relevant terrain navigation, motivated by applications such as helicopter emergency medical services. The main risk is over-trusting learned planners validated only on this benchmark; mitigations are exact references, explicit failure accounting in passage-eval, a documented operational design domain and the stated limitations. PASSAGE is a research benchmark, not a certified navigation product.",
   "rai:personalSensitiveInformation": "None. The data contain public JAXA elevation, procedural obstacles and markers, and computed routes; no people, personal or biometric data. Local file paths, user names and host names were redacted from the published receipts, calibration files, producer source archive, executed notebooks and one Parquet scene receipt; release-receipts/privacy-redactions.json records each change.",
   "rai:hasSyntheticData": true,
-  "rai:dataReleaseMaintenancePlan": "PASSAGE v1.0 is frozen by the Hugging Face tag v1.0 at the camera-ready release; its receipts are in release-receipts/. Semantic changes require a new version (new tag), regenerated receipts and a CHANGELOG entry. Maintainers: the authors at Thales; contact through GitHub issues at https://github.com/ThalesGroup/passage or geoffrey.delhomme@thalesgroup.com.",
+  "rai:dataReleaseMaintenancePlan": "PASSAGE v1.0 is distributed at the Hugging Face tag v1.0, with its metadata and provenance receipts in release-receipts/. Semantic changes require a separately identified release with regenerated receipts and a CHANGELOG entry. Maintainers: the authors at Thales; contact through GitHub issues at https://github.com/ThalesGroup/passage or geoffrey.delhomme@thalesgroup.com.",
   "prov:wasDerivedFrom": [
     {
       "@id": "https://www.eorc.jaxa.jp/ALOS/en/dataset/aw3d30/aw3d30_e.htm",
@@ -60012,7 +60011,7 @@
     {
       "@type": "prov:Activity",
       "prov:label": "Export, verification and publication admission",
-      "sc:description": "Parquet export, release verification of counts and cohort/supervision hashes (release-receipts/release-verification.json), execution of 42 publication notebooks bound in notebook-export-manifest.json, and publication metadata derived from release-receipts/publication-facts.json.",
+      "sc:description": "Parquet export, release verification of counts and cohort/supervision hashes (release-receipts/release-verification.json), execution evidence for the 41 published notebooks bound in notebook-artifacts/manifest.json, and publication metadata derived from release-receipts/publication-facts.json.",
       "prov:wasAttributedTo": [
         {
           "@type": "prov:SoftwareAgent",
@@ -60021,5 +60020,7 @@
         }
       ]
     }
-  ]
+  ],
+  "datePublished": "2026-10-20",
+  "dateModified": "2026-10-23T22:31:51+00:00"
 }

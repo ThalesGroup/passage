@@ -2123,9 +2123,16 @@ def run_generate(
         if dataset_version != DATASET_VERSION:
             raise ValueError(f"Unsupported generation dataset version: {dataset_version}")
         return run_successor_generation(
-            outputs_dirpath, config_filepath, tiles_dirpath, calibration_filepath,
-            resolution=resolution, num_samples=num_samples, num_cpus=num_cpus,
-            disable_images=disable_images, force=force, scene_indices=scene_indices,
+            outputs_dirpath,
+            config_filepath,
+            tiles_dirpath,
+            calibration_filepath,
+            resolution=resolution,
+            num_samples=num_samples,
+            num_cpus=num_cpus,
+            disable_images=disable_images,
+            force=force,
+            scene_indices=scene_indices,
         )
     if scene_indices is not None:
         raise ValueError("Bounded scene indices require an explicit release dataset version")

@@ -8,6 +8,7 @@ Point results are recosted in forward path order; reverse fields accumulate
 from the goal. Their costs agree within GraphSpec's rtol/atol, with no bitwise
 equality promise between these summation orders.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -40,6 +41,7 @@ class GoalField:
     field, infinity means unproved; it must never become a training negative.
     next_nodes contains flattened successor IDs on routes towards goal.
     """
+
     status: str
     distances: np.ndarray
     settled: np.ndarray
@@ -55,8 +57,9 @@ class GoalField:
             status = "no_path" if self.status == "exact" else "censored"
             return ReferenceResult(status, (), None, self.expansions, dict(self.work), self.elapsed_seconds)
         path = _trace(self.next_nodes.ravel(), start, self.goal, self.distances.shape[1], forward=True)
-        return ReferenceResult("exact", path, float(self.distances[start]), self.expansions,
-                               dict(self.work), self.elapsed_seconds)
+        return ReferenceResult(
+            "exact", path, float(self.distances[start]), self.expansions, dict(self.work), self.elapsed_seconds
+        )
 
 
 def _point(point, shape):
@@ -76,8 +79,9 @@ def _inputs(elevation, obstacles, graph, max_expansions):
     graph = GraphSpec() if graph is None else graph
     if not isinstance(graph, GraphSpec):
         raise ValueError("graph must be a GraphSpec")
-    if max_expansions is not None and (isinstance(max_expansions, bool)
-            or not isinstance(max_expansions, Integral) or max_expansions < 0):
+    if max_expansions is not None and (
+        isinstance(max_expansions, bool) or not isinstance(max_expansions, Integral) or max_expansions < 0
+    ):
         raise ValueError("max_expansions must be a nonnegative integer or None")
     terrain = np.ascontiguousarray(elevation, dtype=np.float64)
     if terrain.ndim != 2 or not terrain.size or not np.isfinite(terrain).all():
@@ -126,8 +130,9 @@ def _sift_up(heap, positions, slot, distances, cols, target, astar):
 
 
 @njit(cache=True)
-def _search(terrain, blocked, origin, target, model, weight, minimum, elevation_range,
-            absolute_max, limit, reverse, astar):
+def _search(
+    terrain, blocked, origin, target, model, weight, minimum, elevation_range, absolute_max, limit, reverse, astar
+):
     rows, cols = terrain.shape
     n = terrain.size
     distances = np.full(n, np.inf, dtype=np.float64)
@@ -181,11 +186,13 @@ def _search(terrain, blocked, origin, target, model, weight, minimum, elevation_
                 neighbor = rr * cols + cc
                 distance = 30.0 * math.sqrt(2.0) if dr != 0 and dc != 0 else 30.0
                 if reverse:
-                    edge = directed_edge_cost(terrain[rr, cc], terrain[r, c], distance, weight,
-                                              model, minimum, elevation_range, absolute_max)
+                    edge = directed_edge_cost(
+                        terrain[rr, cc], terrain[r, c], distance, weight, model, minimum, elevation_range, absolute_max
+                    )
                 else:
-                    edge = directed_edge_cost(terrain[r, c], terrain[rr, cc], distance, weight,
-                                              model, minimum, elevation_range, absolute_max)
+                    edge = directed_edge_cost(
+                        terrain[r, c], terrain[rr, cc], distance, weight, model, minimum, elevation_range, absolute_max
+                    )
                 candidate = distances[node] + edge
                 if not np.isfinite(edge) or not np.isfinite(candidate):
                     # Infinity already denotes unproved/unreachable cells. It
@@ -209,8 +216,11 @@ def _search(terrain, blocked, origin, target, model, weight, minimum, elevation_
 
 
 def _trace(parents, start, goal, cols, *, forward=False):
-    node, stop = (start[0] * cols + start[1], goal[0] * cols + goal[1]) if forward else (
-        goal[0] * cols + goal[1], start[0] * cols + start[1])
+    node, stop = (
+        (start[0] * cols + start[1], goal[0] * cols + goal[1])
+        if forward
+        else (goal[0] * cols + goal[1], start[0] * cols + start[1])
+    )
     path = []
     for _ in range(len(parents) + 1):
         path.append((node // cols, node % cols))
@@ -223,12 +233,24 @@ def _trace(parents, start, goal, cols, *, forward=False):
 
 
 def _work(expansions, queue_operations, peak_queue, discovered):
-    return {"expansions": int(expansions), "queue_operations": int(queue_operations),
-            "max_live_states": int(discovered), "peak_queue": int(peak_queue)}
+    return {
+        "expansions": int(expansions),
+        "queue_operations": int(queue_operations),
+        "max_live_states": int(discovered),
+        "peak_queue": int(peak_queue),
+    }
 
 
-def solve_reference(elevation, obstacles, start, goal, *, graph: GraphSpec | None = None,
-                    max_expansions: int | None = None, algorithm: str = "astar") -> ReferenceResult:
+def solve_reference(
+    elevation,
+    obstacles,
+    start,
+    goal,
+    *,
+    graph: GraphSpec | None = None,
+    max_expansions: int | None = None,
+    algorithm: str = "astar",
+) -> ReferenceResult:
     """Return an exact optimum, proved no_path, or an explicitly censored solve.
 
     Invalid inputs or float64 cost overflow raise ValueError. Blocked endpoints
@@ -245,21 +267,44 @@ def solve_reference(elevation, obstacles, start, goal, *, graph: GraphSpec | Non
     if blocked[start] or blocked[goal]:
         return ReferenceResult("no_path", (), None, 0, _work(0, 0, 0, 0), time.perf_counter() - begun)
     cols = terrain.shape[1]
-    output = _search(terrain, blocked, start[0] * cols + start[1], goal[0] * cols + goal[1],
-                     MODEL_CODES[graph.cost_model], float(graph.cost_weight), minimum, maximum - minimum,
-                     max(abs(minimum), abs(maximum)), np.iinfo(np.int64).max if max_expansions is None
-                     else int(max_expansions), False, algorithm == "astar")
+    output = _search(
+        terrain,
+        blocked,
+        start[0] * cols + start[1],
+        goal[0] * cols + goal[1],
+        MODEL_CODES[graph.cost_model],
+        float(graph.cost_weight),
+        minimum,
+        maximum - minimum,
+        max(abs(minimum), abs(maximum)),
+        np.iinfo(np.int64).max if max_expansions is None else int(max_expansions),
+        False,
+        algorithm == "astar",
+    )
     code, distances, parents, _, expansions, operations, peak, discovered = output
     if code == 3:
         raise ValueError("reference float64 cost arithmetic overflow")
     status = ("exact", "no_path", "censored")[code]
     path = _trace(parents, start, goal, cols) if code == 0 else ()
-    cost = (0.0 if start == goal else recost_legal_path(terrain, path, graph=graph, obstacles=blocked,
-                                                      start=start, goal=goal)) if code == 0 else None
+    cost = (
+        (
+            0.0
+            if start == goal
+            else recost_legal_path(terrain, path, graph=graph, obstacles=blocked, start=start, goal=goal)
+        )
+        if code == 0
+        else None
+    )
     if code == 0 and not np.isfinite(cost):
         raise RuntimeError("exact reference produced an illegal or nonfinite route")
-    return ReferenceResult(status, path, cost, int(expansions), _work(expansions, operations, peak, discovered),
-                           time.perf_counter() - begun)
+    return ReferenceResult(
+        status,
+        path,
+        cost,
+        int(expansions),
+        _work(expansions, operations, peak, discovered),
+        time.perf_counter() - begun,
+    )
 
 
 @njit(cache=True)
@@ -311,8 +356,9 @@ def endpoints_connected(obstacles, start, goal) -> bool:
     return bool(_reaches(blocked, start[0] * cols + start[1], goal[0] * cols + goal[1]))
 
 
-def reverse_goal_field(elevation, obstacles, goal, *, graph: GraphSpec | None = None,
-                       max_expansions: int | None = None) -> GoalField:
+def reverse_goal_field(
+    elevation, obstacles, goal, *, graph: GraphSpec | None = None, max_expansions: int | None = None
+) -> GoalField:
     """Dijkstra on transposed edges computes directed original costs to goal.
 
     Relaxing predecessor u from current v adds w(u,v), never w(v,u).
@@ -326,21 +372,40 @@ def reverse_goal_field(elevation, obstacles, goal, *, graph: GraphSpec | None = 
         raise ValueError("reverse field goal must be traversable")
     cols = terrain.shape[1]
     origin = goal[0] * cols + goal[1]
-    output = _search(terrain, blocked, origin, origin, MODEL_CODES[graph.cost_model], float(graph.cost_weight),
-                     minimum, maximum - minimum, max(abs(minimum), abs(maximum)),
-                     np.iinfo(np.int64).max if max_expansions is None else int(max_expansions), True, False)
+    output = _search(
+        terrain,
+        blocked,
+        origin,
+        origin,
+        MODEL_CODES[graph.cost_model],
+        float(graph.cost_weight),
+        minimum,
+        maximum - minimum,
+        max(abs(minimum), abs(maximum)),
+        np.iinfo(np.int64).max if max_expansions is None else int(max_expansions),
+        True,
+        False,
+    )
     code, distances, parents, settled, expansions, operations, peak, discovered = output
     if code == 3:
         raise ValueError("reference float64 cost arithmetic overflow")
     distances[~settled] = np.inf
     parents[~settled] = -1
-    return GoalField("censored" if code == 2 else "exact", distances.reshape(terrain.shape),
-                     settled.reshape(terrain.shape), parents.reshape(terrain.shape), goal, int(expansions),
-                     _work(expansions, operations, peak, discovered), time.perf_counter() - begun)
+    return GoalField(
+        "censored" if code == 2 else "exact",
+        distances.reshape(terrain.shape),
+        settled.reshape(terrain.shape),
+        parents.reshape(terrain.shape),
+        goal,
+        int(expansions),
+        _work(expansions, operations, peak, discovered),
+        time.perf_counter() - begun,
+    )
 
 
-def recost_legal_path(elevation, path, *, graph: GraphSpec | None = None, obstacles=None,
-                      start=None, goal=None) -> float:
+def recost_legal_path(
+    elevation, path, *, graph: GraphSpec | None = None, obstacles=None, start=None, goal=None
+) -> float:
     """Re-cost legal integer 8-connected paths; return NaN for illegal routes."""
     graph = GraphSpec() if graph is None else graph
     if not isinstance(graph, GraphSpec):
@@ -352,9 +417,15 @@ def recost_legal_path(elevation, path, *, graph: GraphSpec | None = None, obstac
         points = np.asarray(path, dtype=np.float64)
     except (TypeError, ValueError):
         return float("nan")
-    if (points.ndim != 2 or points.shape[1] != 2 or not len(points) or not np.isfinite(points).all()
-            or not np.equal(points, np.floor(points)).all() or np.any(points < 0)
-            or np.any(points >= terrain.shape)):
+    if (
+        points.ndim != 2
+        or points.shape[1] != 2
+        or not len(points)
+        or not np.isfinite(points).all()
+        or not np.equal(points, np.floor(points)).all()
+        or np.any(points < 0)
+        or np.any(points >= terrain.shape)
+    ):
         return float("nan")
     if start is not None and not np.array_equal(points[0], start):
         return float("nan")

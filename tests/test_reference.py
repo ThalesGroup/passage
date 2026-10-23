@@ -1,4 +1,5 @@
 """Analytic and independent checks for the canonical directed grid reference."""
+
 import math
 
 import numpy as np
@@ -16,12 +17,14 @@ def test_float32_differences_are_promoted_before_energy_arithmetic():
 
 def test_engine_module_available():
     import importlib.util
+
     assert importlib.util.find_spec("passage.reference") is not None
 
 
 @pytest.mark.parametrize("model,want", [("elevation", 150.0), ("slope", 120.0), ("energy", 80.0)])
 def test_directed_reverse_field_uses_predecessor_to_current_cost(model, want):
     from passage.reference import reverse_goal_field, solve_reference
+
     terrain = np.array([[-5, 0, 5]], dtype=np.float32)
     mask = np.zeros_like(terrain, dtype=np.uint8)
     graph = GraphSpec(cost_model=model, cost_weight=2)
@@ -37,6 +40,7 @@ def test_directed_reverse_field_uses_predecessor_to_current_cost(model, want):
 
 def test_destination_only_diagonal_and_illegal_obstacle_recost():
     from passage.reference import recost_legal_path, solve_reference
+
     terrain = np.zeros((2, 2), dtype=np.float32)
     mask = np.array([[0, 1], [1, 0]], dtype=np.uint8)
     result = solve_reference(terrain, mask, (0, 0), (1, 1))
@@ -49,6 +53,7 @@ def test_destination_only_diagonal_and_illegal_obstacle_recost():
 @pytest.mark.parametrize("height", [0, -15, 20])
 def test_plateaus_and_ties_are_deterministic_with_exact_distance(height):
     from passage.reference import solve_reference
+
     terrain = np.full((4, 4), height, dtype=np.float32)
     mask = np.zeros_like(terrain, dtype=np.uint8)
     results = [solve_reference(terrain, mask, (0, 0), (3, 2)) for _ in range(3)]
@@ -59,6 +64,7 @@ def test_plateaus_and_ties_are_deterministic_with_exact_distance(height):
 
 def test_censoring_never_becomes_no_path_or_a_partial_optimum():
     from passage.reference import reverse_goal_field, solve_reference
+
     terrain = np.zeros((3, 4), dtype=np.float32)
     mask = np.zeros_like(terrain, dtype=np.uint8)
     result = solve_reference(terrain, mask, (0, 0), (2, 3), max_expansions=0)
@@ -77,6 +83,7 @@ def test_censoring_never_becomes_no_path_or_a_partial_optimum():
 def test_roundtrip_decoded_float32_metres_and_independent_graph_optima(tmp_path):
     import networkx as nx
     from passage.reference import recost_legal_path, reverse_goal_field, solve_reference
+
     terrain = np.random.default_rng(28).uniform(-80, 200, (5, 7)).astype(np.float32)
     np.save(tmp_path / "terrain.npy", terrain)
     decoded = np.load(tmp_path / "terrain.npy")
@@ -92,7 +99,7 @@ def test_roundtrip_decoded_float32_metres_and_independent_graph_optima(tmp_path)
             for dr in (-1, 0, 1):
                 for dc in (-1, 0, 1):
                     rr, cc = r + dr, c + dc
-                    if (not (dr or dc) or not (0 <= rr < 5 and 0 <= cc < 7) or obstacles[rr, cc]):
+                    if not (dr or dc) or not (0 <= rr < 5 and 0 <= cc < 7) or obstacles[rr, cc]:
                         continue
                     d = 30 * math.hypot(dr, dc)
                     dst = float(decoded[rr, cc])
@@ -120,6 +127,7 @@ def test_roundtrip_decoded_float32_metres_and_independent_graph_optima(tmp_path)
 
 def test_invalid_inputs_fail_before_search():
     from passage.reference import solve_reference
+
     terrain = np.zeros((2, 2))
     for kwargs in ({"max_expansions": -1}, {"max_expansions": True}, {"algorithm": "weighted"}):
         with pytest.raises(ValueError):
@@ -128,15 +136,19 @@ def test_invalid_inputs_fail_before_search():
         solve_reference(terrain, np.zeros_like(terrain), (0.2, 0), (1, 1))
 
 
-@pytest.mark.parametrize("model,values", [
-    ("elevation", [0, 1]),
-    ("slope_uphill", [0, 1]),
-    ("absolute_elevation", [0, 1]),
-    # Both energy edges are finite (1e308), but their path total is not.
-    ("energy", [0, 1, 2]),
-])
+@pytest.mark.parametrize(
+    "model,values",
+    [
+        ("elevation", [0, 1]),
+        ("slope_uphill", [0, 1]),
+        ("absolute_elevation", [0, 1]),
+        # Both energy edges are finite (1e308), but their path total is not.
+        ("energy", [0, 1, 2]),
+    ],
+)
 def test_float64_overflow_is_an_arithmetic_error_not_proved_unreachable(model, values):
     from passage.reference import recost_legal_path, reverse_goal_field, solve_reference
+
     terrain = np.array([values], dtype=np.float32)
     obstacles = np.zeros_like(terrain, dtype=np.uint8)
     start, goal = (0, 0), (0, len(values) - 1)
@@ -152,11 +164,12 @@ def test_float64_overflow_is_an_arithmetic_error_not_proved_unreachable(model, v
 
 def test_endpoints_connected_matches_solver_proofs_on_random_masks():
     from passage.reference import endpoints_connected, solve_reference
+
     rng = np.random.default_rng(7)
     seen = set()
     for _ in range(300):
         shape = tuple(rng.integers(2, 12, size=2))
-        mask = (rng.random(shape) < rng.uniform(.2, .7)).astype(np.uint8)
+        mask = (rng.random(shape) < rng.uniform(0.2, 0.7)).astype(np.uint8)
         terrain = rng.normal(size=shape).astype(np.float32)
         start, goal = (tuple(int(rng.integers(0, n)) for n in shape) for _ in range(2))
         connected = endpoints_connected(mask, start, goal)
@@ -167,6 +180,7 @@ def test_endpoints_connected_matches_solver_proofs_on_random_masks():
 
 def test_endpoints_connected_uses_destination_only_diagonals():
     from passage.reference import endpoints_connected
+
     mask = np.array([[0, 1], [1, 0]], dtype=np.uint8)
     assert endpoints_connected(mask, (0, 0), (1, 1))
     assert not endpoints_connected(mask, (0, 0), (0, 1))

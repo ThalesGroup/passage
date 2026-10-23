@@ -1,4 +1,5 @@
 """Authored reports are parameterized real-data consumers with no launch cells."""
+
 import ast
 import json
 from pathlib import Path
@@ -6,7 +7,11 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCES = sorted((ROOT / "notebooks").glob("*.ipynb")) + sorted((ROOT / "notebooks/passage-eval").glob("*.ipynb")) + sorted((ROOT / "paper/notebooks").glob("*.ipynb"))
+SOURCES = (
+    sorted((ROOT / "notebooks").glob("*.ipynb"))
+    + sorted((ROOT / "notebooks/passage-eval").glob("*.ipynb"))
+    + sorted((ROOT / "paper/notebooks").glob("*.ipynb"))
+)
 
 
 @pytest.mark.parametrize("source", SOURCES, ids=lambda p: str(p.relative_to(ROOT)))

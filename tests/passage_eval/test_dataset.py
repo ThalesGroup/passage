@@ -154,24 +154,26 @@ def test_release_identity_and_marker_channel_must_be_unambiguous(release_row, mu
 
 
 def test_unpinned_remote_release_fails_before_network():
-    with pytest.raises(ValueError, match='revision'):
-        _loader().load_val_scenes(resolution=3, cost_model='elevation', n_samples=1)
+    with pytest.raises(ValueError, match="revision"):
+        _loader().load_val_scenes(resolution=3, cost_model="elevation", n_samples=1)
 
 
 def test_free_scene_records_its_task_variant(release_row):
-    scene = _loader().scene_from_row(release_row, resolution=3, split='validation', cost_model='elevation', task_variant='free')
-    assert scene.metadata['task_variant'] == 'free'
+    scene = _loader().scene_from_row(
+        release_row, resolution=3, split="validation", cost_model="elevation", task_variant="free"
+    )
+    assert scene.metadata["task_variant"] == "free"
 
 
 def test_local_loader_preserves_arbitrary_released_solver_name(tmp_path, release_row):
-    original = 'astar_elevation'
-    replacement = 'release_solver'
-    release_row['metadata']['solvers'][replacement] = release_row['metadata']['solvers'].pop(original)
-    release_row['metadata']['paths'][replacement] = release_row['metadata']['paths'].pop(original)
-    for variant in ('free', 'obstacles'):
-        release_row[f'path_{replacement}_{variant}'] = release_row.pop(f'path_{original}_{variant}')
-    directory = tmp_path / '3x3' / 'validation'
+    original = "astar_elevation"
+    replacement = "release_solver"
+    release_row["metadata"]["solvers"][replacement] = release_row["metadata"]["solvers"].pop(original)
+    release_row["metadata"]["paths"][replacement] = release_row["metadata"]["paths"].pop(original)
+    for variant in ("free", "obstacles"):
+        release_row[f"path_{replacement}_{variant}"] = release_row.pop(f"path_{original}_{variant}")
+    directory = tmp_path / "3x3" / "validation"
     directory.mkdir(parents=True)
-    pq.write_table(pa.Table.from_pylist([release_row]), directory / 'data.parquet')
-    scene = _loader().load_val_scenes(resolution=3, cost_model='elevation', n_samples=1, dataset_path=tmp_path)[0]
-    assert scene.sample_id == release_row['id']
+    pq.write_table(pa.Table.from_pylist([release_row]), directory / "data.parquet")
+    scene = _loader().load_val_scenes(resolution=3, cost_model="elevation", n_samples=1, dataset_path=tmp_path)[0]
+    assert scene.sample_id == release_row["id"]

@@ -238,6 +238,7 @@ def _materialise_planner(spec: BenchSpec) -> Any:
     if callable(obj):
         if spec.inference_format == "request":
             from functools import partial
+
             return partial(obj, **spec.inference_kwargs)
         return _CallablePlanner(
             obj, name=spec.method_name, kwargs=spec.inference_kwargs, input_kind=spec.inference_format
@@ -363,7 +364,8 @@ def _validate_spec(spec: BenchSpec) -> None:
     if spec.reference_policy not in {"released_labels", "independent_analytic_reference"}:
         raise ValueError("reference_policy must be released_labels or independent_analytic_reference")
     if spec.reference_policy == "independent_analytic_reference" and (
-            not isinstance(spec.reference_cohort_id, str) or not spec.reference_cohort_id.strip()):
+        not isinstance(spec.reference_cohort_id, str) or not spec.reference_cohort_id.strip()
+    ):
         raise ValueError("independent_analytic_reference requires an explicit reference_cohort_id")
     BudgetSpec(**spec.budget)
     component_control(spec.component_control)
@@ -375,13 +377,20 @@ def _qualification(scenes: list[Scene], spec: BenchSpec) -> dict[str, Any]:
     if spec.reference_policy == "independent_analytic_reference":
         from passage.audit import independently_qualified_reference_for_scene
 
-        records = {scene.sample_id: independently_qualified_reference_for_scene(
-            scene, cohort_id=spec.reference_cohort_id, max_expansions=spec.reference_max_expansions)
-            for scene in scenes}
+        records = {
+            scene.sample_id: independently_qualified_reference_for_scene(
+                scene, cohort_id=spec.reference_cohort_id, max_expansions=spec.reference_max_expansions
+            )
+            for scene in scenes
+        }
     else:
-        records = {scene.sample_id: qualified_reference_for_scene(
-            scene, max_expansions=spec.reference_max_expansions) for scene in scenes}
-    failed = {key: value.get("qualification_reasons", []) for key, value in records.items() if not value.get("qualified")}
+        records = {
+            scene.sample_id: qualified_reference_for_scene(scene, max_expansions=spec.reference_max_expansions)
+            for scene in scenes
+        }
+    failed = {
+        key: value.get("qualification_reasons", []) for key, value in records.items() if not value.get("qualified")
+    }
     if failed:
         raise ValueError(f"reference qualification failed before candidate admission: {failed}")
     return records
@@ -426,8 +435,11 @@ def _candidate_identity(spec: BenchSpec) -> dict[str, Any]:
             resolved = Path(path).resolve()
             modules[module.__name__] = {"path": str(resolved), "sha256": sha256_file(resolved)}
     loaded_code = {}
-    members = {"entry": obj} if not isinstance(obj, type) else {
-        name: getattr(obj, name, None) for name in ("__init__", "plan", "predict_path")}
+    members = (
+        {"entry": obj}
+        if not isinstance(obj, type)
+        else {name: getattr(obj, name, None) for name in ("__init__", "plan", "predict_path")}
+    )
     for name, member in members.items():
         code = getattr(member, "__code__", None)
         if code is not None:
@@ -436,8 +448,12 @@ def _candidate_identity(spec: BenchSpec) -> dict[str, Any]:
     if spec.runtime_bundle_manifest is not None:
         path = Path(spec.runtime_bundle_manifest).resolve()
         payload = json.loads(path.read_text(encoding="utf-8"))
-        if (not isinstance(payload, dict) or payload.get("schema") != "passage-runtime-bundle-v1"
-                or not isinstance(payload.get("files"), list) or not payload["files"]):
+        if (
+            not isinstance(payload, dict)
+            or payload.get("schema") != "passage-runtime-bundle-v1"
+            or not isinstance(payload.get("files"), list)
+            or not payload["files"]
+        ):
             raise ValueError("runtime bundle manifest requires passage-runtime-bundle-v1 and nonempty files")
         files = {}
         for item in payload["files"]:
@@ -450,16 +466,27 @@ def _candidate_identity(spec: BenchSpec) -> dict[str, Any]:
             files[member_path.as_posix()] = actual
         bundle = {"path": str(path), "manifest_sha256": sha256_file(path), "files": files}
     declared = spec.candidate_source_sha256
-    if declared is not None and (not isinstance(declared, str) or len(declared) != 64
-                                 or any(character not in "0123456789abcdef" for character in declared)):
+    if declared is not None and (
+        not isinstance(declared, str)
+        or len(declared) != 64
+        or any(character not in "0123456789abcdef" for character in declared)
+    ):
         raise ValueError("candidate_source_sha256 must be a lowercase 64-character SHA256 identity")
     defining_name = getattr(defining_module, "__name__", getattr(obj, "__module__", None))
     if defining_name not in modules and bundle is None and declared is None:
-        raise ValueError("candidate defining module has no readable file; declare a runtime bundle or source SHA256 identity")
-    return {"schema": "passage-candidate-identity-v1", "entry": spec.inference,
-            "defining_module": defining_name, "module_files": modules, "loaded_code_sha256": loaded_code,
-            "runtime_bundle": bundle, "declared_source_sha256": declared,
-            "source_verification": "file_content_measured" if defining_name in modules else "explicit_declared_identity"}
+        raise ValueError(
+            "candidate defining module has no readable file; declare a runtime bundle or source SHA256 identity"
+        )
+    return {
+        "schema": "passage-candidate-identity-v1",
+        "entry": spec.inference,
+        "defining_module": defining_name,
+        "module_files": modules,
+        "loaded_code_sha256": loaded_code,
+        "runtime_bundle": bundle,
+        "declared_source_sha256": declared,
+        "source_verification": "file_content_measured" if defining_name in modules else "explicit_declared_identity",
+    }
 
 
 def _checkpoint_hashes(spec: BenchSpec) -> dict[str, str]:
@@ -475,32 +502,50 @@ def _checkpoint_hashes(spec: BenchSpec) -> dict[str, str]:
 
 def _manifest(spec: BenchSpec, scenes: list[Scene], qualification: dict[str, Any]) -> dict[str, Any]:
     from passage_eval.protocol.attribution import component_control
+
     control = component_control(spec.component_control)
     checkpoint_hashes = _checkpoint_hashes(spec)
     candidate_identity = _candidate_identity(spec)
     procedure = {
-        "method_name": spec.method_name, "family": spec.family, "architecture": spec.architecture,
-        "decoder_variant": spec.decoder_variant, "inference": spec.inference,
-        "inference_format": spec.inference_format, "inference_kwargs": spec.inference_kwargs,
-        "budget": spec.budget, "checkpoint_hashes": checkpoint_hashes, "candidate_identity": candidate_identity,
+        "method_name": spec.method_name,
+        "family": spec.family,
+        "architecture": spec.architecture,
+        "decoder_variant": spec.decoder_variant,
+        "inference": spec.inference,
+        "inference_format": spec.inference_format,
+        "inference_kwargs": spec.inference_kwargs,
+        "budget": spec.budget,
+        "checkpoint_hashes": checkpoint_hashes,
+        "candidate_identity": candidate_identity,
         "component_control": control,
     }
     reference_identity = hashlib.sha256(json.dumps(qualification, sort_keys=True).encode()).hexdigest()
     return {
-        "bench_spec": spec.to_dict(), "method_name": spec.method_name, "seed": int(spec.seeds[0]),
+        "bench_spec": spec.to_dict(),
+        "method_name": spec.method_name,
+        "seed": int(spec.seeds[0]),
         "procedure": procedure,
         "procedure_id": hashlib.sha256(json.dumps(procedure, sort_keys=True).encode()).hexdigest(),
-        "checkpoint_hashes": checkpoint_hashes, "runtime_source_hash": _source_hash(),
+        "checkpoint_hashes": checkpoint_hashes,
+        "runtime_source_hash": _source_hash(),
         "candidate_identity": candidate_identity,
         "component_control": control,
-        "reference_qualification": qualification, "reference_identity": reference_identity,
+        "reference_qualification": qualification,
+        "reference_identity": reference_identity,
         "admission": {"qualified_reference": True, "ordinary_input_contract": "PlanRequest-v1"},
-        "reference_policy": spec.reference_policy, "reference_cohort_id": spec.reference_cohort_id,
-        "dataset": {"repo": spec.dataset_repo, "revision": spec.dataset_revision,
-                    "path": str(Path(spec.dataset_path).resolve()) if spec.dataset_path else None,
-                    "split": spec.split, "resolution": spec.resolution,
-                    "task_variant": spec.task_variant, "content_hash": _dataset_content_hash(scenes)},
-        "split_role": "evaluation", "hardware_stack": spec.hardware_stack or f"{socket.gethostname()}-cpu",
+        "reference_policy": spec.reference_policy,
+        "reference_cohort_id": spec.reference_cohort_id,
+        "dataset": {
+            "repo": spec.dataset_repo,
+            "revision": spec.dataset_revision,
+            "path": str(Path(spec.dataset_path).resolve()) if spec.dataset_path else None,
+            "split": spec.split,
+            "resolution": spec.resolution,
+            "task_variant": spec.task_variant,
+            "content_hash": _dataset_content_hash(scenes),
+        },
+        "split_role": "evaluation",
+        "hardware_stack": spec.hardware_stack or f"{socket.gethostname()}-cpu",
         "cold_series_scope": "first complete roster pass after construction; only roster[0] is first request; import/model loading excluded",
         "extra": spec.extra,
     }
@@ -521,17 +566,40 @@ def _execute_series(spec: BenchSpec, scenes: list[Scene], qualification: dict[st
     _json_write(output / "qualification.json", qualification)
     artifacts = []
     if spec.measure_latency:
-        artifacts.append(run_requests(planner, requests, output_dir=output / "cold", manifest=manifest,
-                                      synchronize=_sync_runtime, series="cold"))
+        artifacts.append(
+            run_requests(
+                planner,
+                requests,
+                output_dir=output / "cold",
+                manifest=manifest,
+                synchronize=_sync_runtime,
+                series="cold",
+            )
+        )
         if spec.latency_warmup:
-            artifacts.append(run_requests(planner, requests, repeats=spec.latency_warmup,
-                                          output_dir=output / "warmup", manifest=manifest,
-                                          synchronize=_sync_runtime, series="warmup"))
-    artifacts.append(run_requests(
-        planner, requests, repeats=(spec.latency_repeats or 1) if spec.measure_latency else 1,
-        output_dir=output, manifest=manifest, synchronize=_sync_runtime,
-        quality_repeat_index=spec.quality_repeat_index, series="warm",
-    ))
+            artifacts.append(
+                run_requests(
+                    planner,
+                    requests,
+                    repeats=spec.latency_warmup,
+                    output_dir=output / "warmup",
+                    manifest=manifest,
+                    synchronize=_sync_runtime,
+                    series="warmup",
+                )
+            )
+    artifacts.append(
+        run_requests(
+            planner,
+            requests,
+            repeats=(spec.latency_repeats or 1) if spec.measure_latency else 1,
+            output_dir=output,
+            manifest=manifest,
+            synchronize=_sync_runtime,
+            quality_repeat_index=spec.quality_repeat_index,
+            series="warm",
+        )
+    )
     return artifacts
 
 
@@ -569,11 +637,14 @@ def cmd_score(run: str | Path, output: str | Path | None = None) -> list[Path]:
         artifact = read_run_artifact(manifest_path.parent)
         procedure = artifact.manifest.get("procedure")
         candidate_identity = artifact.manifest.get("candidate_identity")
-        if (not isinstance(procedure, dict) or not isinstance(candidate_identity, dict)
-                or procedure.get("candidate_identity") != candidate_identity
-                or candidate_identity.get("schema") != "passage-candidate-identity-v1"
-                or hashlib.sha256(json.dumps(procedure, sort_keys=True).encode()).hexdigest()
-                != artifact.manifest.get("procedure_id")):
+        if (
+            not isinstance(procedure, dict)
+            or not isinstance(candidate_identity, dict)
+            or procedure.get("candidate_identity") != candidate_identity
+            or candidate_identity.get("schema") != "passage-candidate-identity-v1"
+            or hashlib.sha256(json.dumps(procedure, sort_keys=True).encode()).hexdigest()
+            != artifact.manifest.get("procedure_id")
+        ):
             raise ValueError("persisted candidate/procedure identity is missing or inconsistent")
         spec = BenchSpec(**artifact.manifest["bench_spec"])
         scenes = _load_scenes(spec)
@@ -593,14 +664,35 @@ def cmd_conform(spec: BenchSpec, output: str | Path) -> Path:
     from passage_eval.execution.conformance import harness_conformance
 
     _validate_spec(spec)
-    scene = Scene("analytic-3x3", np.zeros((3, 3)), np.zeros((3, 3), dtype=bool),
-                  (0, 0), (2, 2), "elevation", 62.4, [(0, 0), (1, 1), (2, 2)], 60 * np.sqrt(2))
-    fixture_spec = replace(spec, n_samples=1, seeds=[spec.seeds[0]], latency_warmup=0,
-                           latency_repeats=1, quality_repeat_index=0, measure_latency=False)
-    qualified = _qualification([scene], replace(fixture_spec, reference_policy="released_labels",
-                                               reference_cohort_id=None))
-    artifact = run_requests(BoundedExactPlanner(), [PlanRequest.from_scene(scene)],
-                            output_dir=Path(output) / "analytic", manifest={"reference_qualification": qualified})
+    scene = Scene(
+        "analytic-3x3",
+        np.zeros((3, 3)),
+        np.zeros((3, 3), dtype=bool),
+        (0, 0),
+        (2, 2),
+        "elevation",
+        62.4,
+        [(0, 0), (1, 1), (2, 2)],
+        60 * np.sqrt(2),
+    )
+    fixture_spec = replace(
+        spec,
+        n_samples=1,
+        seeds=[spec.seeds[0]],
+        latency_warmup=0,
+        latency_repeats=1,
+        quality_repeat_index=0,
+        measure_latency=False,
+    )
+    qualified = _qualification(
+        [scene], replace(fixture_spec, reference_policy="released_labels", reference_cohort_id=None)
+    )
+    artifact = run_requests(
+        BoundedExactPlanner(),
+        [PlanRequest.from_scene(scene)],
+        output_dir=Path(output) / "analytic",
+        manifest={"reference_qualification": qualified},
+    )
     metrics, arrays = score_run_artifact(artifact, [scene])
     write_scored_artifact(artifact, metrics, arrays)
     if metrics["success_rate"] != 1 or not np.isclose(metrics["cost_regret_median"], 0):
@@ -609,13 +701,19 @@ def cmd_conform(spec: BenchSpec, output: str | Path) -> Path:
     paths = cmd_run(fixture_spec, Path(output) / "candidate")
     cmd_score(Path(output) / "candidate")
     receipt = Path(output) / "conformance.json"
-    _json_write(receipt, {"schema": "passage-conformance-v1", "status": "passed",
-                          "analytic_fixture": str(artifact.output_dir),
-                          "candidate_runs": [str(path) for path in paths],
-                          "harness_checks": checks,
-                          "claim_scope": "cpu_contract_checks_not_device_or_population_certification",
-                          "scope": "analytic graph and one qualified ordinary-input request",
-                          "candidate_quality_requirement": "terminal outcomes retained; no optimality threshold"})
+    _json_write(
+        receipt,
+        {
+            "schema": "passage-conformance-v1",
+            "status": "passed",
+            "analytic_fixture": str(artifact.output_dir),
+            "candidate_runs": [str(path) for path in paths],
+            "harness_checks": checks,
+            "claim_scope": "cpu_contract_checks_not_device_or_population_certification",
+            "scope": "analytic graph and one qualified ordinary-input request",
+            "candidate_quality_requirement": "terminal outcomes retained; no optimality threshold",
+        },
+    )
     return receipt
 
 
@@ -643,8 +741,9 @@ def cmd_bench(spec: BenchSpec) -> Path:
             warm = artifacts[-1]
             _, arrays = score_run_artifact(warm, scenes)
             mask = arrays["repeat_index"] == spec.quality_repeat_index
-            primary = {key: value[mask] if value.ndim and len(value) == len(mask) else value
-                       for key, value in arrays.items()}
+            primary = {
+                key: value[mask] if value.ndim and len(value) == len(mask) else value for key, value in arrays.items()
+            }
             metrics = aggregate_primary_metrics(primary)
             latencies = np.asarray([record["total_wall_ms"] for record in warm.records])
             timing = {
@@ -653,39 +752,83 @@ def cmd_bench(spec: BenchSpec) -> Path:
                 "latency_e2e_ms_p99": float(np.percentile(latencies, 99)),
                 "throughput_samples_per_s": 1000 / float(latencies.mean()),
                 "throughput_kind": "serial_complete_request_service_capacity",
-                "latency_repeats": warm.manifest["repeats"], "latency_warmup": spec.latency_warmup,
-                "latency_population": len(warm.records), "quality_repeat_index": spec.quality_repeat_index,
+                "latency_repeats": warm.manifest["repeats"],
+                "latency_warmup": spec.latency_warmup,
+                "latency_population": len(warm.records),
+                "quality_repeat_index": spec.quality_repeat_index,
             }
-            provenance = dict(spec.extra, **timing, inference_entry=spec.inference,
-                              inference_kwargs=seed_spec.inference_kwargs, inference_format=spec.inference_format,
-                              dataset_repo=spec.dataset_repo, dataset_revision=spec.dataset_revision,
-                              dataset_path=spec.dataset_path, task_variant=spec.task_variant,
-                              metric_contract=warm.manifest["schema"], evaluator_source_hash=_source_hash(),
-                              evaluation_batch_size=1, seed_set=list(spec.seeds),
-                              sample_ids=[scene.sample_id for scene in scenes],
-                              reference_identity=warm.manifest["reference_identity"],
-                              procedure_id=warm.manifest["procedure_id"])
+            provenance = dict(
+                spec.extra,
+                **timing,
+                inference_entry=spec.inference,
+                inference_kwargs=seed_spec.inference_kwargs,
+                inference_format=spec.inference_format,
+                dataset_repo=spec.dataset_repo,
+                dataset_revision=spec.dataset_revision,
+                dataset_path=spec.dataset_path,
+                task_variant=spec.task_variant,
+                metric_contract=str(primary["metric_contract"].item()),
+                evaluator_source_hash=_source_hash(),
+                evaluation_batch_size=1,
+                seed_set=list(spec.seeds),
+                sample_ids=[scene.sample_id for scene in scenes],
+                reference_identity=warm.manifest["reference_identity"],
+                procedure_id=warm.manifest["procedure_id"],
+                budget=warm.manifest["procedure"]["budget"],
+                candidate_identity=warm.manifest["candidate_identity"],
+                component_control=warm.manifest["component_control"],
+                checkpoint_hashes=warm.manifest["checkpoint_hashes"],
+                dataset_content_hash=warm.manifest["dataset"]["content_hash"],
+                hardware_stack=spec.hardware_stack or spec.edge_accelerator or f"{socket.gethostname()}-cpu",
+                determinism_flag=spec.determinism_flag,
+                container_digest=spec.container_digest,
+                calibration_decisions_hash=compute_calibration_decisions_hash(spec.calibration_decisions)
+                if spec.calibration_decisions is not None
+                else "",
+                reference_policy=spec.reference_policy,
+                reference_cohort_id=spec.reference_cohort_id,
+            )
             sidecar = ReproducibilitySidecar(
-                method_name=spec.method_name, family=spec.family, dataset_version=spec.dataset_version,
+                method_name=spec.method_name,
+                family=spec.family,
+                dataset_version=spec.dataset_version,
                 dataset_content_hash=_dataset_content_hash(scenes),
                 operating_point=f"{spec.resolution}x{spec.resolution}/{scenes[0].cost_model}",
-                seeds=[int(seed)], split_seed=42,
+                seeds=[int(seed)],
+                split_seed=42,
                 hardware_stack=spec.hardware_stack or spec.edge_accelerator or f"{socket.gethostname()}-cpu",
-                determinism_flag=spec.determinism_flag, batch_size=1, dtype=spec.dtype,
-                commit_sha=_checkout_commit(), container_digest=spec.container_digest,
+                determinism_flag=spec.determinism_flag,
+                batch_size=1,
+                dtype=spec.dtype,
+                commit_sha=_checkout_commit(),
+                container_digest=spec.container_digest,
                 calibration_decisions_hash=compute_calibration_decisions_hash(spec.calibration_decisions)
-                if spec.calibration_decisions is not None else "", extra=provenance,
+                if spec.calibration_decisions is not None
+                else "",
+                extra=provenance,
                 notes="Primary metrics use the frozen warm repeat; all measured series are independently scored.",
             )
             weights = [scene.cost_weight for scene in scenes]
             submission = Submission(
-                method_name=spec.method_name, family=spec.family, architecture=spec.architecture,
-                decoder_variant=spec.decoder_variant, resolution=spec.resolution, cost_model=scenes[0].cost_model,
-                cost_weight=weights[0] if min(weights) == max(weights) else float("nan"), split=spec.split,
-                seed=int(seed), n_samples=metrics["n_samples"], metrics=metrics, host=socket.gethostname(),
-                edge_accelerator=spec.edge_accelerator, batch_size=1, dtype=spec.dtype,
+                method_name=spec.method_name,
+                family=spec.family,
+                architecture=spec.architecture,
+                decoder_variant=spec.decoder_variant,
+                resolution=spec.resolution,
+                cost_model=scenes[0].cost_model,
+                cost_weight=weights[0] if min(weights) == max(weights) else float("nan"),
+                split=spec.split,
+                seed=int(seed),
+                n_samples=metrics["n_samples"],
+                metrics=metrics,
+                host=socket.gethostname(),
+                edge_accelerator=spec.edge_accelerator,
+                batch_size=1,
+                dtype=spec.dtype,
                 latency_e2e_ms_p50=timing["latency_e2e_ms_p50"] if spec.measure_latency else None,
-                package_version=__version__, dataset_version=spec.dataset_version, extra=provenance,
+                package_version=__version__,
+                dataset_version=spec.dataset_version,
+                extra=provenance,
             )
             last_run_dir = submit(submission, root=results_root, per_sample=primary, sidecar=sidecar)
             shutil.copytree(temporary, last_run_dir / "complete_requests")
@@ -854,10 +997,14 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "compare":
         from passage_eval.metrics.comparison import compare_artifacts
 
-        result = compare_artifacts(args.score, primary_repeat_index=args.primary_repeat_index,
-                                   bootstrap_resamples=args.bootstrap_resamples,
-                                   bootstrap_seed=args.bootstrap_seed, confidence=args.confidence,
-                                   odd_spec=json.loads(args.odd_spec.read_text()) if args.odd_spec else None)
+        result = compare_artifacts(
+            args.score,
+            primary_repeat_index=args.primary_repeat_index,
+            bootstrap_resamples=args.bootstrap_resamples,
+            bootstrap_seed=args.bootstrap_seed,
+            confidence=args.confidence,
+            odd_spec=json.loads(args.odd_spec.read_text()) if args.odd_spec else None,
+        )
         _json_write(args.output, result)
         print(args.output)
         return 0

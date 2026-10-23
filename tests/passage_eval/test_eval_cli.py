@@ -51,11 +51,17 @@ def test_cli_scores_released_labels_and_persists_paired_evidence(tmp_path, relea
         assert arrays["regret"].tolist() == pytest.approx([0])
         assert arrays["metric_contract"].item() == "passage-qualified-complete-v1"
     sidecar = json.loads((run / "sidecar.json").read_text())
+    stored = json.loads((run / "metrics.json").read_text())["submission"]
+    assert json.loads(stored["extra_json"])["metric_contract"] == "passage-qualified-complete-v1"
+    assert sidecar["extra"]["metric_contract"] == "passage-qualified-complete-v1"
     assert sidecar["dataset_content_hash"]
     assert sidecar["extra"]["task_variant"] == "obstacles"
     assert sidecar["extra"]["sample_ids"] == [release_row["id"]]
     assert main(["leaderboard", "--root", str(root)]) == 0
     assert main(["rebuild", "--root", str(root)]) == 0
+    from passage_eval import load_leaderboard
+
+    assert load_leaderboard(root).df.method_name.tolist() == ["oracle"]
 
 
 def test_spec_paths_are_respected_unless_explicitly_overridden(tmp_path):
@@ -153,6 +159,60 @@ def test_seed_checkpoint_factories_and_timing_provenance(tmp_path, metre_scene, 
         assert sidecar["determinism_flag"] == "non_deterministic"
         assert sidecar["extra"]["latency_repeats"] == 2
         assert len(sidecar["extra"]["evaluator_source_hash"]) == 64
+    from passage_eval import load_leaderboard, rebuild_leaderboard, summarise_leaderboard
+
+    rebuild_leaderboard(tmp_path)
+    summary = summarise_leaderboard(load_leaderboard(tmp_path).df)
+    assert summary.n_seeds.tolist() == [3]
+    assert summary.n_runs.tolist() == [3]
+
+
+@pytest.mark.parametrize(
+    "setting,values",
+    [
+        ("budget", [{"max_expansions": 1}, {"max_expansions": 100}]),
+        (
+            "component_control",
+            [
+                {"variant": "exact_classical", "guide": "none"},
+                {"variant": "budgeted_classical", "guide": "none"},
+            ],
+        ),
+        ("hardware_stack", ["runtime-A", "runtime-B"]),
+    ],
+)
+def test_cli_retains_condition_bearing_provenance_for_seed_summary(tmp_path, release_row, setting, values):
+    from passage_eval import load_leaderboard, summarise_leaderboard
+    from passage_eval.cli import cmd_bench
+
+    split = tmp_path / "data" / "3x3" / "validation"
+    split.mkdir(parents=True)
+    pq.write_table(pa.Table.from_pylist([release_row]), split / "data-00000.parquet")
+    for seed, value in zip([1234, 2026], values):
+        spec = BenchSpec(
+            "same-procedure-name",
+            "classical",
+            "analytic",
+            inference="passage_eval.baselines.classical:BoundedExactPlanner",
+            resolution=3,
+            seeds=[seed],
+            dataset_path=str(tmp_path / "data"),
+            results_root=str(tmp_path / "results"),
+            n_samples=1,
+            measure_latency=False,
+            **{setting: value},
+        )
+        cmd_bench(spec)
+    summary = summarise_leaderboard(load_leaderboard(tmp_path / "results").df)
+    assert len(summary) == 2
+    assert summary.n_seeds.tolist() == [1, 1]
+    condition_values = [json.loads(value)[setting] for value in summary.comparison_extra_json]
+    if setting == "component_control":
+        assert {value["variant"] for value in condition_values} == {"exact_classical", "budgeted_classical"}
+    else:
+        assert condition_values == values
+    if setting == "budget":
+        assert summary["mean"].tolist() == [999999.0, 0.0]
 
 
 def test_cli_init_rebuild_and_leaderboard(tmp_path, capsys):

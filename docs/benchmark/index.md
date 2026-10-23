@@ -14,10 +14,6 @@ That package is what you hook up to your planner — whether
 it is a dense-vision model, a graph neural network, a
 reinforcement-learning policy, or a classical solver — to get a
 score with identified inputs, procedure, references and metric contract.
-The paper's learned-model results are historical results of the original
-study, reported as obtained; not re-run on the released dataset (see
-[Paper results](leaderboard.md#paper-results)).
-
 This section of the documentation is the single entry point for that
 process. Start with [Evaluate your planner](contributing-a-method.md) to run
 `conform → run → score → compare → report`; use the protocol and API pages to
@@ -49,11 +45,11 @@ interpret the results.
 
     ---
 
-    The pre-registered, paper-aligned rules: six headline metrics,
-    paired-bootstrap CI on the mean of paired differences,
-    three-seed pooled aggregation, Holm–Bonferroni step-down
-    correction, and the Pareto-dominant / Trade-off / Indistinguishable
-    decision rule.
+    Six primary metrics, contrasts of their prescribed aggregates,
+    shared geographic-block draws across three training seeds, and
+    Holm–Bonferroni correction with declared paired-test evidence.
+    Decisions distinguish Pareto dominance, trade-offs, partial evidence
+    and no demonstrated difference.
 
     [:octicons-arrow-right-24: Read the protocol](protocol.md)
 
@@ -67,12 +63,12 @@ interpret the results.
 
     [:octicons-arrow-right-24: Read the package guide](passage-eval.md)
 
-- :material-rocket-launch: **Paired statistics (paper)**
+- :material-rocket-launch: **Paired statistics**
 
     ---
 
-    The paper's paired mean-difference analysis: pairing checks, three-seed
-    aggregation, Holm–Bonferroni correction and sidecar checks. To compare
+    Complete six-metric comparison: pairing checks, shared geographic-block
+    draws, three-seed contrasts and declared paired-test evidence. To compare
     planners with the CLI workflow, use
     [Evaluate your planner](contributing-a-method.md).
 
@@ -161,8 +157,7 @@ policy, rollout policy — is never scored against the oracle in
 isolation.
 
 The paper evaluated two **dense-vision finalists** (path-mask segmentation and
-cost-to-go regression). Their numbers are historical results of the original
-study, reported as obtained; not re-run on the released dataset. No
+cost-to-go regression). No
 learned-model result on PASSAGE v1.0 is published yet; the
 [First entries](candidates.md) page describes the first leaderboard entries.
 Graph-neural-network and reinforcement-learning planners plug into the same

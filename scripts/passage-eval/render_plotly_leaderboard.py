@@ -19,9 +19,12 @@ CR is exactly zero by construction and can't be shown on a log axis).
 from __future__ import annotations
 
 import json
+import math
 import sys
 from dataclasses import dataclass
+from html import escape
 from pathlib import Path
+from typing import Any
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -69,10 +72,7 @@ CANDIDATES: tuple[Candidate, ...] = (
         method_name="greedy_classical",
         shortname="greedy",
         family="classical",
-        description=(
-            "Diagonal-greedy descent that ignores costs. Always feasible, "
-            "always suboptimal; smoke baseline."
-        ),
+        description=("Diagonal-greedy descent that ignores costs. Always feasible, always suboptimal; smoke baseline."),
         color="#d62728",
     ),
     Candidate(
@@ -91,8 +91,7 @@ CANDIDATES: tuple[Candidate, ...] = (
         shortname="seg-CNXTv2",
         family="dense_segmentation",
         description=(
-            "Dense path segmentation. Backbone: ConvNeXtV2-atto. Loss: BCE. "
-            "Decoder: threshold + Dijkstra-on-logits."
+            "Dense path segmentation. Backbone: ConvNeXtV2-atto. Loss: BCE. Decoder: threshold + Dijkstra-on-logits."
         ),
         color="#2378c5",
     ),
@@ -100,10 +99,7 @@ CANDIDATES: tuple[Candidate, ...] = (
         method_name="graph-edge_mlp_classical_astar",
         shortname="gnn-EdgeMLP",
         family="graph",
-        description=(
-            "Per-edge 5→16→16→1 MLP that predicts edge costs; classical "
-            "A* run on the learned cost grid."
-        ),
+        description=("Per-edge 5→16→16→1 MLP that predicts edge costs; classical A* run on the learned cost grid."),
         color="#2ca02c",
     ),
     Candidate(
@@ -111,8 +107,7 @@ CANDIDATES: tuple[Candidate, ...] = (
         shortname="gnn-VMPNN",
         family="graph",
         description=(
-            "Vector message-passing neural network (timing-only entry; "
-            "predictions not yet wired into the leaderboard)."
+            "Vector message-passing neural network (timing-only entry; predictions not yet wired into the leaderboard)."
         ),
         color="#9467bd",
     ),
@@ -120,11 +115,18 @@ CANDIDATES: tuple[Candidate, ...] = (
 SHORTNAME = {c.method_name: c.shortname for c in CANDIDATES}
 COLOR = {c.method_name: c.color for c in CANDIDATES}
 IS_ORACLE = {c.method_name: c.is_oracle for c in CANDIDATES}
+REGISTRY = {c.method_name: c for c in CANDIDATES}
 
 
 ACCELERATOR_ORDER = (
-    "h100", "thor-gpu", "orin-gpu", "orin-npu", "tiger-igpu",
-    "thor-cpu", "orin-cpu", "tiger-cpu",
+    "h100",
+    "thor-gpu",
+    "orin-gpu",
+    "orin-npu",
+    "tiger-igpu",
+    "thor-cpu",
+    "orin-cpu",
+    "tiger-cpu",
 )
 ACCELERATOR_LABELS = {
     "h100": "H100 (server GPU)",
@@ -150,9 +152,13 @@ def _load_df() -> pd.DataFrame:
     if df.empty:
         return df
     df["host_accelerator_slug"] = df.apply(
-        lambda r: (str(r["edge_accelerator"]).lower()
-                   if isinstance(r.get("edge_accelerator"), str) and str(r["edge_accelerator"]).lower() != "nan" and r["edge_accelerator"]
-                   else f"{str(r.get('host', 'unknown')).lower()}-cpu"),
+        lambda r: (
+            str(r["edge_accelerator"]).lower()
+            if isinstance(r.get("edge_accelerator"), str)
+            and str(r["edge_accelerator"]).lower() != "nan"
+            and r["edge_accelerator"]
+            else f"{str(r.get('host', 'unknown')).lower()}-cpu"
+        ),
         axis=1,
     )
     df["shortname"] = df["method_name"].map(SHORTNAME).fillna(df["method_name"])
@@ -161,52 +167,107 @@ def _load_df() -> pd.DataFrame:
     return df
 
 
+def _accelerators(df: pd.DataFrame) -> list[str]:
+    present = set(df["host_accelerator_slug"])
+    return [a for a in ACCELERATOR_ORDER if a in present] + sorted(present - set(ACCELERATOR_ORDER))
+
+
+def _summary(df: pd.DataFrame) -> pd.DataFrame:
+    """Use the storage layer's condition and distinct-seed contract everywhere."""
+    summary = pe.summarise_leaderboard(df).copy()
+    if summary.empty:
+        return summary
+    summary["shortname"] = summary["method_name"].map(SHORTNAME).fillna(summary["method_name"])
+    summary["color"] = summary["method_name"].map(COLOR).fillna("#666666")
+    summary["is_oracle"] = summary["method_name"].map(IS_ORACLE).fillna(False).astype(bool)
+    excluded = {
+        "method_name",
+        "family",
+        "host_accelerator_slug",
+        "mean",
+        "std",
+        "n_seeds",
+        "n_runs",
+        "n_metric_seeds",
+        "n_samples",
+        "latency_e2e_ms_p50",
+        "provenance_json",
+        "shortname",
+        "color",
+        "is_oracle",
+    }
+    conditions = [column for column in summary.columns if column not in excluded]
+    summary["condition"] = summary.apply(
+        lambda row: "; ".join(f"{key}={row[key]}" for key in conditions if pd.notna(row[key])), axis=1
+    )
+    indices = summary.groupby("method_name", sort=False).cumcount() + 1
+    summary["label"] = summary["shortname"] + " · condition " + indices.astype(str)
+    summary["metric_available"] = summary["mean"].map(math.isfinite) & (summary["n_metric_seeds"] > 0)
+    summary["seed_coverage"] = summary["n_metric_seeds"].astype(str) + "/" + summary["n_seeds"].astype(str)
+    return summary
+
+
+def _metric_text(row: pd.Series) -> str:
+    if not row["metric_available"]:
+        return "Unavailable"
+    std = f"{row['std']:.4f}" if pd.notna(row["std"]) else "—"
+    return f"{row['mean']:.4f} ± {std}"
+
+
+def _annotate_unavailable(fig: go.Figure, summary: pd.DataFrame) -> None:
+    for index, (_, row) in enumerate(summary[~summary["metric_available"]].iterrows()):
+        fig.add_annotation(
+            text=f"{escape(row['label'])}: CR-med unavailable (metric seeds={row['seed_coverage']})",
+            xref="paper",
+            yref="paper",
+            x=0,
+            y=1 - index * 0.08,
+            xanchor="left",
+            yanchor="top",
+            showarrow=False,
+        )
+
+
 # ---------------------------------------------------------------------------
 # Per-accelerator plotly figure (oracle = vertical reference line)
 # ---------------------------------------------------------------------------
 
 
 def _per_accelerator_fig(df_accel: pd.DataFrame, accel: str) -> go.Figure:
-    agg = df_accel.groupby("method_name", as_index=False).agg(
-        cost_regret_median=("cost_regret_median", "mean"),
-        cost_regret_std=("cost_regret_median", "std"),
-        latency_e2e_ms_p50=("latency_e2e_ms_p50", "median"),
-        shortname=("shortname", "first"),
-        color=("color", "first"),
-        is_oracle=("is_oracle", "first"),
-        n_seeds=("seed", "nunique"),
-        n_samples=("n_samples", "max"),
-    )
+    agg = _summary(df_accel)
 
     fig = go.Figure()
+    _annotate_unavailable(fig, agg)
 
     # Candidate traces (oracle excluded — drawn as a vline below).
-    cands = agg[~agg["is_oracle"]]
-    cr_vals = cands["cost_regret_median"].astype(float).clip(lower=1e-5)
+    cands = agg[~agg["is_oracle"] & agg["metric_available"]]
+    cr_vals = cands["mean"].astype(float).clip(lower=1e-5)
     y_min = float(cr_vals.min()) * 0.5 if len(cr_vals) else 1e-4
     y_max = float(cr_vals.max()) * 2.0 if len(cr_vals) else 1.0
 
     for _, row in cands.iterrows():
-        std = float(row["cost_regret_std"]) if pd.notna(row["cost_regret_std"]) else 0.0
-        std_str = f" ± {std:.4f}" if std > 0 else ""
         hover = (
             f"<b>{row['shortname']}</b>"
             f"<br>method = {row['method_name']}"
             f"<br>accel  = {accel}"
-            f"<br>CR-med = {float(row['cost_regret_median']):.4f}{std_str}"
+            f"<br>CR-med seed mean = {_metric_text(row)}"
             f"<br>latency_e2e_p50 = {float(row['latency_e2e_ms_p50']):.2f} ms"
-            f"<br>val samples per seed = {int(row['n_samples'])}"
-            f"<br>seeds = {int(row['n_seeds'])}"
+            f"<br>samples per seed = {int(row['n_samples'])}"
+            f"<br>metric seeds={row['seed_coverage']}"
+            f"<br>runs = {int(row['n_runs'])}"
+            f"<br>{escape(row['condition'])}"
             "<extra></extra>"
         )
         fig.add_trace(
             go.Scatter(
                 x=[float(row["latency_e2e_ms_p50"])],
-                y=[max(float(row["cost_regret_median"]), 1e-5)],
+                y=[max(float(row["mean"]), 1e-5)],
                 mode="markers",
-                name=row["shortname"],
+                name=row["label"],
                 marker=dict(
-                    size=14, color=row["color"], symbol="circle",
+                    size=14,
+                    color=row["color"],
+                    symbol="circle",
                     line=dict(color="white", width=1.0),
                 ),
                 hovertemplate=hover,
@@ -214,10 +275,12 @@ def _per_accelerator_fig(df_accel: pd.DataFrame, accel: str) -> go.Figure:
         )
 
     # Oracle as a vertical dashed reference line at its latency.
-    oracle = agg[agg["is_oracle"]]
-    if not oracle.empty:
-        x_oracle = float(oracle["latency_e2e_ms_p50"].iloc[0])
-        color = str(oracle["color"].iloc[0])
+    oracle = agg[agg["is_oracle"] & agg["metric_available"]]
+    for _, row in oracle.iterrows():
+        x_oracle = float(row["latency_e2e_ms_p50"])
+        color = str(row["color"])
+        if not math.isfinite(x_oracle):
+            continue
         # Background reference line (no legend entry).
         fig.add_vline(
             x=x_oracle,
@@ -227,8 +290,10 @@ def _per_accelerator_fig(df_accel: pd.DataFrame, accel: str) -> go.Figure:
         # Invisible scatter to add a legend entry for the reference line.
         fig.add_trace(
             go.Scatter(
-                x=[None], y=[None], mode="lines",
-                name=f"{oracle['shortname'].iloc[0]} latency = {x_oracle:.1f} ms",
+                x=[None],
+                y=[None],
+                mode="lines",
+                name=f"{row['label']} latency = {x_oracle:.1f} ms; metric seeds={row['seed_coverage']}",
                 line=dict(color=color, width=2, dash="dash"),
                 hoverinfo="skip",
             )
@@ -237,13 +302,15 @@ def _per_accelerator_fig(df_accel: pd.DataFrame, accel: str) -> go.Figure:
     fig.update_layout(
         title=dict(
             text=f"<b>{ACCELERATOR_LABELS.get(accel, accel)}</b>",
-            x=0.5, xanchor="center",
+            x=0.5,
+            xanchor="center",
             font=dict(size=15),
         ),
         xaxis=dict(
             title="latency p50 (ms)",
             type="log",
-            showgrid=True, gridcolor="#eee",
+            showgrid=True,
+            gridcolor="#eee",
             zeroline=False,
         ),
         yaxis=dict(
@@ -253,18 +320,22 @@ def _per_accelerator_fig(df_accel: pd.DataFrame, accel: str) -> go.Figure:
                 __import__("math").log10(max(y_min, 1e-6)),
                 __import__("math").log10(max(y_max, 1.0)),
             ],
-            showgrid=True, gridcolor="#eee",
+            showgrid=True,
+            gridcolor="#eee",
             zeroline=False,
         ),
         # Horizontal legend on TOP — keeps it well clear of the x-axis title.
         legend=dict(
             orientation="h",
-            yanchor="bottom", y=1.06,
-            xanchor="center", x=0.5,
+            yanchor="bottom",
+            y=1.06,
+            xanchor="center",
+            x=0.5,
             font=dict(size=11),
             bgcolor="rgba(255,255,255,0)",
         ),
-        plot_bgcolor="white", paper_bgcolor="white",
+        plot_bgcolor="white",
+        paper_bgcolor="white",
         height=420,
         margin=dict(l=70, r=15, t=110, b=60),
         hoverlabel=dict(bgcolor="white", font_size=12),
@@ -273,14 +344,17 @@ def _per_accelerator_fig(df_accel: pd.DataFrame, accel: str) -> go.Figure:
 
 
 def render_per_accelerator(df: pd.DataFrame) -> list[str]:
-    accels = [a for a in ACCELERATOR_ORDER if a in df["host_accelerator_slug"].unique()]
+    accels = _accelerators(df)
     for accel in accels:
         sub = df[df["host_accelerator_slug"] == accel].copy()
-        if sub.empty: continue
+        if sub.empty:
+            continue
         fig = _per_accelerator_fig(sub, accel)
         out = PLOTLY_OUT / f"leaderboard_{accel}.html"
         fig.write_html(
-            out, include_plotlyjs="cdn", full_html=True,
+            out,
+            include_plotlyjs="cdn",
+            full_html=True,
             config={"displayModeBar": True, "displaylogo": False, "responsive": True},
         )
         print(f"  wrote {out.relative_to(REPO_ROOT)}")
@@ -288,32 +362,20 @@ def render_per_accelerator(df: pd.DataFrame) -> list[str]:
 
 
 def render_full(df: pd.DataFrame, out_path: Path) -> None:
-    accels = [a for a in ACCELERATOR_ORDER if a in df["host_accelerator_slug"].unique()]
-    methods = list(dict.fromkeys(df["method_name"]))
-
-    agg = df.groupby(["method_name", "host_accelerator_slug"], as_index=False).agg(
-        cost_regret_median=("cost_regret_median", "mean"),
-        latency_e2e_ms_p50=("latency_e2e_ms_p50", "median"),
-        shortname=("shortname", "first"),
-        color=("color", "first"),
-        is_oracle=("is_oracle", "first"),
-    )
+    agg = _summary(df)
 
     fig = go.Figure()
-    for method in methods:
-        sub = agg[agg["method_name"] == method].copy()
-        sub["__order"] = sub["host_accelerator_slug"].map(
-            {a: i for i, a in enumerate(accels)}
-        )
-        sub = sub.sort_values("__order")
-        is_oracle = bool(sub["is_oracle"].iloc[0])
-        shortname = sub["shortname"].iloc[0]
-        color = sub["color"].iloc[0]
+    _annotate_unavailable(fig, agg)
+    for _, row in agg[agg["metric_available"]].iterrows():
+        is_oracle = bool(row["is_oracle"])
+        shortname = row["shortname"]
+        color = row["color"]
+        accel = row["host_accelerator_slug"]
         fig.add_trace(
             go.Bar(
-                x=sub["host_accelerator_slug"].map(lambda a: ACCELERATOR_LABELS.get(a, a)),
-                y=sub["cost_regret_median"].clip(lower=1e-5),
-                name=shortname,
+                x=[ACCELERATOR_LABELS.get(accel, accel)],
+                y=[max(float(row["mean"]), 1e-5)],
+                name=row["label"],
                 marker=dict(
                     color=color,
                     line=dict(color="black", width=2) if is_oracle else dict(width=0),
@@ -321,7 +383,9 @@ def render_full(df: pd.DataFrame, out_path: Path) -> None:
                 ),
                 hovertemplate=(
                     f"<b>{shortname}</b><br>accelerator=%{{x}}<br>"
-                    "CR-med=%{y:.4f}<extra></extra>"
+                    f"CR-med seed mean={_metric_text(row)}<br>"
+                    f"metric seeds={row['seed_coverage']}; runs={int(row['n_runs'])}<br>"
+                    f"{escape(row['condition'])}<extra></extra>"
                 ),
             )
         )
@@ -329,18 +393,19 @@ def render_full(df: pd.DataFrame, out_path: Path) -> None:
     fig.update_layout(
         title="PASSAGE 256² / elevation — leaderboard by accelerator",
         xaxis_title="host / accelerator",
-        yaxis=dict(title="CR-median ↓ (log)", type="log",
-                    showgrid=True, gridcolor="#eee"),
+        yaxis=dict(title="CR-median ↓ (log)", type="log", showgrid=True, gridcolor="#eee"),
         barmode="group",
-        plot_bgcolor="white", paper_bgcolor="white",
+        plot_bgcolor="white",
+        paper_bgcolor="white",
         height=520,
         margin=dict(l=60, r=10, t=70, b=120),
-        legend=dict(orientation="h", yanchor="top", y=-0.18,
-                    xanchor="center", x=0.5, font=dict(size=11)),
+        legend=dict(orientation="h", yanchor="top", y=-0.18, xanchor="center", x=0.5, font=dict(size=11)),
     )
 
     fig.write_html(
-        out_path, include_plotlyjs="cdn", full_html=True,
+        out_path,
+        include_plotlyjs="cdn",
+        full_html=True,
         config={"displayModeBar": True, "displaylogo": False, "responsive": True},
     )
     print(f"  wrote {out_path.relative_to(REPO_ROOT)}")
@@ -351,11 +416,18 @@ def render_full(df: pd.DataFrame, out_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def render_partial(df: pd.DataFrame, accels: list[str],
-                   out_path: Path, *, iframe_prefix: str) -> dict[str, int]:
+def render_partial(
+    df: pd.DataFrame,
+    accels: list[str],
+    out_path: Path,
+    *,
+    iframe_prefix: str,
+    protocol_href: str = "benchmark/protocol/",
+) -> dict[str, Any]:
     n_candidates = df["method_name"].nunique()
     n_accels = df["host_accelerator_slug"].nunique()
     n_rows = len(df)
+    summary = _summary(df)
 
     # --- Material tabs, one per accelerator -------------------------------
     tabs: list[str] = []
@@ -373,28 +445,30 @@ def render_partial(df: pd.DataFrame, accels: list[str],
 
     # --- Candidate description table --------------------------------------
     rows: list[str] = []
-    for c in CANDIDATES:
-        if c.method_name not in df["method_name"].values:
-            continue
-        sub = df[df["method_name"] == c.method_name]
-        n_seeds = int(sub["seed"].nunique())
-        n_samples = int(sub["n_samples"].max())
-        best_cr = float(sub["cost_regret_median"].min())
-        if c.is_oracle:
-            shortname_html = f"⭐ <strong><em>{c.shortname}</em></strong>"
+    for _, row in summary.iterrows():
+        candidate = REGISTRY.get(row["method_name"])
+        description = candidate.description if candidate else ""
+        if row["is_oracle"]:
+            shortname_html = f"⭐ <strong><em>{escape(row['shortname'])}</em></strong>"
             row_class = ' class="oracle-row"'
         else:
-            shortname_html = f"<code>{c.shortname}</code>"
-            row_class = ''
+            shortname_html = f"<code>{escape(row['shortname'])}</code>"
+            row_class = ""
+        provenance = escape(str(row.get("provenance_json", "")))
+        contract = escape(str(row.get("metric_contract", "unknown")))
         rows.append(
             f"<tr{row_class}>"
             f"<td>{shortname_html}</td>"
-            f"<td><code>{c.method_name}</code></td>"
-            f"<td>{c.family.replace('_', ' ')}</td>"
-            f"<td>{c.description}</td>"
-            f"<td align=\"right\">{n_seeds}</td>"
-            f"<td align=\"right\">{n_samples}</td>"
-            f"<td align=\"right\">{best_cr:.4f}</td>"
+            f"<td><code>{escape(row['method_name'])}</code></td>"
+            f"<td>{escape(row['family'].replace('_', ' '))}</td>"
+            f"<td>{escape(description)}</td>"
+            f"<td>{escape(row['host_accelerator_slug'])}<br>{escape(row['condition'])}</td>"
+            f'<td><a href="{escape(protocol_href, quote=True)}"><code>{contract}</code></a>'
+            f"<details><summary>Run provenance</summary><pre>{provenance}</pre></details></td>"
+            f'<td align="right">{row["seed_coverage"]}</td>'
+            f'<td align="right">{int(row["n_runs"])}</td>'
+            f'<td align="right">{int(row["n_samples"])}</td>'
+            f'<td align="right">{_metric_text(row)}</td>'
             "</tr>"
         )
 
@@ -423,6 +497,11 @@ Each tab shows one host / accelerator. **Coloured circles** mark the
 candidates' cost-regret vs end-to-end latency; the **dashed vertical
 line** marks the A* oracle's latency (its `CR-median = 0` by
 construction). Hover any point to see the full metric breakdown.
+Each point and table row keeps its benchmark conditions, data revision,
+code version and metric contract separate. Values are means over distinct
+training seeds with available metric values; repeated seeds in the same condition
+are rejected. Metric seed coverage is shown as available/total; candidates with
+no available metric values are labelled unavailable and have no plotted estimate.
 
 {chr(10).join(tabs)}
 
@@ -437,9 +516,12 @@ construction). Hover any point to see the full metric breakdown.
   <th>Method id</th>
   <th>Family</th>
   <th>Description</th>
-  <th align="right" title="Pre-registered training seeds (passage_eval.DEFAULT_SEEDS = 1234, 2026, 3407)">Seeds</th>
-  <th align="right" title="Number of validation samples scored per seed">n_samples</th>
-  <th align="right">Best CR-med ↓</th>
+  <th>Accelerator / benchmark conditions</th>
+  <th>Metric contract / provenance</th>
+  <th align="right" title="Seeds with an available metric value / all distinct training seeds">Metric seeds / total</th>
+  <th align="right">Runs</th>
+  <th align="right" title="Number of samples scored per seed">n_samples</th>
+  <th align="right">CR-med seed mean ± std ↓</th>
 </tr></thead>
 <tbody>
 {chr(10).join(rows)}
@@ -447,16 +529,25 @@ construction). Hover any point to see the full metric breakdown.
 </table>
 
 <p class="leaderboard-legend">
-  <strong>n_samples</strong>: number of validation samples scored per
-  seed (1024 for the released vision baselines; smaller for the
-  classical / smoke baselines). <strong>Best CR-med</strong>:
-  smallest seed-mean of <code>cost_regret_median</code> across the
-  accelerators this candidate has been benchmarked on.
+  <strong>n_samples</strong>: number of samples scored per seed in the
+  stated condition. <strong>CR-med seed mean ± std</strong>: arithmetic
+  mean and sample standard deviation of each available distinct seed's
+  <code>cost_regret_median</code>, using the same summary as the graphs.
+  <strong>Metric seeds / total</strong> reports available/total distinct seeds;
+  0/total is unavailable and has no plotted estimate.
+  A single seed has no estimated standard deviation (shown as —).
+  See the <a href="{escape(protocol_href, quote=True)}">metric contract</a>
+  before comparing rows from different conditions.
 </p>
 """
     out_path.write_text(md, encoding="utf-8")
     print(f"  wrote {out_path.relative_to(REPO_ROOT)}  (candidates={n_candidates}, rows={n_rows})")
-    return {"n_candidates": n_candidates, "n_accels": n_accels, "n_rows": n_rows}
+    return {
+        "n_candidates": n_candidates,
+        "n_accels": n_accels,
+        "n_rows": n_rows,
+        "conditions": json.loads(summary.to_json(orient="records")),
+    }
 
 
 EMPTY_PARTIAL = """<!-- auto-generated by scripts/passage-eval/render_plotly_leaderboard.py — do not edit -->
@@ -485,8 +576,10 @@ def main() -> int:
         render_empty()
         print("[render-plotly] empty leaderboard: wrote the entries-to-come partials")
         return 0
-    print(f"[render-plotly] {len(df)} rows / {df['method_name'].nunique()} candidates / "
-          f"{df['host_accelerator_slug'].nunique()} accelerators")
+    print(
+        f"[render-plotly] {len(df)} rows / {df['method_name'].nunique()} candidates / "
+        f"{df['host_accelerator_slug'].nunique()} accelerators"
+    )
 
     accels = render_per_accelerator(df)
     render_full(df, PLOTLY_OUT / "leaderboard_full.html")
@@ -495,18 +588,19 @@ def main() -> int:
     # site/benchmark/leaderboard/index.html (use_directory_urls=true), so the
     # prefix must climb two levels back up.
     stats = render_partial(
-        df, accels,
+        df,
+        accels,
         PARTIAL_OUT / "leaderboard_main_index.md",
         iframe_prefix="gen/plotly",
     )
     render_partial(
-        df, accels,
+        df,
+        accels,
         PARTIAL_OUT / "leaderboard_main_benchmark.md",
         iframe_prefix="../../gen/plotly",
+        protocol_href="../../benchmark/protocol/",
     )
-    (PLOTLY_OUT / "candidates_table_data.json").write_text(
-        json.dumps(stats, indent=2), encoding="utf-8"
-    )
+    (PLOTLY_OUT / "candidates_table_data.json").write_text(json.dumps(stats, indent=2), encoding="utf-8")
     print("[render-plotly] done")
     return 0
 

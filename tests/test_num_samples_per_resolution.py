@@ -27,7 +27,19 @@ import passage.generate as gen
 
 def test_num_samples_mapping_per_resolution(monkeypatch, tmp_path):
     # Create a minimal config with per-resolution num_samples mapping
-    cfg = {"resolutions": [64, 128], "num_samples": {"64": 3, "128": 5}}
+    cfg = {
+        "resolutions": [64, 128],
+        "num_samples": {"64": 3, "128": 5},
+        "solvers": [
+            {
+                "name": "astar_elevation",
+                "backend": "grid",
+                "solver": "astar",
+                "cost_model": "elevation",
+                "weight": 1.0,
+            }
+        ],
+    }
     cfg_path = tmp_path / "config.yaml"
     cfg_path.write_text(json.dumps(cfg))
 
