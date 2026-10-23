@@ -1334,9 +1334,15 @@ class TestTilesNeeded:
         outputs_dir.mkdir()
 
         # Run generation sequentially to keep logs deterministic
-        gen.run_generate(str(outputs_dir), str(cfg_path), str(tiles_dir),
-                         calibration_filepath=str(calib_dir / "calibrate.json"),
-                         num_cpus=0, disable_images=True, force=True)
+        gen.run_generate(
+            str(outputs_dir),
+            str(cfg_path),
+            str(tiles_dir),
+            calibration_filepath=str(calib_dir / "calibrate.json"),
+            num_cpus=0,
+            disable_images=True,
+            force=True,
+        )
 
         # Check outputs summary and generated sample files
         summary_path = outputs_dir / "summary.json"

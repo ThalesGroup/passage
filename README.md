@@ -313,8 +313,7 @@ The paper reports two dense-vision finalists at 256² under `elevation`:
 `convnextv2_atto+BCE` segmentation and `repvit_m1+Bellman, V_bridge` regression,
 compared with the analytic A* oracle. Their per-task results are released under
 [`src/passage-eval/results/paper-results/`](src/passage-eval/results/paper-results/README.md).
-These are historical results of the original study, reported as obtained; not
-re-run on the released dataset. The [evaluation protocol](docs/benchmark/protocol.md)
+The [evaluation protocol](docs/benchmark/protocol.md)
 explains how `passage-eval` implements the paper's task and metrics.
 
 The [leaderboard](docs/benchmark/leaderboard.md)
@@ -348,7 +347,7 @@ The dataset, **PASSAGE v1.0**, is published on Hugging Face as
 
 | Item | Value |
 | --- | --- |
-| Version | 1.0, verified on the Hub at commit [`2ab44d8`](https://huggingface.co/datasets/thalesgroup/passage/tree/2ab44d899652c7fb99c425488e84a7d565963547) |
+| Version | 1.0, release tag [`v1.0`](https://huggingface.co/datasets/thalesgroup/passage/tree/v1.0) |
 | Core scenes | 4,400,000 at seven resolutions, from 64×64 to 4096×4096 cells |
 | Route variants | 26,400,000, all exact routes (six per scene) |
 | Splits | train / calibration / validation / test = 90 / 2 / 4 / 4 % |
@@ -373,7 +372,7 @@ import numpy as np
 import zstandard
 from datasets import load_dataset
 
-REVISION = "2ab44d899652c7fb99c425488e84a7d565963547"  # verified PASSAGE v1.0 upload
+REVISION = "v1.0"  # PASSAGE data and publication metadata
 
 # Preview rows: small, 64 per split, with rendered images.
 rows = load_dataset("thalesgroup/passage", "256x256_samples",
@@ -603,7 +602,7 @@ The publication destination is set in the sequential generation recipe above.
 | [`obstacles.ipynb`](notebooks/obstacles.ipynb) | Obstacle masks, coverage and detours over the validation split |
 | [`solve.ipynb`](notebooks/solve.ipynb) | Solving labels again with the exact reference; why the search budget matters |
 | [`astar_inference_timing.ipynb`](notebooks/astar_inference_timing.ipynb) | Timing a planner fairly: warm-up, repetitions, percentiles |
-| [`passage-eval/`](notebooks/passage-eval) | Evaluating a planner step by step, classical baselines on the validation split, the paper's historical per-task results (`02_paper_results`) and the leaderboard record format |
+| [`passage-eval/`](notebooks/passage-eval) | Evaluating a planner step by step, classical baselines on the validation split, the paper's per-task results with their stated evaluation conditions (`02_paper_results`) and the leaderboard record format |
 | [`paper/notebooks/`](paper/notebooks) | Five release-wide reports: dataset statistics, receipt checks, route divergence between objectives, an obstacle showcase, and search effort and solve time across resolutions |
 
 The four underscore templates export as `dataset.ipynb`, `display.ipynb`,

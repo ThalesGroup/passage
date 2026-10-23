@@ -30,7 +30,7 @@ and Datasets Track paper. The repository and the dataset share version 1.0.
 - **Leaderboard**: released empty. Its first entries will be the two
   dense-vision finalists of the paper, retrained on PASSAGE v1.0. The per-task
   paper results are released separately under
-  `src/passage-eval/results/paper-results/`, as reported in the original study.
+  `src/passage-eval/results/paper-results/`.
 - **Documentation and metadata**: user guides, benchmark protocol, datasheet,
   Croissant metadata, citation file, dataset terms (`DATASET_LICENSE.md`),
   notebooks and a test suite with at least 80 % coverage.

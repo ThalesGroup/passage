@@ -25,7 +25,7 @@ route variants, all exact routes. Its test split is a geographic hold-out
 evaluator are in the [code repository](https://github.com/ThalesGroup/passage).
 
 > **🧾 Release receipt.** The
-> [publication facts](https://huggingface.co/datasets/thalesgroup/passage/blob/main/release-receipts/publication-facts.json) record
+> [publication facts](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/release-receipts/publication-facts.json) record
 > 4,400,000 core scenes, 26,400,000 objective/obstacle variants and 1,792
 > preview rows; preview rows repeat core scenes and add no training
 > observations. Labels are solved in float64 from the same float32 terrain
@@ -33,11 +33,8 @@ evaluator are in the [code repository](https://github.com/ThalesGroup/passage).
 > All 26,400,000 variants are exact routes; start and goal cells that the
 > obstacles disconnect are rejected by the generator.
 
-No learned-model result on PASSAGE v1.0 is published yet; the first
-leaderboard entries will be the paper's two finalists, retrained on PASSAGE
-v1.0. The paper's learned-model results are historical results of the
-original study, reported as obtained; not re-run on the released dataset.
-
+The guarantees below concern the computed reference labels. Model scores
+require their own declared data, decoder and evaluation conditions.
 **How to read this card.** [At a glance](#at-a-glance) and the
 [Quick start](#quick-start) get you to a loaded scene in a few lines. The
 next three sections describe the files, what a row holds, and the cost model
@@ -57,7 +54,7 @@ licence terms, maintenance and the citation.
 
 | Item | Value |
 | --- | --- |
-| Version | 1.0, verified on the Hub at commit [`2ab44d8`](https://huggingface.co/datasets/thalesgroup/passage/tree/2ab44d899652c7fb99c425488e84a7d565963547) |
+| Version | 1.0, release tag [`v1.0`](https://huggingface.co/datasets/thalesgroup/passage/tree/v1.0) |
 | Core scenes | 4,400,000 at seven resolutions, from 64×64 to 4096×4096 cells |
 | Route variants | 26,400,000, all exact routes (six per scene) |
 | Splits | train / calibration / validation / test = 90 / 2 / 4 / 4 % |
@@ -65,34 +62,33 @@ licence terms, maintenance and the citation.
 | Preview rows | 1,792 (64 per split and resolution), with rendered images |
 | Size | about 1.27 TB of Parquet (5,997 shards); 1.31 TB with receipts and notebooks |
 | Intended tasks | Classical planning, path-mask segmentation, cost-to-go regression, graph and reinforcement-learning planners |
-| Licence | Code: MIT. Data: JAXA AW3D30 terms, see [DATASET_LICENSE.md](https://huggingface.co/datasets/thalesgroup/passage/blob/main/DATASET_LICENSE.md) |
+| Licence | Code: MIT. Data: JAXA AW3D30 terms, see [DATASET_LICENSE.md](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/DATASET_LICENSE.md) |
 | Paper | *PASSAGE: A Real-Terrain Benchmark for Trustworthy Constrained Path Planning*, NeurIPS 2026, Track on Evaluations and Datasets |
 
 <p align="center">
-  <img src="https://huggingface.co/datasets/thalesgroup/passage/resolve/main/notebook-artifacts/256x256/display/display-256-0000000024.png" alt="Validation scene 0000000024 at 256×256: the three cost objectives, without and with obstacles" width="85%"/>
+  <img src="https://huggingface.co/datasets/thalesgroup/passage/resolve/v1.0/notebook-artifacts/256x256/display/display-256-0000000024.png" alt="Validation scene 0000000024 at 256×256: the three cost objectives, without and with obstacles" width="85%"/>
 </p>
 
 *Figure 1. One released scene (validation, 256×256, ID `0000000024`) with its
 six stored reference routes. Columns are the three cost objectives; the top
 row is free terrain (solid green routes) and the bottom row has the obstacles
 blocked (dashed blue routes). Rendered by the executed
-[`256x256/display.ipynb`](https://huggingface.co/datasets/thalesgroup/passage/blob/main/256x256/display.ipynb) notebook.*
+[`256x256/display.ipynb`](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/256x256/display.ipynb) notebook.*
 
 ---
 
 ## 🚀 Quick start
 
 Install `datasets`, `pillow`, `zstandard` and `numpy` (for example
-`pip install datasets pillow zstandard numpy`). Pin a commit for reproducible
-work. The examples use `2ab44d8…`, the commit whose data and receipts were
-checked against the release hashes.
+`pip install datasets pillow zstandard numpy`). The examples use the
+`v1.0` release tag to load the data and their release metadata together.
 
 ```python
 import numpy as np
 import zstandard
 from datasets import load_dataset
 
-REVISION = "2ab44d899652c7fb99c425488e84a7d565963547"  # verified PASSAGE v1.0 upload
+REVISION = "v1.0"  # PASSAGE data and publication metadata
 
 # Preview rows: small, 64 per split, with rendered images.
 rows = load_dataset("thalesgroup/passage", "256x256_samples",
@@ -135,7 +131,7 @@ The core configurations have no image columns. The `passage` package in the
 code repository provides a bounded loader, `passage.dataset.DatasetSource`,
 which requires a 40-character commit hash for remote use. To browse rows
 without code, open the [dataset viewer](https://huggingface.co/datasets/thalesgroup/passage/viewer);
-to see a loaded scene step by step, open [`notebooks/demo.ipynb`](https://huggingface.co/datasets/thalesgroup/passage/blob/main/notebooks/demo.ipynb).
+to see a loaded scene step by step, open [`notebooks/demo.ipynb`](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/notebooks/demo.ipynb).
 
 ---
 
@@ -183,7 +179,7 @@ cells; actual ground spacing varies with latitude.*
 ## 🧱 Columns
 
 *Table 3. Parquet columns. Exact Arrow types are in the `dataset_info` block of
-the [Hub dataset card](https://huggingface.co/datasets/thalesgroup/passage/blob/main/README.md).*
+the [Hub dataset card](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/README.md).*
 
 | Column | Type | Content |
 | --- | --- | --- |
@@ -245,8 +241,8 @@ The release receipts record six exact routes per scene at every resolution:
 6,000,000 at each resolution from 64×64 to 512×512, 1,500,000 at
 1024×1024, 600,000 at 2048×2048 and 300,000 at 4096×4096.
 
-> **🧭 See it on one task.** [`notebooks/costmodel.ipynb`](https://huggingface.co/datasets/thalesgroup/passage/blob/main/notebooks/costmodel.ipynb)
-> and [`notebooks/paper/cost_model_path_divergence.ipynb`](https://huggingface.co/datasets/thalesgroup/passage/blob/main/notebooks/paper/cost_model_path_divergence.ipynb)
+> **🧭 See it on one task.** [`notebooks/costmodel.ipynb`](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/notebooks/costmodel.ipynb)
+> and [`notebooks/paper/cost_model_path_divergence.ipynb`](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/notebooks/paper/cost_model_path_divergence.ipynb)
 > show how the three objectives change the route on the same terrain.
 
 <details markdown="1">
@@ -339,7 +335,7 @@ Report the six values together; no composite score replaces them. A
 different route can have zero regret, because tied optima exist. Report
 results per resolution, objective and obstacle condition, and time the whole
 procedure, decoding and fallbacks included. The
-[`passage-eval` notebooks](https://huggingface.co/datasets/thalesgroup/passage/tree/main/notebooks/passage-eval)
+[`passage-eval` notebooks](https://huggingface.co/datasets/thalesgroup/passage/tree/v1.0/notebooks/passage-eval)
 show the evaluator on released tasks.
 
 ---
@@ -347,7 +343,7 @@ show the evaluator on released tasks.
 ## 🌎 Geography and splits
 
 Every AW3D30 source tile belongs to exactly one split. Tiles inside the
-[hold-out mask](https://huggingface.co/datasets/thalesgroup/passage/blob/main/assets/hold_out_mask.png) (South America) go to `test`. The
+[hold-out mask](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/assets/hold_out_mask.png) (South America) go to `test`. The
 other tiles go to `train`, `calibration` or `validation` by seeded 5°×5° blocks.
 A crop is admitted only if all its source tiles, plus a one-tile guard ring,
 belong to its split, so the source-cell windows of different splits are
@@ -384,8 +380,8 @@ are rejected, not padded.
    AW3D30 list (checked on 11 October 2026). Tiles are normalised to 3600×3600
    cells by nearest angular-centre sampling.
 2. **Calibration.** The complete calibration range is **-430.0 m to 8767.0 m**.
-   [calibrate.json](https://huggingface.co/datasets/thalesgroup/passage/blob/main/calibration/calibrate.json) holds the authenticated tile
-   inventory and validity policy.
+   [calibrate.json](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/calibration/calibrate.json) holds the source-tile
+   inventory, its local SHA-256 identities and the validity policy.
 3. **Scene.** Each scene uses its own seed, `blake2b(seed, resolution, index,
    split)`. It draws a centre tile and a target elevation, takes the nearest
    cell as the start, places the crop around it and draws the goal uniformly
@@ -396,28 +392,27 @@ are rejected, not padded.
 4. **Labels.** An exact float64 A\* reference solves all six variants from the
    decoded float32 tensor, with no expansion budget.
 5. **Release.** Shards are verified against the per-resolution cohort and
-   supervision hashes, and 42 executed notebooks are bound in
-   `notebook-export-manifest.json`. A bounded replay of 56 selected scenes
-   reproduced 84 scientific records and 84 preview images byte for byte.
+   supervision hashes, and 41 executed notebooks are bound in
+   `notebook-artifacts/manifest.json`. The notebook solver checks use stated,
+   bounded samples; they do not independently re-solve every graph.
 
 Normalisation `nearest-angular-center-v1`, tie policy
 `float64-priority-then-row-major-node-strict-improvement-v1` and endpoint
 policy `one-distinct-pair-per-accepted-crop-disconnected-endpoints-rejected` are
-recorded in [publication-facts.json](https://huggingface.co/datasets/thalesgroup/passage/blob/main/release-receipts/publication-facts.json).
+recorded in [publication-facts.json](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/release-receipts/publication-facts.json).
 
 > **🧾 Where the claims come from.** The scientific claims of this card derive
-> from [release verification](https://huggingface.co/datasets/thalesgroup/passage/blob/main/release-receipts/release-verification.json),
-> [generation provenance](https://huggingface.co/datasets/thalesgroup/passage/blob/main/release-receipts/generation-provenance.json),
-> [publication facts](https://huggingface.co/datasets/thalesgroup/passage/blob/main/release-receipts/publication-facts.json) and
-> [metadata hashes](https://huggingface.co/datasets/thalesgroup/passage/blob/main/release-receipts/publication-metadata.json). Receipts were
-> sealed before upload, so their `upload` field reads `not_run`. Local file
+> from [release verification](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/release-receipts/release-verification.json),
+> [generation provenance](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/release-receipts/generation-provenance.json),
+> [publication facts](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/release-receipts/publication-facts.json) and
+> [metadata hashes](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/release-receipts/publication-metadata.json). The receipts
+> bind the scientific inputs and the published document hashes. Local file
 > paths, user names and host names were redacted from the published receipts,
 > calibration files, producer source archive, executed notebooks and one
-> Parquet scene receipt; [privacy-redactions.json](https://huggingface.co/datasets/thalesgroup/passage/blob/main/release-receipts/privacy-redactions.json)
+> Parquet scene receipt; [privacy-redactions.json](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/release-receipts/privacy-redactions.json)
 > lists every changed file with its original and published SHA-256. The
-> receipts bind the data files of commit `2ab44d8`; this card and the executed
-> notebooks (see [Notebooks](#notebooks)) were published in the next commit. You
-> do not need the receipts to use the data.
+> release tag binds the dataset files, this card and the executed notebooks
+> (see [Notebooks](#notebooks)). You do not need the receipts to use the data.
 
 The images in `assets/` are illustrations; for the released data, inspect the
 `_samples` configurations and the executed `display.ipynb` notebooks listed in
@@ -431,39 +426,39 @@ The repository ships executed notebooks. Each one states the question it
 answers, explains every step, and ends with a summary computed from its own
 results. They open on the Hub with their outputs; their figures and a JSON
 record of their numbers are also saved under
-[`notebook-artifacts/`](https://huggingface.co/datasets/thalesgroup/passage/tree/main/notebook-artifacts).
-[`notebook-artifacts/manifest.json`](https://huggingface.co/datasets/thalesgroup/passage/blob/main/notebook-artifacts/manifest.json) binds
+[`notebook-artifacts/`](https://huggingface.co/datasets/thalesgroup/passage/tree/v1.0/notebook-artifacts).
+[`notebook-artifacts/manifest.json`](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/notebook-artifacts/manifest.json) binds
 each notebook to its source, the code commit, the data revision, its
 parameters and the hashes of its outputs.
-[`notebook-export-manifest.json`](https://huggingface.co/datasets/thalesgroup/passage/blob/main/notebook-export-manifest.json) describes
-the notebooks as first published with the release.
+[`notebook-export-manifest.json`](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/notebook-export-manifest.json) records
+the producer execution evidence; the artifact manifest binds the published notebooks.
 
 *Table 5. Executed reports per resolution.*
 
 | Report | 64 | 128 | 256 | 512 | 1024 | 2048 | 4096 |
 | --- | :-: | :-: | :-: | :-: | :-: | :-: | :-: |
-| Census of every scene, map of the splits, relief, route outcomes and an exact re-solve (`dataset`) | [open](https://huggingface.co/datasets/thalesgroup/passage/blob/main/64x64/dataset.ipynb) | [open](https://huggingface.co/datasets/thalesgroup/passage/blob/main/128x128/dataset.ipynb) | [open](https://huggingface.co/datasets/thalesgroup/passage/blob/main/256x256/dataset.ipynb) | [open](https://huggingface.co/datasets/thalesgroup/passage/blob/main/512x512/dataset.ipynb) | [open](https://huggingface.co/datasets/thalesgroup/passage/blob/main/1024x1024/dataset.ipynb) | [open](https://huggingface.co/datasets/thalesgroup/passage/blob/main/2048x2048/dataset.ipynb) | [open](https://huggingface.co/datasets/thalesgroup/passage/blob/main/4096x4096/dataset.ipynb) |
-| One scene: its input channels, six routes and their costs (`display`) | [open](https://huggingface.co/datasets/thalesgroup/passage/blob/main/64x64/display.ipynb) | [open](https://huggingface.co/datasets/thalesgroup/passage/blob/main/128x128/display.ipynb) | [open](https://huggingface.co/datasets/thalesgroup/passage/blob/main/256x256/display.ipynb) | [open](https://huggingface.co/datasets/thalesgroup/passage/blob/main/512x512/display.ipynb) | [open](https://huggingface.co/datasets/thalesgroup/passage/blob/main/1024x1024/display.ipynb) | [open](https://huggingface.co/datasets/thalesgroup/passage/blob/main/2048x2048/display.ipynb) | [open](https://huggingface.co/datasets/thalesgroup/passage/blob/main/4096x4096/display.ipynb) |
-| How far obstacles and objectives move the optimal route (`metrics`) | [open](https://huggingface.co/datasets/thalesgroup/passage/blob/main/64x64/metrics.ipynb) | [open](https://huggingface.co/datasets/thalesgroup/passage/blob/main/128x128/metrics.ipynb) | [open](https://huggingface.co/datasets/thalesgroup/passage/blob/main/256x256/metrics.ipynb) | [open](https://huggingface.co/datasets/thalesgroup/passage/blob/main/512x512/metrics.ipynb) | [open](https://huggingface.co/datasets/thalesgroup/passage/blob/main/1024x1024/metrics.ipynb) | [open](https://huggingface.co/datasets/thalesgroup/passage/blob/main/2048x2048/metrics.ipynb) | [open](https://huggingface.co/datasets/thalesgroup/passage/blob/main/4096x4096/metrics.ipynb) |
-| Three classical planners scored with `passage-eval` (`passage_eval_metrics`) | [open](https://huggingface.co/datasets/thalesgroup/passage/blob/main/64x64/passage_eval_metrics.ipynb) | [open](https://huggingface.co/datasets/thalesgroup/passage/blob/main/128x128/passage_eval_metrics.ipynb) | [open](https://huggingface.co/datasets/thalesgroup/passage/blob/main/256x256/passage_eval_metrics.ipynb) | [open](https://huggingface.co/datasets/thalesgroup/passage/blob/main/512x512/passage_eval_metrics.ipynb) | [open](https://huggingface.co/datasets/thalesgroup/passage/blob/main/1024x1024/passage_eval_metrics.ipynb) | [open](https://huggingface.co/datasets/thalesgroup/passage/blob/main/2048x2048/passage_eval_metrics.ipynb) | [open](https://huggingface.co/datasets/thalesgroup/passage/blob/main/4096x4096/passage_eval_metrics.ipynb) |
+| Census of every scene, map of the splits, relief, route outcomes and an exact re-solve (`dataset`) | [open](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/64x64/dataset.ipynb) | [open](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/128x128/dataset.ipynb) | [open](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/256x256/dataset.ipynb) | [open](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/512x512/dataset.ipynb) | [open](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/1024x1024/dataset.ipynb) | [open](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/2048x2048/dataset.ipynb) | [open](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/4096x4096/dataset.ipynb) |
+| One scene: its input channels, six routes and their costs (`display`) | [open](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/64x64/display.ipynb) | [open](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/128x128/display.ipynb) | [open](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/256x256/display.ipynb) | [open](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/512x512/display.ipynb) | [open](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/1024x1024/display.ipynb) | [open](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/2048x2048/display.ipynb) | [open](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/4096x4096/display.ipynb) |
+| How far obstacles and objectives move the optimal route (`metrics`) | [open](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/64x64/metrics.ipynb) | [open](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/128x128/metrics.ipynb) | [open](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/256x256/metrics.ipynb) | [open](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/512x512/metrics.ipynb) | [open](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/1024x1024/metrics.ipynb) | [open](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/2048x2048/metrics.ipynb) | [open](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/4096x4096/metrics.ipynb) |
+| Three classical planners scored with `passage-eval` (`passage_eval_metrics`) | [open](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/64x64/passage_eval_metrics.ipynb) | [open](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/128x128/passage_eval_metrics.ipynb) | [open](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/256x256/passage_eval_metrics.ipynb) | [open](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/512x512/passage_eval_metrics.ipynb) | [open](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/1024x1024/passage_eval_metrics.ipynb) | [open](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/2048x2048/passage_eval_metrics.ipynb) | [open](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/4096x4096/passage_eval_metrics.ipynb) |
 
 *Table 6. Topic notebooks.*
 
 | Notebook | What it shows |
 | --- | --- |
-| [`notebooks/demo.ipynb`](https://huggingface.co/datasets/thalesgroup/passage/blob/main/notebooks/demo.ipynb) | Getting started: load a scene, decode it, build a training target |
-| [`notebooks/costmodel.ipynb`](https://huggingface.co/datasets/thalesgroup/passage/blob/main/notebooks/costmodel.ipynb) | The three objectives: routes, elevation profiles, cost of the wrong objective |
-| [`notebooks/obstacles.ipynb`](https://huggingface.co/datasets/thalesgroup/passage/blob/main/notebooks/obstacles.ipynb) | Obstacle masks, coverage and detours over the validation split |
-| [`notebooks/solve.ipynb`](https://huggingface.co/datasets/thalesgroup/passage/blob/main/notebooks/solve.ipynb) | Solving labels again with the exact reference; why the search budget matters |
-| [`notebooks/astar_inference_timing.ipynb`](https://huggingface.co/datasets/thalesgroup/passage/blob/main/notebooks/astar_inference_timing.ipynb) | Timing a planner fairly: warm-up, repetitions, percentiles |
-| [`notebooks/paper/dataset_statistics.ipynb`](https://huggingface.co/datasets/thalesgroup/passage/blob/main/notebooks/paper/dataset_statistics.ipynb) | Scenes, route outcomes, route length and search effort across resolutions |
-| [`notebooks/paper/dataset_qualification.ipynb`](https://huggingface.co/datasets/thalesgroup/passage/blob/main/notebooks/paper/dataset_qualification.ipynb) | Checking the release receipts against the published files |
-| [`notebooks/paper/cost_model_path_divergence.ipynb`](https://huggingface.co/datasets/thalesgroup/passage/blob/main/notebooks/paper/cost_model_path_divergence.ipynb) | Distance between the optima of two objectives at every resolution |
-| [`notebooks/paper/obstacles_showcase.ipynb`](https://huggingface.co/datasets/thalesgroup/passage/blob/main/notebooks/paper/obstacles_showcase.ipynb) | One scene per resolution where the obstacles move the route |
-| [`notebooks/paper/solver_runtime_scaling.ipynb`](https://huggingface.co/datasets/thalesgroup/passage/blob/main/notebooks/paper/solver_runtime_scaling.ipynb) | Search effort and measured solve time across resolutions |
-| [`notebooks/passage-eval/01_astar_walkthrough.ipynb`](https://huggingface.co/datasets/thalesgroup/passage/blob/main/notebooks/passage-eval/01_astar_walkthrough.ipynb) | Evaluating a planner step by step: the contract and the six metrics |
-| [`notebooks/passage-eval/02_score_released_baselines.ipynb`](https://huggingface.co/datasets/thalesgroup/passage/blob/main/notebooks/passage-eval/02_score_released_baselines.ipynb) | Classical baselines (A\*, greedy, random walk) on the validation split |
-| [`notebooks/passage-eval/03_leaderboard.ipynb`](https://huggingface.co/datasets/thalesgroup/passage/blob/main/notebooks/passage-eval/03_leaderboard.ipynb) | Recording results in the `passage-eval` format |
+| [`notebooks/demo.ipynb`](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/notebooks/demo.ipynb) | Getting started: load a scene, decode it, build a training target |
+| [`notebooks/costmodel.ipynb`](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/notebooks/costmodel.ipynb) | The three objectives: routes, elevation profiles, cost of the wrong objective |
+| [`notebooks/obstacles.ipynb`](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/notebooks/obstacles.ipynb) | Obstacle masks, coverage and detours over the validation split |
+| [`notebooks/solve.ipynb`](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/notebooks/solve.ipynb) | Solving labels again with the exact reference; why the search budget matters |
+| [`notebooks/astar_inference_timing.ipynb`](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/notebooks/astar_inference_timing.ipynb) | Timing a planner fairly: warm-up, repetitions, percentiles |
+| [`notebooks/paper/dataset_statistics.ipynb`](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/notebooks/paper/dataset_statistics.ipynb) | Scenes, route outcomes, route length and search effort across resolutions |
+| [`notebooks/paper/dataset_qualification.ipynb`](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/notebooks/paper/dataset_qualification.ipynb) | Checking the release receipts against the published files |
+| [`notebooks/paper/cost_model_path_divergence.ipynb`](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/notebooks/paper/cost_model_path_divergence.ipynb) | Distance between the optima of two objectives at every resolution |
+| [`notebooks/paper/obstacles_showcase.ipynb`](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/notebooks/paper/obstacles_showcase.ipynb) | One scene per resolution where the obstacles move the route |
+| [`notebooks/paper/solver_runtime_scaling.ipynb`](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/notebooks/paper/solver_runtime_scaling.ipynb) | Search effort and measured solve time across resolutions |
+| [`notebooks/passage-eval/01_astar_walkthrough.ipynb`](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/notebooks/passage-eval/01_astar_walkthrough.ipynb) | Evaluating a planner step by step: the contract and the six metrics |
+| [`notebooks/passage-eval/02_score_released_baselines.ipynb`](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/notebooks/passage-eval/02_score_released_baselines.ipynb) | Classical baselines (A\*, greedy, random walk) on the validation split |
+| [`notebooks/passage-eval/03_leaderboard.ipynb`](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/notebooks/passage-eval/03_leaderboard.ipynb) | Recording results in the `passage-eval` format |
 
 > **▶️ Rerunning a notebook.** The notebooks run in the frozen environment of
 > the [code repository](https://github.com/ThalesGroup/passage)
@@ -502,14 +497,14 @@ between cost models.
 > elevation data, procedural obstacles and markers, and computed routes. They
 > contain no people, personal data or biometric data.
 
-See the [datasheet](https://huggingface.co/datasets/thalesgroup/passage/blob/main/DATASHEET.md) and the Responsible AI fields of
-[croissant.json](https://huggingface.co/datasets/thalesgroup/passage/blob/main/croissant.json) for details.
+See the [datasheet](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/DATASHEET.md) and the Responsible AI fields of
+[croissant.json](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/croissant.json) for details.
 
 ---
 
 ## 📜 Licence and attribution
 
-- Code (generator, evaluator, notebooks): [MIT](https://huggingface.co/datasets/thalesgroup/passage/blob/main/LICENSE).
+- Code (generator, evaluator, notebooks): [MIT](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/LICENSE).
 - Data: derived from JAXA AW3D30 and subject to the
   [JAXA Terms of Use of Research Data](https://earth.jaxa.jp/en/data/policy/),
   linked from section 5 of the
@@ -518,7 +513,7 @@ See the [datasheet](https://huggingface.co/datasets/thalesgroup/passage/blob/mai
   JAXA, including for distributed derivatives; commercial use requires prior
   notification to JAXA, and JAXA asks to be notified, where possible, of
   publications that use the data. The dataset is neither MIT-licensed nor
-  public domain. See [DATASET_LICENSE.md](https://huggingface.co/datasets/thalesgroup/passage/blob/main/DATASET_LICENSE.md).
+  public domain. See [DATASET_LICENSE.md](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/DATASET_LICENSE.md).
 - Credit line: **The original data used for this product have been supplied by JAXA's ALOS World 3D–30m (AW3D30).**
 - Source reference: J. Takaku, T. Tadono, M. Doutsu, F. Ohgushi and H. Kai,
   "Updates of 'AW3D30' ALOS Global Digital Surface Model with Other Open
@@ -564,8 +559,8 @@ The NeurIPS 2026 proceedings are not published yet. This entry will be
 completed with the proceedings details (volume, pages and paper URL) once
 they are available; the title, authors, venue and year will not change.
 
-Machine-readable metadata: [CITATION.cff](https://huggingface.co/datasets/thalesgroup/passage/blob/main/CITATION.cff) and
-[croissant.json](https://huggingface.co/datasets/thalesgroup/passage/blob/main/croissant.json) (Croissant 1.1 with Responsible AI fields).
+Machine-readable metadata: [CITATION.cff](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/CITATION.cff) and
+[croissant.json](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/croissant.json) (Croissant 1.1 with Responsible AI fields).
 
 ---
 

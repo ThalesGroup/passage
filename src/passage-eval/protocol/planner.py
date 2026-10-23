@@ -124,6 +124,7 @@ class Planner(ABC):
 def candidate_scene(scene: Scene) -> Scene:
     """Isolate candidate-owned inputs from the evaluator's labels and arrays."""
     from passage_eval.protocol.contracts import PlanRequest
+
     ordinary = PlanRequest.from_scene(scene)
     return replace(
         scene,
@@ -222,7 +223,7 @@ def validated_raw_path(path: PathLike) -> np.ndarray:
         points = np.asarray(path)
         if points.size == 0:
             return np.empty((0, 2), dtype=np.float64)
-        if points.ndim != 2 or points.shape[1] != 2 or points.dtype.kind not in 'iuf':
+        if points.ndim != 2 or points.shape[1] != 2 or points.dtype.kind not in "iuf":
             return np.empty((0, 2), dtype=np.float64)
         # Check coordinates in their original precision before downstream
         # metric helpers cast to float64. A tiny fractional long-double cell

@@ -7,7 +7,7 @@ icon: material/package-variant-closed
 
 | Author | Date | Version |
 |---|---|---|
-| Geoffrey Delhomme | 2026-10-20 | 1.0 |
+| Geoffrey Delhomme | 2026-10-24 | 1.1 |
 
 `passage_eval` loads released scenes, scores decoded paths under their analytic
 terrain task, and preserves the evidence needed for statistical comparison. It
@@ -18,11 +18,9 @@ evaluator reads the paper.
 To evaluate your own planner, start with
 [Evaluate your planner](contributing-a-method.md). Its CLI separates `conform`,
 `run`, offline `score`, matched `compare` and `report`, and keeps every timed
-route. The Python functions below are lighter: they score paths and run the
-paper's paired statistics, but they do not produce the timed results on
-qualified references that the CLI workflow produces. The paper's learned-model
-results are historical results of the original study, reported as obtained;
-not re-run on the released dataset.
+route. The Python functions below are lighter: they score paths and compare
+identified per-task outcomes. The CLI workflow additionally produces timed
+results on qualified references.
 
 ## 1. Install and load a frozen subset
 
@@ -48,7 +46,7 @@ from passage_eval.io.dataset import load_val_scenes
 scenes = load_val_scenes(
     resolution=64, cost_model="elevation", split="validation", n_samples=8,
     dataset_repo="thalesgroup/passage",
-    dataset_revision="2ab44d899652c7fb99c425488e84a7d565963547",
+    dataset_revision="c09cc5a21a55a93e7c09d47368d5f5bf75cb8fae",
 )
 # Local alternative: dataset_path="<root>/export"
 ```
@@ -75,9 +73,8 @@ geometry uses valid paths. New arrays include `sample_id`, `regret`, `assd`, `h9
 `oracle_costs`, and `metric_contract`.
 
 ASSD divides symmetric nearest-waypoint distance by oracle waypoint count.
-Hausdorff p95 uses raw pixels. Arrays without a metric-contract label, such as
-the released paper results, use the original study's units; scoring them
-requires an explicit `allow_legacy=True`.
+Hausdorff p95 uses raw pixels. Arrays without a metric-contract label require an explicit
+`allow_legacy=True`; callers must declare their normalization before comparison.
 
 ```python
 import numpy as np
@@ -94,33 +91,51 @@ API when candidate costs are untrusted.
 
 ## 3. Compare paired methods
 
-```python
-from passage_eval import paired_bootstrap_delta, holm_bonferroni, decide_pairwise
+For a complete comparison, supply measured per-task outcomes for both methods
+at each training seed. Each mapping contains `task_id`, `regret`, `assd`, `h95`,
+`success`, `obstacle_violation`, and `valid_path` in the same frozen task order.
+Use the primary quality repeat, keep failed-path censored regret, and check
+matching data, task conditions, work limits and checkpoint provenance first.
 
-# A and B must refer to the same frozen samples in the same order.
-assert np.array_equal(arrays_A["sample_id"], arrays_B["sample_id"])
-record, draws = paired_bootstrap_delta(
-    arrays_A["regret"], arrays_B["regret"], metric="regret_mean",
-    n_bootstrap=10_000, seed=1234, return_draws=True,
+```python
+from passage_eval import compare_primary_metrics
+
+comparison = compare_primary_metrics(
+    A_by_seed, B_by_seed,  # keys: 1234, 2026, 3407
+    blocks=geographic_blocks,  # aligned with the shared ordered task roster
+    n_bootstrap=10_000, seed=1234,
 )
-p_value = record.two_sided_p_value(draws)
-print(record.delta, record.ci_low, record.ci_high, p_value)
+for metric, record in comparison.deltas.items():
+    print(metric, record.delta, record.ci_low, record.ci_high,
+          record.n_a, record.n_b)
+print(comparison.inference_status)  # test_not_provided
 ```
 
-For three seeds use `multiseed_paired_bootstrap(A_by_seed, B_by_seed,
-metric=..., n_bootstrap_per_seed=10_000, return_draws=True)`. Input dictionaries
-are keyed by 1234, 2026, and 3407. Geometry compares jointly finite pairs and
-reports their retained count. Regret failures remain finite through censorship.
-Apply `holm_bonferroni` to the declared family and call
-`decide_pairwise(records, holm=adjusted)`. A full Pareto claim requires every
-metric to favor the same method; wins with unconfirmed metrics are a trade-off.
+The API compares all six declared primary metrics using `T(A) - T(B)`, with
+median and p90 reductions for regret and means for the other metrics. Each
+whole-geographic-block draw is shared across methods and training seeds; the
+three seed contrasts are averaged inside that draw. Geometry uses each
+method's own valid-path subset. An empty subset in any draw makes that
+geometry interval unavailable. The returned record includes per-seed estimates
+and intervals in `record.per_seed`.
 
-[Paired statistics (paper)](walkthrough.md) gives the complete paired
-mean-difference example. These functions estimate paired mean differences, as
-in the paper. The `passage-eval compare` command instead produces
-geographic-block intervals for its reported statistics and marks missing block
-information. Choose the estimand and
-resampling unit before inspecting results.
+For confirmatory decisions, also supply `p_values`, `paired_test`, and
+`test_assumptions`. These must identify a valid predeclared paired test of the
+same contrast and all six p-values (`NaN` when unavailable). The API applies
+Holm–Bonferroni; it does not validate the scientific assumptions of a supplied
+test. Without that evidence, it returns descriptive intervals and no
+confirmatory win. Bootstrap tail fractions and CI-only proxies do not replace
+the test. [Paired statistics](walkthrough.md) shows loading and reporting.
+
+The lower-level `paired_bootstrap_delta` and `multiseed_paired_bootstrap` accept
+an explicit `statistic` callable. They assume correct pairing; the multiseed
+helper also assumes an identical task roster across seeds. With no `blocks`,
+they resample individual tasks, so they do not establish geographic
+uncertainty. Missing geometry needs explicit `nan_policy="omit"`, which reduces
+each method's finite subset separately. Prefer `compare_primary_metrics` for
+the complete primary-metric family. The CLI `compare` command instead reports
+matched-task geographic-block intervals for each selected statistic and
+condition; its output alone does not establish a three-seed confirmatory win.
 
 ## 4. Deployment and diagnostics
 

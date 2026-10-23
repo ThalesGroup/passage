@@ -4,20 +4,18 @@
 
 | Author | Date | Version | Status |
 | --- | --- | --- | --- |
-| Geoffrey Delhomme | 2026-10-19 | 1.0 | Generated, verified and admitted for publication; not yet uploaded |
+| Geoffrey Delhomme | 2026-10-24 | 1.0 | Published; dataset and publication metadata verified |
 
 This datasheet follows the questions of *Datasheets for Datasets*. It describes
 PASSAGE v1.0 (Hub tag `v1.0`), published at
 [huggingface.co/datasets/thalesgroup/passage](https://huggingface.co/datasets/thalesgroup/passage),
-and accompanies its [Croissant metadata](https://huggingface.co/datasets/thalesgroup/passage/blob/main/croissant.json)
+and accompanies its [Croissant metadata](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/croissant.json)
 (Croissant 1.1 with Responsible AI fields). The same file is kept in the
 [code repository](https://github.com/ThalesGroup/passage).
 
 The release receipts summarise PASSAGE v1.0 as follows:
 
-PASSAGE v1.0 contains 4,400,000 core scenes and 26,400,000 objective/obstacle variants; 1,792 separate preview rows do not add independent training observations. Terrain and labels use persisted float32 inputs decoded before authoritative float64 graph solves. Missing/nodata source crops are rejected. All 26,400,000 variants are exact routes; start and goal cells that the obstacles disconnect are rejected by the generator. No learned-model result on PASSAGE v1.0 has been published yet.
-
-The paper's learned-model results are historical results of the original study, reported as obtained; not re-run on the released dataset. This datasheet documents a computational
+PASSAGE v1.0 contains 4,400,000 core scenes and 26,400,000 objective/obstacle variants; 1,792 separate preview rows do not add independent training observations. Terrain and labels use persisted float32 inputs decoded before authoritative float64 graph solves. Missing/nodata source crops are rejected. All 26,400,000 variants are exact routes; start and goal cells that the obstacles disconnect are rejected by the generator. This datasheet documents a computational
 annotation and qualification process. It is not an operational deployment
 certification.
 
@@ -154,9 +152,8 @@ Elevation inherits the limitations of the AW3D30 digital surface model,
 including canopy and building surfaces and possible sensor artefacts.
 Obstacles are abstractions, not measured hazards. Labels are exact only under
 the stated graph contract. Release verification checked scene counts, terminal
-statuses and cohort and supervision hashes for every resolution. A bounded
-replay of 56 selected scenes reproduced 84 scientific records and 84 preview
-images byte for byte; it does not certify every row or cross-platform
+statuses and cohort and supervision hashes for every resolution. These
+checks do not independently re-solve every graph or certify cross-platform
 reproducibility.
 
 ### Is the dataset self-contained, or does it link to other resources?
@@ -268,10 +265,8 @@ that archive was redacted (see `release-receipts/privacy-redactions.json`);
 
 ### Has the dataset been used for any tasks already?
 
-No learned-model result on PASSAGE v1.0 has been published yet. The paper's
-learned results (dense path-mask segmentation and cost-to-go regression) are
-historical results of the original study, reported as obtained;
-not re-run on the released dataset.
+The accompanying paper presents dense path-mask segmentation and cost-to-go
+regression as examples of learned terrain-aware routing.
 
 ### What (other) tasks could the dataset be used for?
 

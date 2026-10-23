@@ -50,8 +50,9 @@ def metre_scene():
 @pytest.fixture
 def tensor_scene(metre_scene):
     from dataclasses import replace
+
     tensor = np.zeros((3, 3, 3), dtype=np.float32)
     tensor[:, :, 1] = -1
     tensor[metre_scene.start + (1,)] = 0
     tensor[metre_scene.goal + (1,)] = 1
-    return replace(metre_scene, input_tensor=tensor, metadata={'calibration': {'min': 0., 'max': 1.}})
+    return replace(metre_scene, input_tensor=tensor, metadata={"calibration": {"min": 0.0, "max": 1.0}})

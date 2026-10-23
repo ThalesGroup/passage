@@ -1,4 +1,5 @@
 """Offline reference/geometry scoring of the exact timed terminal outputs."""
+
 from __future__ import annotations
 
 import json
@@ -20,92 +21,120 @@ from passage_eval.protocol.planner import Scene, validated_raw_path
 
 
 def _qualified_reference(reference: Mapping[str, Any], scene: Scene, identity: dict, manifest: dict):
-    if (reference.get('qualified') is not True
-            or reference.get('reference_status', reference.get('status')) != 'exact'):
-        raise ValueError(f'{scene.sample_id}: a qualified exact reference is required')
-    if reference.get('sample_id', scene.sample_id) != scene.sample_id:
-        raise ValueError('qualified reference sample identity mismatch')
-    if reference.get('cost_model') != identity['cost_model'] or reference.get('cost_weight') != identity['cost_weight']:
-        raise ValueError('qualified reference objective mismatch')
-    if reference.get('task_variant') != identity['task_variant']:
-        raise ValueError('qualified reference task variant mismatch')
-    if reference.get('graph_id') != identity['graph_id']:
-        raise ValueError('qualified reference graph mismatch')
-    if not reference.get('reference_id'):
-        raise ValueError('qualified reference must carry a reference identity')
-    receipt = reference.get('reference')
-    if not isinstance(receipt, Mapping) or receipt.get('contract_id') != 'passage-analytic-reference-v1':
-        raise ValueError('qualified reference requires its canonical exact solver receipt')
-    payload = {key: value for key, value in receipt.items() if key not in {'reference_id', 'hash'}}
-    digest = hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(',', ':'), allow_nan=False).encode()).hexdigest()
-    if (digest != receipt.get('reference_id') or digest != receipt.get('hash')
-            or digest != reference['reference_id'] or receipt.get('status') != 'exact'
-            or receipt.get('scene_id') != reference.get('scene_id')
-            or receipt.get('graph_id') != identity['graph_id']
-            or receipt.get('graph') != identity['graph']
-            or receipt.get('cost') != reference.get('optimal_cost')
-            or not np.array_equal(receipt.get('path'), reference.get('optimal_path'))):
-        raise ValueError('qualified reference disagrees with its exact solver receipt')
-    qualification_policy = reference.get('qualification_policy', 'released_labels')
-    if qualification_policy == 'independent_analytic_reference_v1':
-        cohort = reference.get('cohort_id')
-        if (not isinstance(cohort, str) or not cohort.strip()
-                or manifest.get('reference_policy') != 'independent_analytic_reference'
-                or manifest.get('reference_cohort_id') != cohort
-                or 'source_label_qualified' not in reference
-                or 'source_label_qualification_reasons' not in reference):
-            raise ValueError('independent reference receipt requires an explicitly matching named cohort')
-    elif qualification_policy == 'released_labels':
-        if manifest.get('reference_policy', 'released_labels') != 'released_labels':
-            raise ValueError('released label receipt admission policy mismatch')
+    if reference.get("qualified") is not True or reference.get("reference_status", reference.get("status")) != "exact":
+        raise ValueError(f"{scene.sample_id}: a qualified exact reference is required")
+    if reference.get("sample_id", scene.sample_id) != scene.sample_id:
+        raise ValueError("qualified reference sample identity mismatch")
+    if reference.get("cost_model") != identity["cost_model"] or reference.get("cost_weight") != identity["cost_weight"]:
+        raise ValueError("qualified reference objective mismatch")
+    if reference.get("task_variant") != identity["task_variant"]:
+        raise ValueError("qualified reference task variant mismatch")
+    if reference.get("graph_id") != identity["graph_id"]:
+        raise ValueError("qualified reference graph mismatch")
+    if not reference.get("reference_id"):
+        raise ValueError("qualified reference must carry a reference identity")
+    receipt = reference.get("reference")
+    if not isinstance(receipt, Mapping) or receipt.get("contract_id") != "passage-analytic-reference-v1":
+        raise ValueError("qualified reference requires its canonical exact solver receipt")
+    payload = {key: value for key, value in receipt.items() if key not in {"reference_id", "hash"}}
+    digest = hashlib.sha256(
+        json.dumps(payload, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()
+    ).hexdigest()
+    if (
+        digest != receipt.get("reference_id")
+        or digest != receipt.get("hash")
+        or digest != reference["reference_id"]
+        or receipt.get("status") != "exact"
+        or receipt.get("scene_id") != reference.get("scene_id")
+        or receipt.get("graph_id") != identity["graph_id"]
+        or receipt.get("graph") != identity["graph"]
+        or receipt.get("cost") != reference.get("optimal_cost")
+        or not np.array_equal(receipt.get("path"), reference.get("optimal_path"))
+    ):
+        raise ValueError("qualified reference disagrees with its exact solver receipt")
+    qualification_policy = reference.get("qualification_policy", "released_labels")
+    if qualification_policy == "independent_analytic_reference_v1":
+        cohort = reference.get("cohort_id")
+        if (
+            not isinstance(cohort, str)
+            or not cohort.strip()
+            or manifest.get("reference_policy") != "independent_analytic_reference"
+            or manifest.get("reference_cohort_id") != cohort
+            or "source_label_qualified" not in reference
+            or "source_label_qualification_reasons" not in reference
+        ):
+            raise ValueError("independent reference receipt requires an explicitly matching named cohort")
+    elif qualification_policy == "released_labels":
+        if manifest.get("reference_policy", "released_labels") != "released_labels":
+            raise ValueError("released label receipt admission policy mismatch")
         from passage.audit import stored_label_identity
-        current_label_id = stored_label_identity(scene.oracle_path, scene.oracle_cost,
-                                                 task_variant=identity['task_variant'])
-        recorded_label_id = stored_label_identity(reference.get('stored_path'), reference.get('stored_cost'),
-                                                  task_variant=identity['task_variant'])
-        if reference.get('stored_label_id') != current_label_id or recorded_label_id != current_label_id:
-            raise ValueError('qualified receipt stored label identity mismatch')
-        if any(reference.get(key) is not True for key in ('legal', 'stored_cost_agreement', 'optimality')):
-            raise ValueError('qualified reference receipt must establish legality, cost agreement and optimality')
+
+        current_label_id = stored_label_identity(
+            scene.oracle_path, scene.oracle_cost, task_variant=identity["task_variant"]
+        )
+        recorded_label_id = stored_label_identity(
+            reference.get("stored_path"), reference.get("stored_cost"), task_variant=identity["task_variant"]
+        )
+        if reference.get("stored_label_id") != current_label_id or recorded_label_id != current_label_id:
+            raise ValueError("qualified receipt stored label identity mismatch")
+        if any(reference.get(key) is not True for key in ("legal", "stored_cost_agreement", "optimality")):
+            raise ValueError("qualified reference receipt must establish legality, cost agreement and optimality")
     else:
-        raise ValueError('unknown qualified reference admission policy')
+        raise ValueError("unknown qualified reference admission policy")
     # The audit producer binds reference IDs to the ordinary scene content. Use
     # its same identity function rather than trusting a caller's sample ID alone.
-    if reference.get('scene_id') is not None:
+    if reference.get("scene_id") is not None:
         from passage.audit import scene_identity
-        if reference['scene_id'] != scene_identity(scene):
-            raise ValueError('qualified reference scene content mismatch')
+
+        if reference["scene_id"] != scene_identity(scene):
+            raise ValueError("qualified reference scene content mismatch")
     else:
-        for key in ('elevation_hash', 'obstacles_hash', 'start', 'goal'):
+        for key in ("elevation_hash", "obstacles_hash", "start", "goal"):
             if reference.get(key) != identity[key]:
-                raise ValueError('qualified reference must bind terrain, obstacles and endpoints')
-    path = validated_raw_path(reference.get('optimal_path', []))
+                raise ValueError("qualified reference must bind terrain, obstacles and endpoints")
+    path = validated_raw_path(reference.get("optimal_path", []))
     connected, violated, _ = path_status(path, start=scene.start, goal=scene.goal, obstacles=scene.obstacles)
     cost = path_cost(scene.elevation, path, weight=scene.cost_weight, cost_model=scene.cost_model)
-    optimum = reference.get('optimal_cost')
-    graph = identity['graph']
-    if (not connected or violated or optimum is None or not np.isfinite(optimum) or optimum <= 0
-            or not np.isclose(cost, optimum, rtol=graph['rtol'], atol=graph['atol'])):
-        raise ValueError('qualified exact reference route/cost is invalid')
-    if qualification_policy == 'released_labels':
+    optimum = reference.get("optimal_cost")
+    graph = identity["graph"]
+    if (
+        not connected
+        or violated
+        or optimum is None
+        or not np.isfinite(optimum)
+        or optimum <= 0
+        or not np.isclose(cost, optimum, rtol=graph["rtol"], atol=graph["atol"])
+    ):
+        raise ValueError("qualified exact reference route/cost is invalid")
+    if qualification_policy == "released_labels":
         stored_path = validated_raw_path(scene.oracle_path)
-        stored_connected, stored_violated, _ = path_status(stored_path, start=scene.start, goal=scene.goal,
-                                                          obstacles=scene.obstacles)
+        stored_connected, stored_violated, _ = path_status(
+            stored_path, start=scene.start, goal=scene.goal, obstacles=scene.obstacles
+        )
         stored_recost = path_cost(scene.elevation, stored_path, weight=scene.cost_weight, cost_model=scene.cost_model)
-        if (not stored_connected or stored_violated or not np.isfinite(scene.oracle_cost) or scene.oracle_cost <= 0
-                or not np.isclose(stored_recost, scene.oracle_cost, rtol=graph['rtol'], atol=graph['atol'])
-                or not np.isclose(stored_recost, optimum, rtol=graph['rtol'], atol=graph['atol'])):
-            raise ValueError('current stored label must be legal, agree with its cost and be exactly optimal')
-    return path, float(optimum), str(reference['reference_id'])
+        if (
+            not stored_connected
+            or stored_violated
+            or not np.isfinite(scene.oracle_cost)
+            or scene.oracle_cost <= 0
+            or not np.isclose(stored_recost, scene.oracle_cost, rtol=graph["rtol"], atol=graph["atol"])
+            or not np.isclose(stored_recost, optimum, rtol=graph["rtol"], atol=graph["atol"])
+        ):
+            raise ValueError("current stored label must be legal, agree with its cost and be exactly optimal")
+    return path, float(optimum), str(reference["reference_id"])
 
 
 # Public integration boundary; retain the historical private name for callers.
 validate_qualified_reference = _qualified_reference
 
 
-def score_run_artifact(artifact: RunArtifact, scenes: Iterable[Scene], *,
-                       reference_store: Mapping[str, Mapping[str, Any]] | None = None,
-                       require_qualified_reference: bool = True) -> tuple[dict[str, float], dict[str, np.ndarray]]:
+def score_run_artifact(
+    artifact: RunArtifact,
+    scenes: Iterable[Scene],
+    *,
+    reference_store: Mapping[str, Mapping[str, Any]] | None = None,
+    require_qualified_reference: bool = True,
+) -> tuple[dict[str, float], dict[str, np.ndarray]]:
     """Score every recorded repeat, preserving failures and service deadlines.
 
     Exact references come from an external qualified store (or evaluator-owned
@@ -116,85 +145,112 @@ def score_run_artifact(artifact: RunArtifact, scenes: Iterable[Scene], *,
     artifact.validate()
     materialized = list(scenes)
     scene_map = {scene.sample_id: scene for scene in materialized}
-    if len(scene_map) != len(materialized) or set(scene_map) != set(artifact.manifest['roster']):
-        raise ValueError('scoring scenes must match the complete unique artifact roster')
+    if len(scene_map) != len(materialized) or set(scene_map) != set(artifact.manifest["roster"]):
+        raise ValueError("scoring scenes must match the complete unique artifact roster")
     if reference_store is None:
-        reference_store = artifact.manifest.get('reference_qualification')
+        reference_store = artifact.manifest.get("reference_qualification")
     if require_qualified_reference and reference_store is None:
-        raise ValueError('qualified exact reference store required; stored path costs are unqualified')
+        raise ValueError("qualified exact reference store required; stored path costs are unqualified")
     references, identities = {}, {}
-    for sample_id in artifact.manifest['roster']:
+    for sample_id in artifact.manifest["roster"]:
         scene = scene_map[sample_id]
         identity = request_identity(PlanRequest.from_scene(scene))
-        recorded = artifact.manifest['request_specs'][sample_id]
+        recorded = artifact.manifest["request_specs"][sample_id]
         # Budget belongs to the procedure, not the task identity for rescoring.
-        for key in identity.keys() - {'budget'}:
+        for key in identity.keys() - {"budget"}:
             if recorded.get(key) != identity[key]:
-                raise ValueError(f'{sample_id}: scoring input identity mismatch for {key}')
+                raise ValueError(f"{sample_id}: scoring input identity mismatch for {key}")
         identities[sample_id] = identity
         if require_qualified_reference:
             if sample_id not in reference_store:
-                raise ValueError(f'{sample_id}: missing qualified reference')
+                raise ValueError(f"{sample_id}: missing qualified reference")
             references[sample_id] = _qualified_reference(reference_store[sample_id], scene, identity, artifact.manifest)
         else:
             cost = path_cost(scene.elevation, scene.oracle_path, weight=scene.cost_weight, cost_model=scene.cost_model)
-            connected, violated, _ = path_status(scene.oracle_path, start=scene.start,
-                                                 goal=scene.goal, obstacles=scene.obstacles)
+            connected, violated, _ = path_status(
+                scene.oracle_path, start=scene.start, goal=scene.goal, obstacles=scene.obstacles
+            )
             if not connected or violated or not np.isfinite(cost) or cost <= 0:
-                raise ValueError('stored diagnostic reference route must be legal and have positive physical cost')
-            references[sample_id] = (scene.oracle_path, cost, 'stored-unqualified')
-    artifact.scoring_references = (json_safe({sample_id: reference_store[sample_id]
-                                            for sample_id in artifact.manifest['roster']})
-                                   if require_qualified_reference else None)
-    row_scenes = [scene_map[record['sample_id']] for record in artifact.records]
-    row_refs = [references[record['sample_id']] for record in artifact.records]
+                raise ValueError("stored diagnostic reference route must be legal and have positive physical cost")
+            references[sample_id] = (scene.oracle_path, cost, "stored-unqualified")
+    artifact.scoring_references = (
+        json_safe({sample_id: reference_store[sample_id] for sample_id in artifact.manifest["roster"]})
+        if require_qualified_reference
+        else None
+    )
+    row_scenes = [scene_map[record["sample_id"]] for record in artifact.records]
+    row_refs = [references[record["sample_id"]] for record in artifact.records]
     paths = [validated_raw_path(path) for path in artifact.paths]
-    costs = np.asarray([path_cost(scene.elevation, path, weight=scene.cost_weight, cost_model=scene.cost_model)
-                        for scene, path in zip(row_scenes, paths)])
+    costs = np.asarray(
+        [
+            path_cost(scene.elevation, path, weight=scene.cost_weight, cost_model=scene.cost_model)
+            for scene, path in zip(row_scenes, paths)
+        ]
+    )
     for row, scene, path, cost in zip(artifact.records, row_scenes, paths, costs):
-        connected, violated, obstacle_cells = path_status(path, start=scene.start, goal=scene.goal,
-                                                          obstacles=scene.obstacles)
-        recorded_cost = row.get('recost')
+        connected, violated, obstacle_cells = path_status(
+            path, start=scene.start, goal=scene.goal, obstacles=scene.obstacles
+        )
+        recorded_cost = row.get("recost")
         agrees = (recorded_cost is None and not np.isfinite(cost)) or (
-            recorded_cost is not None and np.isclose(recorded_cost, cost, rtol=identities[scene.sample_id]['graph']['rtol'],
-                                                     atol=identities[scene.sample_id]['graph']['atol']))
+            recorded_cost is not None
+            and np.isclose(
+                recorded_cost,
+                cost,
+                rtol=identities[scene.sample_id]["graph"]["rtol"],
+                atol=identities[scene.sample_id]["graph"]["atol"],
+            )
+        )
         if not agrees:
-            raise ValueError('offline physical cost disagrees with timed route recost')
-        if (row.get('connected_path') != connected or row.get('obstacle_violation') != violated
-                or row.get('obstacle_cells') != obstacle_cells
-                or row.get('legal_path') != (connected and not violated and np.isfinite(cost))):
-            raise ValueError('offline legality disagrees with timed route validation')
-    status_ok = np.asarray([row['status'] == 'ok' for row in artifact.records], dtype=bool)
-    arrays = per_sample_metrics(predicted_paths=paths, oracle_paths=[reference[0] for reference in row_refs],
-                    predicted_costs=costs, oracle_costs=[reference[1] for reference in row_refs],
-                    obstacles=[scene.obstacles for scene in row_scenes],
-                    starts=[scene.start for scene in row_scenes], goals=[scene.goal for scene in row_scenes])
-    arrays['connected_path'] = arrays['success'].copy()
-    arrays['legal_path'] = arrays['valid_path'].copy()
+            raise ValueError("offline physical cost disagrees with timed route recost")
+        if (
+            row.get("connected_path") != connected
+            or row.get("obstacle_violation") != violated
+            or row.get("obstacle_cells") != obstacle_cells
+            or row.get("legal_path") != (connected and not violated and np.isfinite(cost))
+        ):
+            raise ValueError("offline legality disagrees with timed route validation")
+    status_ok = np.asarray([row["status"] == "ok" for row in artifact.records], dtype=bool)
+    arrays = per_sample_metrics(
+        predicted_paths=paths,
+        oracle_paths=[reference[0] for reference in row_refs],
+        predicted_costs=costs,
+        oracle_costs=[reference[1] for reference in row_refs],
+        obstacles=[scene.obstacles for scene in row_scenes],
+        starts=[scene.start for scene in row_scenes],
+        goals=[scene.goal for scene in row_scenes],
+    )
+    arrays["connected_path"] = arrays["success"].copy()
+    arrays["legal_path"] = arrays["valid_path"].copy()
     # A late, cancelled, OOM or failed route cannot be rescued by offline scoring.
-    arrays['success'] &= status_ok
-    arrays['valid_path'] &= status_ok
-    arrays['pred_costs'] = apply_censored_penalty(costs, arrays['oracle_costs'],
-                                    decoder_succeeded=arrays['success'],
-                                    obstacle_violated=arrays['obstacle_violation'])
-    arrays['regret'] = cost_regret(arrays['pred_costs'], arrays['oracle_costs'])
-    arrays['assd'][~arrays['valid_path']] = np.nan
-    arrays['h95'][~arrays['valid_path']] = np.nan
-    policy = 'qualified_exact' if require_qualified_reference else 'stored_unqualified'
+    arrays["success"] &= status_ok
+    arrays["valid_path"] &= status_ok
+    arrays["pred_costs"] = apply_censored_penalty(
+        costs,
+        arrays["oracle_costs"],
+        decoder_succeeded=arrays["success"],
+        obstacle_violated=arrays["obstacle_violation"],
+    )
+    arrays["regret"] = cost_regret(arrays["pred_costs"], arrays["oracle_costs"])
+    arrays["assd"][~arrays["valid_path"]] = np.nan
+    arrays["h95"][~arrays["valid_path"]] = np.nan
+    policy = "qualified_exact" if require_qualified_reference else "stored_unqualified"
     n = len(artifact.records)
     # Choose one declared support family over the whole roster. A partial
     # broader annotation must not silently split its tasks into finer tiles.
-    metadata = artifact.manifest['request_metadata']
-    choices = [(('cluster_id',), 'declared_cluster_id'),
-               (('geographic', 'cluster_id'), 'declared_geographic_cluster_id'),
-               (('source_footprint_id',), 'declared_source_footprint_id'),
-               (('source_tile_id',), 'declared_source_tile_id'),
-               (('tile_id',), 'declared_tile_id'),
-               (('geographic', 'tile_id'), 'declared_geographic_tile_id')]
-    block_map, block_source = {}, 'unknown'
+    metadata = artifact.manifest["request_metadata"]
+    choices = [
+        (("cluster_id",), "declared_cluster_id"),
+        (("geographic", "cluster_id"), "declared_geographic_cluster_id"),
+        (("source_footprint_id",), "declared_source_footprint_id"),
+        (("source_tile_id",), "declared_source_tile_id"),
+        (("tile_id",), "declared_tile_id"),
+        (("geographic", "tile_id"), "declared_geographic_tile_id"),
+    ]
+    block_map, block_source = {}, "unknown"
     for keys, provenance in choices:
         declared = {}
-        for sample_id in artifact.manifest['roster']:
+        for sample_id in artifact.manifest["roster"]:
             value = metadata[sample_id]
             for key in keys:
                 value = value.get(key) if isinstance(value, dict) else None
@@ -205,89 +261,116 @@ def score_run_artifact(artifact: RunArtifact, scenes: Iterable[Scene], *,
                 block_map = {key: str(value) for key, value in declared.items()}
                 block_source = provenance
             break
-    cluster_ids = [block_map.get(scene.sample_id, '') for scene in row_scenes]
+    cluster_ids = [block_map.get(scene.sample_id, "") for scene in row_scenes]
     cluster_sources = [block_source] * len(row_scenes)
-    arrays.update(sample_id=np.asarray([row['sample_id'] for row in artifact.records]),
-                  repeat_index=np.asarray([row['repeat_index'] for row in artifact.records], dtype=np.int64),
-                  quality_repeat_index=np.array(artifact.manifest['quality_repeat_index'], dtype=np.int64),
-                  primary_quality=np.asarray([row['repeat_index'] == artifact.manifest['quality_repeat_index']
-                                              for row in artifact.records], dtype=bool),
-                  series=np.asarray([row['series'] for row in artifact.records]),
-                  status=np.asarray([row['status'] for row in artifact.records]),
-                  route_hash=np.asarray([row['route_hash'] for row in artifact.records]),
-                  raw_pred_costs=costs, reference_id=np.asarray([reference[2] for reference in row_refs]),
-                  reference_qualified=np.full(n, require_qualified_reference, dtype=bool),
-                  reference_policy=np.full(n, policy),
-                  fallback=np.asarray([row['fallback'] for row in artifact.records], dtype=bool),
-                  latency_ms=np.asarray([row['total_wall_ms'] for row in artifact.records]),
-                  cluster_id=np.asarray(cluster_ids), cluster_provenance=np.asarray(cluster_sources),
-                  obs_density=np.asarray([float(np.mean(scene.obstacles)) for scene in row_scenes]),
-                  elev_std=np.asarray([float(np.std(scene.elevation)) for scene in row_scenes]),
-                  oracle_len=np.asarray([len(reference[0]) for reference in row_refs], dtype=np.int64),
-                  metric_contract=np.array('passage-qualified-complete-v1' if require_qualified_reference
-                                           else 'passage-stored-diagnostic-v1'))
-    primary_mask = arrays['repeat_index'] == artifact.manifest['quality_repeat_index']
+    arrays.update(
+        sample_id=np.asarray([row["sample_id"] for row in artifact.records]),
+        repeat_index=np.asarray([row["repeat_index"] for row in artifact.records], dtype=np.int64),
+        quality_repeat_index=np.array(artifact.manifest["quality_repeat_index"], dtype=np.int64),
+        primary_quality=np.asarray(
+            [row["repeat_index"] == artifact.manifest["quality_repeat_index"] for row in artifact.records], dtype=bool
+        ),
+        series=np.asarray([row["series"] for row in artifact.records]),
+        status=np.asarray([row["status"] for row in artifact.records]),
+        route_hash=np.asarray([row["route_hash"] for row in artifact.records]),
+        raw_pred_costs=costs,
+        reference_id=np.asarray([reference[2] for reference in row_refs]),
+        reference_qualified=np.full(n, require_qualified_reference, dtype=bool),
+        reference_policy=np.full(n, policy),
+        fallback=np.asarray([row["fallback"] for row in artifact.records], dtype=bool),
+        latency_ms=np.asarray([row["total_wall_ms"] for row in artifact.records]),
+        cluster_id=np.asarray(cluster_ids),
+        cluster_provenance=np.asarray(cluster_sources),
+        obs_density=np.asarray([float(np.mean(scene.obstacles)) for scene in row_scenes]),
+        elev_std=np.asarray([float(np.std(scene.elevation)) for scene in row_scenes]),
+        oracle_len=np.asarray([len(reference[0]) for reference in row_refs], dtype=np.int64),
+        metric_contract=np.array(
+            "passage-qualified-complete-v1" if require_qualified_reference else "passage-stored-diagnostic-v1"
+        ),
+    )
+    primary_mask = arrays["repeat_index"] == artifact.manifest["quality_repeat_index"]
     primary = {key: values[primary_mask] for key, values in arrays.items() if values.ndim == 1}
     metrics = aggregate_primary_metrics(primary)
     all_repeats = aggregate_primary_metrics(arrays)
-    all_repeats.update(connected_path_rate=float(np.mean(arrays['connected_path'])),
-                       legal_route_rate=float(np.mean(arrays['valid_path'])),
-                       fallback_rate=float(np.mean(arrays['fallback'])))
-    metrics['all_repeats'] = all_repeats
-    metrics['latency_all_repeats_ms'] = {name: float(np.quantile(arrays['latency_ms'], quantile))
-                                       for name, quantile in (('p50', .5), ('p95', .95), ('p99', .99))}
-    metrics.update(requested_count=n, attempted_count=n, completed_count=n,
-                   connected_path_rate=float(np.mean(primary['connected_path'])),
-                   legal_route_rate=float(np.mean(primary['valid_path'])),
-                   fallback_rate=float(np.mean(primary['fallback'])),
-                   terminal_ok_rate=float(np.mean(status_ok)),
-                   reference_qualified=bool(require_qualified_reference),
-                   quality_repeat_index=artifact.manifest['quality_repeat_index'],
-                   scored_repeat_count=artifact.manifest['repeats'])
+    all_repeats.update(
+        connected_path_rate=float(np.mean(arrays["connected_path"])),
+        legal_route_rate=float(np.mean(arrays["valid_path"])),
+        fallback_rate=float(np.mean(arrays["fallback"])),
+    )
+    metrics["all_repeats"] = all_repeats
+    metrics["latency_all_repeats_ms"] = {
+        name: float(np.quantile(arrays["latency_ms"], quantile))
+        for name, quantile in (("p50", 0.5), ("p95", 0.95), ("p99", 0.99))
+    }
+    metrics.update(
+        requested_count=n,
+        attempted_count=n,
+        completed_count=n,
+        connected_path_rate=float(np.mean(primary["connected_path"])),
+        legal_route_rate=float(np.mean(primary["valid_path"])),
+        fallback_rate=float(np.mean(primary["fallback"])),
+        terminal_ok_rate=float(np.mean(status_ok)),
+        reference_qualified=bool(require_qualified_reference),
+        quality_repeat_index=artifact.manifest["quality_repeat_index"],
+        scored_repeat_count=artifact.manifest["repeats"],
+    )
     return metrics, arrays
 
 
 def write_scored_artifact(artifact: RunArtifact, metrics: dict, arrays: dict[str, np.ndarray]) -> None:
     if artifact.output_dir is None:
-        raise ValueError('scored artifact requires a persisted output directory')
+        raise ValueError("scored artifact requires a persisted output directory")
     artifact.validate()
     output_dir = Path(artifact.output_dir)
-    reference_flags = np.asarray(arrays.get('reference_qualified'))
-    if (reference_flags.dtype.kind != 'b' or reference_flags.shape != (len(artifact.records),)
-            or not (reference_flags.all() or (~reference_flags).all())):
-        raise ValueError('reference qualification flags must be homogeneous and align with every record')
+    reference_flags = np.asarray(arrays.get("reference_qualified"))
+    if (
+        reference_flags.dtype.kind != "b"
+        or reference_flags.shape != (len(artifact.records),)
+        or not (reference_flags.all() or (~reference_flags).all())
+    ):
+        raise ValueError("reference qualification flags must be homogeneous and align with every record")
     qualified = bool(reference_flags.all())
-    contract_array = np.asarray(arrays.get('metric_contract'))
-    expected_contract = 'passage-qualified-complete-v1' if qualified else 'passage-stored-diagnostic-v1'
+    contract_array = np.asarray(arrays.get("metric_contract"))
+    expected_contract = "passage-qualified-complete-v1" if qualified else "passage-stored-diagnostic-v1"
     if contract_array.shape != () or contract_array.item() != expected_contract:
-        raise ValueError('metric contract must match the scored reference qualification policy')
+        raise ValueError("metric contract must match the scored reference qualification policy")
     contract = str(contract_array.item())
     for key, values in arrays.items():
         if np.asarray(values).dtype.hasobject:
-            raise ValueError(f'object/pickle arrays forbidden: {key}')
+            raise ValueError(f"object/pickle arrays forbidden: {key}")
     reference_inputs_hash = None
     if qualified:
         if artifact.scoring_references is None:
-            raise ValueError('qualified scoring requires its validated reference payload; run the offline scorer first')
-        reference_payload = {'schema': 'passage-qualified-score-inputs-v1',
-                             'request_specs': artifact.manifest['request_specs'],
-                             'reference_qualification': artifact.scoring_references}
-        reference_file = output_dir / 'score_reference_inputs.json'
-        reference_file.write_text(json.dumps(reference_payload, sort_keys=True, indent=2, allow_nan=False) + '\n')
+            raise ValueError("qualified scoring requires its validated reference payload; run the offline scorer first")
+        reference_payload = {
+            "schema": "passage-qualified-score-inputs-v1",
+            "request_specs": artifact.manifest["request_specs"],
+            "reference_qualification": artifact.scoring_references,
+        }
+        reference_file = output_dir / "score_reference_inputs.json"
+        reference_file.write_text(json.dumps(reference_payload, sort_keys=True, indent=2, allow_nan=False) + "\n")
         reference_inputs_hash = sha256_file(reference_file)
-    np.savez(output_dir / 'per_sample.npz', **arrays)
-    (output_dir / 'metrics.json').write_text(json.dumps(json_safe(metrics), sort_keys=True, indent=2, allow_nan=False) + '\n')
-    receipt = dict(schema='passage-offline-score-v1', qualified_reference=qualified, metric_contract=contract,
-                   reference_policy='qualified_exact' if qualified else 'stored_unqualified',
-                   run_manifest_sha256=sha256_file(output_dir / 'run_manifest.json'),
-                   per_sample_sha256=sha256_file(output_dir / 'per_sample.npz'),
-                   metrics_sha256=sha256_file(output_dir / 'metrics.json'),
-                   scored_records=len(artifact.records), scored_repeats=artifact.manifest['repeats'],
-                   quality_repeat_index=artifact.manifest['quality_repeat_index'],
-                   reference_admission_policy=artifact.manifest.get('reference_policy', 'released_labels'),
-                   reference_cohort_id=artifact.manifest.get('reference_cohort_id'))
+    np.savez(output_dir / "per_sample.npz", **arrays)
+    (output_dir / "metrics.json").write_text(
+        json.dumps(json_safe(metrics), sort_keys=True, indent=2, allow_nan=False) + "\n"
+    )
+    receipt = dict(
+        schema="passage-offline-score-v1",
+        qualified_reference=qualified,
+        metric_contract=contract,
+        reference_policy="qualified_exact" if qualified else "stored_unqualified",
+        run_manifest_sha256=sha256_file(output_dir / "run_manifest.json"),
+        per_sample_sha256=sha256_file(output_dir / "per_sample.npz"),
+        metrics_sha256=sha256_file(output_dir / "metrics.json"),
+        scored_records=len(artifact.records),
+        scored_repeats=artifact.manifest["repeats"],
+        quality_repeat_index=artifact.manifest["quality_repeat_index"],
+        reference_admission_policy=artifact.manifest.get("reference_policy", "released_labels"),
+        reference_cohort_id=artifact.manifest.get("reference_cohort_id"),
+    )
     if qualified:
-        receipt['reference_inputs_sha256'] = reference_inputs_hash
-        receipt['reference_payload_identity'] = hashlib.sha256(
-            json.dumps(artifact.scoring_references, sort_keys=True, allow_nan=False).encode()).hexdigest()
-    (output_dir / 'score_receipt.json').write_text(json.dumps(receipt, sort_keys=True, indent=2) + '\n')
+        receipt["reference_inputs_sha256"] = reference_inputs_hash
+        receipt["reference_payload_identity"] = hashlib.sha256(
+            json.dumps(artifact.scoring_references, sort_keys=True, allow_nan=False).encode()
+        ).hexdigest()
+    (output_dir / "score_receipt.json").write_text(json.dumps(receipt, sort_keys=True, indent=2) + "\n")

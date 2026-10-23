@@ -21,8 +21,16 @@ MODEL_CODES = {"distance": 0, "elevation": 1, "absolute_elevation": 2, "slope_up
 
 
 @njit(cache=True)
-def directed_edge_cost(src: float, dst: float, distance: float, weight: float,
-                       model: int, minimum: float, elevation_range: float, absolute_max: float) -> float:
+def directed_edge_cost(
+    src: float,
+    dst: float,
+    distance: float,
+    weight: float,
+    model: int,
+    minimum: float,
+    elevation_range: float,
+    absolute_max: float,
+) -> float:
     """One directed edge, evaluated exclusively in float64 by callers.
 
     Destination height uses extrema from the whole crop, including blocked
@@ -50,8 +58,9 @@ def _sum_path(elevation, points, weight, model, minimum, elevation_range, absolu
         r1, c1 = points[index]
         diagonal = r0 != r1 and c0 != c1
         distance = PIXEL_SIZE_M * np.sqrt(2.0) if diagonal else PIXEL_SIZE_M
-        total += directed_edge_cost(elevation[r0, c0], elevation[r1, c1], distance, weight,
-                                    model, minimum, elevation_range, absolute_max)
+        total += directed_edge_cost(
+            elevation[r0, c0], elevation[r1, c1], distance, weight, model, minimum, elevation_range, absolute_max
+        )
     return total
 
 
@@ -85,8 +94,17 @@ def path_cost(elevation: np.ndarray, path: PathLike, *, weight: float, cost_mode
     elevation_range = maximum - minimum
     if not np.isfinite(elevation_range):
         raise ValueError("float64 cost arithmetic overflow in elevation range")
-    total = float(_sum_path(elevation, points, float(weight), MODEL_CODES[cost_model], minimum,
-                            elevation_range, max(abs(minimum), abs(maximum))))
+    total = float(
+        _sum_path(
+            elevation,
+            points,
+            float(weight),
+            MODEL_CODES[cost_model],
+            minimum,
+            elevation_range,
+            max(abs(minimum), abs(maximum)),
+        )
+    )
     if not np.isfinite(total):
         raise ValueError("float64 cost arithmetic overflow in path total")
     return total
