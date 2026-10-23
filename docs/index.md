@@ -258,7 +258,7 @@ status and stream the large configurations.
     ```bash
     # Install uv (if needed), then the locked environment
     curl -LsSf https://astral.sh/uv/install.sh | sh
-    git clone https://github.com/ThalesGroup/passage.git
+    git clone --branch develop https://github.com/ThalesGroup/passage.git
     cd passage
     uv sync --frozen
 

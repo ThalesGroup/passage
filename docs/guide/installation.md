@@ -35,7 +35,7 @@ repository's `uv.lock` file, it installs the exact locked versions:
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # Clone the repository
-git clone https://github.com/ThalesGroup/passage.git
+git clone --branch develop https://github.com/ThalesGroup/passage.git
 cd passage
 
 # Install the locked runtime environment (passage and passage-eval)
