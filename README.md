@@ -418,7 +418,7 @@ contract, split policy and limitations.
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # Clone & install the locked environment
-git clone https://github.com/ThalesGroup/passage.git
+git clone --branch develop https://github.com/ThalesGroup/passage.git
 cd passage
 uv sync --frozen
 
