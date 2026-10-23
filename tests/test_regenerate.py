@@ -3,6 +3,7 @@
 import importlib
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 import yaml
@@ -11,6 +12,20 @@ import yaml
 def workflow():
     assert importlib.util.find_spec("passage.regenerate"), "bounded regeneration workflow missing"
     return importlib.import_module("passage.regenerate")
+
+
+@pytest.fixture
+def disk_space(monkeypatch):
+    """Control capacity at the filesystem boundary while keeping admission real."""
+    free_bytes = {}
+
+    def disk_usage(path):
+        total = 128 * 1024**3
+        free = free_bytes.get(Path(path), total)
+        return SimpleNamespace(total=total, used=total - free, free=free)
+
+    monkeypatch.setattr(workflow().shutil, "disk_usage", disk_usage)
+    return free_bytes
 
 
 def inputs(tmp_path):
@@ -95,7 +110,7 @@ def test_measurement_stage_and_resume_boundaries_are_deterministic():
     assert list(w.generation_stage_bounds(4, 100)) == [(0, 4)]
 
 
-def test_dry_run_validates_inputs_without_writes(tmp_path):
+def test_dry_run_validates_inputs_without_writes(tmp_path, disk_space):
     w = workflow()
     config, tiles, calibration = inputs(tmp_path)
     final, scratch = tmp_path / "final", tmp_path / "scratch"
@@ -108,6 +123,28 @@ def test_dry_run_validates_inputs_without_writes(tmp_path):
         dry_run=True,
     )
     assert result["status"] == "planned"
+    assert not final.exists()
+    assert not scratch.exists()
+
+
+@pytest.mark.parametrize("low_space_root", ["scratch", "final"])
+def test_dry_run_rejects_low_space_before_writes(tmp_path, disk_space, low_space_root):
+    w = workflow()
+    config, tiles, calibration = inputs(tmp_path)
+    parents = {name: tmp_path / f"{name}-volume" for name in ("scratch", "final")}
+    for parent in parents.values():
+        parent.mkdir()
+    final, scratch = parents["final"] / "final", parents["scratch"] / "scratch"
+    disk_space[parents[low_space_root]] = 12 * 1024**3
+    with pytest.raises(OSError, match=rf"insufficient free space at .*{low_space_root}:"):
+        w.run_regenerate(
+            config_filepath=config,
+            tiles_dirpath=tiles,
+            calibration_filepath=calibration,
+            dataset_dirpath=final,
+            scratch_dirpath=scratch,
+            dry_run=True,
+        )
     assert not final.exists()
     assert not scratch.exists()
 
@@ -447,7 +484,7 @@ def test_scratch_lock_is_exclusive_across_final_destinations(tmp_path):
         w.os.close(descriptor)
 
 
-def test_holdout_mask_content_binds_readonly_plan_identity(tmp_path):
+def test_holdout_mask_content_binds_readonly_plan_identity(tmp_path, disk_space):
     w = workflow()
     config, tiles, calibration = inputs(tmp_path)
     mask = tmp_path / "holdout.png"
