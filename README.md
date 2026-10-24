@@ -427,6 +427,12 @@ uv run --frozen passage --help
 uv run --frozen passage-eval --help
 ```
 
+Generation and publication workflows that write provenance receipts require a
+source checkout installed with `uv sync --frozen` or `pip install -e .`. Keep
+`src/passage/`, `src/passage-eval/`, `pyproject.toml` and `uv.lock` together in
+that checkout so the receipts can identify the producer code and locked
+environment. Wheel installations support dataset loading and evaluation.
+
 `uv sync` creates `.venv` but does not activate it. Use `uv run --frozen` for
 commands below, or run `source .venv/bin/activate` once in each shell before
 invoking `passage` or `passage-eval` directly. See the [sequential reproduction
