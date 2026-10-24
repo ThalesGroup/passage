@@ -2108,6 +2108,9 @@ def export_successor_batch(
     count owns a pool for this call. The memory budget caps concurrent producer
     workspaces independently of the executor's generation capacity.
     """
+    from passage.regenerate import _require_source_checkout
+
+    _require_source_checkout(__file__)
     if not scene_indices or any(isinstance(i, bool) or not isinstance(i, int) or i < 0 for i in scene_indices):
         raise ValueError("Release scene indices must be a nonempty roster of nonnegative integers")
     if scene_indices != sorted(set(scene_indices)):

@@ -241,8 +241,17 @@ def _inventory(tiles: Path, calibration_path: Path) -> list[dict]:
     return inventory
 
 
+def _require_source_checkout(module_file: str | Path) -> Path:
+    module_path = Path(module_file).resolve()
+    root = module_path.parents[2]
+    required = ("src/passage/__init__.py", "src/passage-eval/__init__.py", "pyproject.toml", "uv.lock")
+    if module_path.parent != root / "src/passage" or not all((root / path).is_file() for path in required):
+        raise RuntimeError("Release receipts require a complete source checkout; clone PASSAGE and install editable.")
+    return root
+
+
 def code_identity() -> dict:
-    root = Path(__file__).resolve().parents[2]
+    root = _require_source_checkout(__file__)
     paths = [*root.glob("src/**/*.py"), *root.glob("notebooks/**/*.ipynb"), root / "pyproject.toml", root / "uv.lock"]
     return {str(path.relative_to(root)): hash_file(path) for path in sorted(paths) if path.is_file()}
 
@@ -704,6 +713,7 @@ def run_regenerate(
     export_memory_bytes=8 * GIB,
 ) -> dict:
     """Run the declared full release by default, or a separately identified bounded pilot."""
+    _require_source_checkout(__file__)
     config_path, root, scratch, tiles, calibration = [
         Path(p).resolve()
         for p in (config_filepath, dataset_dirpath, scratch_dirpath, tiles_dirpath, calibration_filepath)

@@ -53,6 +53,12 @@ Run the tools with `uv run passage …`, or activate the environment
 (`source .venv/bin/activate`) and call `passage` directly. This guide uses the
 short form.
 
+Generation and publication workflows that produce provenance receipts require
+this cloned repository, installed with `uv sync --frozen` or `pip install -e .`.
+Keep `src/passage/`, `src/passage-eval/`, `pyproject.toml` and `uv.lock` in place
+so the receipts can identify the producer code and locked environment. Wheel
+installations support loading datasets and running `passage-eval`.
+
 ---
 
 ## Preview the Documentation Site
