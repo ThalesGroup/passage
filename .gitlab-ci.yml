@@ -1,0 +1,51 @@
+# MIT License
+#
+# Copyright (c) 2026 THALES
+
+# Keep the GitLab source checks aligned with the publication mirror. GitLab
+# Pages remains available on the default branch when a compatible runner exists.
+stages:
+  - test
+  - deploy
+
+default:
+  image: python:3.12
+  before_script:
+    - python -m pip install 'uv==0.12.6'
+
+lint:
+  stage: test
+  script:
+    - uv sync --locked --group dev
+    - uv run --locked ruff check src/ tests/
+    - uv run --locked ruff format --check src/ tests/
+
+test:
+  stage: test
+  image: python:$PYTHON_VERSION
+  parallel:
+    matrix:
+      - PYTHON_VERSION: ["3.11", "3.12"]
+  script:
+    - apt-get update -qq && apt-get install -y --no-install-recommends libgl1
+    - uv sync --locked --group dev
+    - uv run --locked python --version
+    - uv run --locked pytest --cov --cov-report=xml:coverage.xml --cov-report=term-missing -x -v
+  artifacts:
+    when: always
+    paths:
+      - coverage.xml
+
+pages:
+  stage: deploy
+  needs: []
+  script:
+    - test -n "$CI_PAGES_URL"
+    - export SITE_URL="${CI_PAGES_URL%/}/"
+    - uv sync --locked --group docs
+    - uv run --locked mkdocs build --strict --site-dir public
+  artifacts:
+    paths:
+      - public
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
