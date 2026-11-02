@@ -27,7 +27,19 @@ import passage.generate as gen
 
 def test_num_samples_mapping_per_resolution(monkeypatch, tmp_path):
     # Create a minimal config with per-resolution num_samples mapping
-    cfg = {"resolutions": [64, 128], "num_samples": {"64": 3, "128": 5}}
+    cfg = {
+        "resolutions": [64, 128],
+        "num_samples": {"64": 3, "128": 5},
+        "solvers": [
+            {
+                "name": "astar_elevation",
+                "backend": "grid",
+                "solver": "astar",
+                "cost_model": "elevation",
+                "weight": 1.0,
+            }
+        ],
+    }
     cfg_path = tmp_path / "config.yaml"
     cfg_path.write_text(json.dumps(cfg))
 
@@ -48,7 +60,13 @@ def test_num_samples_mapping_per_resolution(monkeypatch, tmp_path):
 
     # Run generation sequentially (num_cpus=0) and force regeneration
     gen.run_generate(
-        str(outputs_dir), str(cfg_path), str(tmp_path / "tiles"), num_cpus=0, disable_images=True, force=True
+        str(outputs_dir),
+        str(cfg_path),
+        str(tmp_path / "tiles"),
+        calibration_filepath=str(calib_dir / "calibrate.json"),
+        num_cpus=0,
+        disable_images=True,
+        force=True,
     )
 
     # Check per-resolution summaries

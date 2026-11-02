@@ -23,21 +23,13 @@
 """
 Generate module for PASSAGE.
 
-This module generates dataset samples from ALOS AW3D30 DSM tiles,
-loading center tile and surrounding tiles to create cropped elevation images.
+`run_generate` runs the generator that built PASSAGE v1.0 when the
+configuration sets `generation.dataset_version`, as the shipped
+`config/config.yaml` does. Otherwise it runs a sample-by-sample path that the
+v1.0 release does not use.
 
-The generation process:
-1. Draw a random elevation from the global min/max range (from calibrate.json).
-2. Load tile_stats into a pandas DataFrame and filter tiles containing that elevation.
-3. Select a random tile from the filtered set.
-4. Load surrounding tiles as needed for the requested resolution.
-5. Handle latitude bounds and longitude wrapping at -180/180.
-
-Geographic hold-out regions:
-- The hold_out_mask.png (config/hold_out_mask.png) defines regions reserved for testing.
-- For 'test' split: only tiles within the hold-out mask are used.
-- For other splits (train, validation, calibration): tiles in the hold-out mask are excluded.
-- The mask is 181x361 pixels (1 degree per pixel), covering lat -90 to +90, lon -180 to +180.
+Tiles inside `config/hold_out_mask.png` (181x361 pixels, one pixel per degree,
+latitude -90 to +90, longitude -180 to +180) are used only by the `test` split.
 """
 
 import csv
@@ -820,7 +812,7 @@ def load_tile_grid(
     return_loaded_tiles: bool = False,
 ) -> np.ndarray | tuple[np.ndarray, list[tuple[int, int]]]:
     """
-    Load a (2*half_tiles+1) x (2*half_tiles+1) grid of tiles centered on the given coordinates.
+    Load a ``(2*half_tiles+1) x (2*half_tiles+1)`` grid of tiles centered on the given coordinates.
 
     Handles latitude bounds by substituting flat tiles for out-of-bounds rows.
     Handles longitude wrapping at -180/180.
@@ -1875,10 +1867,10 @@ def count_valid_samples(
     Args:
         res_dir: Resolution directory containing split subdirs.
         disable_images: If True, don't check for images.
-        split_assignments: Mapping from sample index -> split name. If None, assumes legacy layout without splits.
+        split_assignments: Mapping from sample index -> split name. If None, assumes a layout without split directories.
         preview_image_indices_by_split: Optional mapping from split name to the set of
             sample indices that are expected to have preview images.
-        solver_names: Optional solver names expected under images/<solver>/...
+        solver_names: Optional solver names expected under ``images/<solver>/...``
 
     Returns:
         Number of consecutive valid samples from index 0.
@@ -2098,7 +2090,8 @@ def run_generate(
     num_cpus: int | None = None,
     disable_images: bool = False,
     force: bool = False,
-) -> None:
+    scene_indices: range | list[int] | None = None,
+) -> dict | None:
     """
     Main orchestration function for generating dataset samples.
 
@@ -2111,7 +2104,8 @@ def run_generate(
         num_samples: Number of samples to generate.
         num_cpus: Number of CPUs to use for multiprocessing.
         disable_images: If True, skip saving PNG images.
-        force: If True, delete existing directories and regenerate all samples.
+        force: If True, delete existing directories and regenerate all samples; the release generator refuses to overwrite an existing output root.
+        scene_indices: Global indices for a bounded release batch; preserve the full sample count.
     """
     # Load config
     config_path = Path(config_filepath)
@@ -2121,6 +2115,27 @@ def run_generate(
 
     with open(config_path) as f:
         config = yaml.safe_load(f)
+
+    dataset_version = config.get("generation", {}).get("dataset_version") if isinstance(config, dict) else None
+    if dataset_version is not None:
+        from passage.successor_generation import DATASET_VERSION, run_successor_generation
+
+        if dataset_version != DATASET_VERSION:
+            raise ValueError(f"Unsupported generation dataset version: {dataset_version}")
+        return run_successor_generation(
+            outputs_dirpath,
+            config_filepath,
+            tiles_dirpath,
+            calibration_filepath,
+            resolution=resolution,
+            num_samples=num_samples,
+            num_cpus=num_cpus,
+            disable_images=disable_images,
+            force=force,
+            scene_indices=scene_indices,
+        )
+    if scene_indices is not None:
+        raise ValueError("Bounded scene indices require an explicit release dataset version")
 
     # Get parameters from config or arguments
     if isinstance(resolution, list):

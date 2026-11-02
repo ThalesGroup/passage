@@ -1,17 +1,36 @@
 # Changelog
 
-## Unreleased
+## 1.0.0
 
-### Added
+First public release of PASSAGE, published with the NeurIPS 2026 Evaluations
+and Datasets Track paper. The repository and the dataset share version 1.0.
 
-- Deterministic per-sample generation seeding via `generation.seed`, with recorded `generation_seed` and `sample_seed` provenance in sample metadata.
-- Repository release metadata files: `CITATION.cff`, `DATASHEET.md`, `croissant.json`, and `Makefile`.
-- `make manifest` workflow for writing `outputs/export/manifest.sha256` from a prepared export tree.
-- `DATASET_LICENSE.md` to document the dataset-side JAXA AW3D30 obligations separately from the MIT code license.
-
-### Changed
-
-- Corrected public documentation to reflect the default 4,400,000-sample (≈4.4 M) benchmark size — 1,000,000 per resolution at 64–512, 250,000 at 1024, 100,000 at 2048, 50,000 at 4096 — and the current reproducibility contract.
-- Exposed deterministic-generation provenance in the export schema used for Hugging Face parquet preparation.
-- Restored `config/config.yaml` to the 4.4 M-sample paper benchmark and aligned preview-image defaults with the sample export settings.
-- Made `passage export` stage release metadata files into the export tree, with anonymous submission copies available via `--anonymous`.
+- **Dataset PASSAGE v1.0** on Hugging Face
+  ([`thalesgroup/passage`](https://huggingface.co/datasets/thalesgroup/passage)):
+  4,400,000 core scenes at seven resolutions, from 64×64 to 4096×4096 cells,
+  built from JAXA ALOS AW3D30 terrain. Each scene carries 6 route variants
+  (three objectives, with and without obstacles), 26,400,000 exact A* routes
+  in all; start and goal cells that the obstacles disconnect are rejected by
+  the generator. Train / calibration / validation / test
+  splits are 90 / 2 / 4 / 4 %, with a South America hold-out and 5°×5° source
+  blocks elsewhere; 1,792 preview rows carry rendered images.
+- **Generator** (`passage`): `download`, `calibrate`, `generate`, `compress`,
+  `export` and `upload`, plus `regenerate` for bounded, resumable generation
+  with verified Parquet export. Generation is deterministic from
+  `generation.seed`, and every sample records its provenance. `audit` and
+  `qualify` check stored routes and released files against recorded receipts.
+- **Evaluator** (`passage-eval` 1.0.0): a complete-request harness
+  (`conform`, `run`, `score`, `compare`, `report`) for classical, graph,
+  reinforcement-learning and vision planners. Planner inputs exclude reference
+  labels. Costs are recomputed with 30-metre edges and the released weights;
+  failed requests are censored at `1e6 × optimum`. ASSD is normalized by the
+  reference waypoint count and Hausdorff p95 is reported in pixels. Paired
+  comparisons resample geographic blocks, and every score has a reproducibility
+  sidecar. Classical baselines and leaderboard storage are included.
+- **Leaderboard**: released empty. Its first entries will be the two
+  dense-vision finalists of the paper, retrained on PASSAGE v1.0. The per-task
+  paper results are released separately under
+  `src/passage-eval/results/paper-results/`.
+- **Documentation and metadata**: user guides, benchmark protocol, datasheet,
+  Croissant metadata, citation file, dataset terms (`DATASET_LICENSE.md`),
+  notebooks and a test suite with at least 80 % coverage.

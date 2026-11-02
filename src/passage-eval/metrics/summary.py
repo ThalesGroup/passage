@@ -32,10 +32,89 @@ from passage_eval._typing import PathLike
 from passage_eval.metrics.geometric import path_assd, path_hausdorff_p95
 from passage_eval.metrics.regret import cost_regret, cost_regret_summary
 from passage_eval.metrics.reliability import (
-    obstacle_cells_traversed_per_path,
-    obstacle_violation_rate,
-    success_rate,
+    path_status,
 )
+from passage_eval.protocol.discipline import apply_censored_penalty
+
+
+def per_sample_metrics(
+    *,
+    predicted_paths: Sequence[PathLike],
+    oracle_paths: Sequence[PathLike],
+    predicted_costs: Sequence[float] | np.ndarray,
+    oracle_costs: Sequence[float] | np.ndarray,
+    obstacles: Sequence[np.ndarray] | None = None,
+    starts: Sequence[tuple[int, int]] | None = None,
+    goals: Sequence[tuple[int, int]] | None = None,
+) -> dict[str, np.ndarray]:
+    """Validated per-sample evidence; censored costs retain failed decodes."""
+    n = len(predicted_paths)
+    if not (n == len(oracle_paths) == len(predicted_costs) == len(oracle_costs)):
+        raise ValueError("Mismatched batch lengths across paths/costs.")
+    if (starts is None) != (goals is None):
+        raise ValueError("Provide both starts and goals")
+    for values in (obstacles, starts, goals):
+        if values is not None and len(values) != n:
+            raise ValueError("Per-sample fields must align with paths")
+    statuses = [
+        path_status(
+            p,
+            start=starts[i] if starts is not None else None,
+            goal=goals[i] if goals is not None else None,
+            obstacles=obstacles[i] if obstacles is not None else None,
+        )
+        for i, p in enumerate(predicted_paths)
+    ]
+    succeeded = np.array([s[0] for s in statuses], dtype=bool)
+    violated = np.array([s[1] for s in statuses], dtype=bool)
+    valid = succeeded & ~violated
+    costs = apply_censored_penalty(
+        predicted_costs, oracle_costs, decoder_succeeded=succeeded, obstacle_violated=violated
+    )
+    # Geometry is defined on the successful, obstacle-free subset (App. A.3).
+    geometry_paths = [p if valid[i] else [] for i, p in enumerate(predicted_paths)]
+    return {
+        "pred_costs": costs,
+        "oracle_costs": np.asarray(oracle_costs, dtype=np.float64),
+        "regret": cost_regret(costs, oracle_costs),
+        "assd": path_assd(geometry_paths, oracle_paths),
+        "h95": path_hausdorff_p95(geometry_paths, oracle_paths),
+        "success": succeeded,
+        "obstacle_violation": violated,
+        "valid_path": valid,
+        "obstacle_cells": np.array([s[2] for s in statuses], dtype=np.int64),
+    }
+
+
+def aggregate_primary_metrics(arrays: dict[str, np.ndarray], *, obstacles_available: bool = True) -> dict[str, float]:
+    """Aggregate validated per-sample arrays without rerunning inference."""
+    stats = cost_regret_summary(arrays["regret"]).as_dict()
+    n = len(arrays["regret"])
+
+    def mean_finite(values):
+        return float(np.nanmean(values)) if np.isfinite(values).any() else float("nan")
+
+    counts = arrays["obstacle_cells"]
+    return {
+        "cost_regret_median": stats["cost_regret_median"],
+        "cost_regret_p90": stats["cost_regret_p90"],
+        "path_assd": mean_finite(arrays["assd"]),
+        "path_hausdorff_p95": mean_finite(arrays["h95"]),
+        "success_rate": float(np.mean(arrays["success"])) if n else float("nan"),
+        "obstacle_violation_rate": float(np.mean(arrays["obstacle_violation"]))
+        if n and obstacles_available
+        else float("nan"),
+        "cost_regret_p95": stats["cost_regret_p95"],
+        "cost_regret_mean": stats["cost_regret_mean"],
+        "cost_regret_geomean": stats["cost_regret_geomean"],
+        "obstacle_cells_traversed_per_path": float(np.mean(counts[counts > 0]))
+        if obstacles_available and np.any(counts > 0)
+        else float("nan"),
+        "n_samples": n,
+        "n_regret_valid": stats["cost_regret_n_valid"],
+        "n_regret_nan": stats["cost_regret_n_nan"],
+        "n_path_valid": int(np.count_nonzero(arrays["valid_path"])),
+    }
 
 
 def compute_primary_metrics(
@@ -48,47 +127,21 @@ def compute_primary_metrics(
     starts: Sequence[tuple[int, int]] | None = None,
     goals: Sequence[tuple[int, int]] | None = None,
 ) -> dict[str, float]:
-    """Compute the six primary decoded-path metrics + diagnostic side.
+    """Six metrics; costs include censored failures, geometry uses valid paths.
 
-    Returns a flat dict ready to write into a paper-facing CSV row.
+    Costs passed to this lower-level API must already use the analytic scene
+    model. Use score_planner to recompute them directly from candidate paths.
     """
-    if not (len(predicted_paths) == len(oracle_paths) == len(predicted_costs) == len(oracle_costs)):
-        raise ValueError("Mismatched batch lengths across paths/costs.")
-    if obstacles is not None and len(obstacles) != len(predicted_paths):
-        raise ValueError("len(obstacles) must equal batch size.")
-
-    regret = cost_regret(predicted_costs, oracle_costs)
-    regret_stats = cost_regret_summary(regret).as_dict()
-
-    assd = path_assd(predicted_paths, oracle_paths)
-    haus95 = path_hausdorff_p95(predicted_paths, oracle_paths)
-
-    succ = success_rate(predicted_paths, starts=starts, goals=goals)
-    if obstacles is not None:
-        oviol = obstacle_violation_rate(predicted_paths, obstacles)
-        obstacle_cells = obstacle_cells_traversed_per_path(predicted_paths, obstacles)
-    else:
-        oviol = float("nan")
-        obstacle_cells = float("nan")
-
-    return {
-        # primary headline
-        "cost_regret_median": regret_stats["cost_regret_median"],
-        "cost_regret_p90": regret_stats["cost_regret_p90"],
-        "path_assd": float(np.nanmean(assd)) if np.any(np.isfinite(assd)) else float("nan"),
-        "path_hausdorff_p95": float(np.nanmean(haus95)) if np.any(np.isfinite(haus95)) else float("nan"),
-        "success_rate": succ,
-        "obstacle_violation_rate": oviol,
-        # diagnostic-side
-        "cost_regret_p95": regret_stats["cost_regret_p95"],
-        "cost_regret_mean": regret_stats["cost_regret_mean"],
-        "cost_regret_geomean": regret_stats["cost_regret_geomean"],
-        "obstacle_cells_traversed_per_path": obstacle_cells,
-        # bookkeeping
-        "n_samples": int(len(predicted_paths)),
-        "n_regret_valid": int(regret_stats["cost_regret_n_valid"]),
-        "n_regret_nan": int(regret_stats["cost_regret_n_nan"]),
-    }
+    arrays = per_sample_metrics(
+        predicted_paths=predicted_paths,
+        oracle_paths=oracle_paths,
+        predicted_costs=predicted_costs,
+        oracle_costs=oracle_costs,
+        obstacles=obstacles,
+        starts=starts,
+        goals=goals,
+    )
+    return aggregate_primary_metrics(arrays, obstacles_available=obstacles is not None)
 
 
 def paired_bootstrap_ci(

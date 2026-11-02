@@ -1,263 +1,168 @@
 ---
-title: End-to-End Walkthrough
+title: Paired statistics
 icon: material/rocket-launch
 ---
 
-# End-to-end walkthrough — evaluating a planner
+# Paired statistics
 
-This page is a complete worked example. We assume you have:
+| Author | Date | Version |
+|---|---|---|
+| Geoffrey Delhomme | 2026-10-24 | 1.1 |
 
-1. A **trained planner** (any family — vision, GNN, RL, classical).
-2. A **canonical decoder** that turns the planner's intermediate
-   output into a path of grid cells.
-3. A way to run that pipeline on each **PASSAGE** test sample.
+This page compares two planners on the six primary decoded-path metrics. Each
+planner has three trained checkpoints (seeds 1234, 2026 and 3407), scored on the
+same frozen test tasks. It checks task pairing, estimates each metric contrast
+under shared geographic-block draws, and explains the separate evidence needed
+for a confirmatory decision. [The protocol](protocol.md) defines the estimators
+and reporting scope. To produce the timed, qualified-reference results used
+here, start with [Evaluate your planner](contributing-a-method.md).
 
-By the end of this page you will have:
+## 1. Freeze and run the candidates
 
-- A six-row headline metric block.
-- A paired-bootstrap $95\%$ CI on the mean of paired differences
-  vs. a baseline.
-- The Holm–Bonferroni-adjusted decision (Pareto-dominant /
-  Trade-off / Indistinguishable).
-- A reproducibility sidecar JSON file pinning every degree of
-  freedom.
-
----
-
-## 0. Prerequisites
+Install from the root with `uv sync --frozen`. For each candidate, declare
+three trained checkpoints in `inference_kwargs_by_seed`, pin the dataset commit,
+freeze decoder decisions on calibration, and run its test spec once:
 
 ```bash
-pip install -e ./src/passage-eval[notebook]
+uv run --frozen passage-eval bench --spec candidate-A.test.yaml
+uv run --frozen passage-eval bench --spec candidate-B.test.yaml
 ```
 
-The walkthrough below runs from a notebook or a stand-alone Python
-script — both are equivalent.
+Each spec uses `split: test`, `cost_model: elevation`, `resolution: 256`, the same
+sample cap, and seeds `[1234, 2026, 3407]`. Use separate fresh result roots.
+A cap of 1024 is a subset campaign. Keep the sidecars, manifests, score receipts,
+checkpoint artifacts and runtime identities. Check that the methods share the
+data, task conditions and declared work limits required by the analysis plan.
 
----
+## 2. Load the measured evidence and verify pairing
 
-## 1. Run your planner on the test split
-
-For each of the three pre-registered seeds
-$\{1234,\,2026,\,3407\}$, run your planner end-to-end on the
-**PASSAGE** test split (the South-America geographic hold-out
-slice; see [Dataset Generation](../generation/index.md)).
-
-For every sample $i$, your harness produces:
-
-- `pred_path[i]` — a list of $(r, c)$ waypoints from $s$ to $g$.
-- `pred_cost[i]` — the cost of `pred_path` under the same cost model.
-- `oracle_path[i]`, `oracle_cost[i]` — already in the dataset shard.
-- `success[i]` $\in \{0, 1\}$ — did the decoder reach $g$?
-- `violation[i]` $\in \{0, 1\}$ — did `pred_path` cross any obstacle
-  cell?
-
-Persist these as one `.npz` per seed.
-
-!!! tip "Decoder freezing (Rule 3)"
-    Every decoder hyperparameter (threshold, step, schedule, …) was
-    fixed on the calibration split before this run. Record the
-    config under a deterministic hash so [Rule 6](protocol.md#rule-6-no-test-split-leakage)
-    can be enforced.
-
----
-
-## 2. Compute the six primary metrics per seed
+The following example reads the warm scored run directory for each checkpoint.
+It selects the frozen primary quality repeat from the complete-request arrays;
+repeated timed routes must not become extra independent tasks.
 
 ```python
+from pathlib import Path
 import numpy as np
-from passage_eval.metrics import compute_primary_metrics
-from passage_eval.protocol import apply_censored_penalty
+from passage_eval import DEFAULT_SEEDS, compare_primary_metrics
 
-per_seed_metrics = []
-per_seed_arrays  = []
+# Replace these with the actual warm run directories containing per_sample.npz.
+runs_A = {1234: "...", 2026: "...", 3407: "..."}
+runs_B = {1234: "...", 2026: "...", 3407: "..."}
 
-for seed in (1234, 2026, 3407):
-    z = np.load(f"results/test_seed{seed}.npz")
-    pred_cost   = z["pred_cost"]
-    oracle_cost = z["oracle_cost"]
-    success     = z["success"].astype(bool)
-    violation   = z["violation"].astype(bool)
-    assd        = z["assd"]
-    h95         = z["hausdorff_p95"]
 
-    # Censored-penalty rule on failed decodes (paper Rule, m = 2.0).
-    pred_cost_p = apply_censored_penalty(pred_cost, success,
-                                          oracle_cost, multiplier=2.0)
+def load_primary(run_directory):
+    with np.load(Path(run_directory) / "per_sample.npz", allow_pickle=False) as data:
+        assert data["metric_contract"].item() == "passage-qualified-complete-v1"
+        assert data["reference_qualified"].all()
+        selected = data["primary_quality"]
+        assert selected.dtype.kind == "b"
+        assert np.array_equal(selected, data["repeat_index"] == data["quality_repeat_index"].item())
+        columns = {
+            field: data[field][selected].copy()
+            for field in ("regret", "assd", "h95", "success",
+                          "obstacle_violation", "valid_path")
+        }
+        columns["task_id"] = data["sample_id"][selected].copy()
+        blocks = data["cluster_id"][selected].copy()
+    return columns, blocks
 
-    per_seed_metrics.append(
-        compute_primary_metrics(
-            pred_cost=pred_cost_p, oracle_cost=oracle_cost,
-            success=success, violation=violation,
-            assd=assd, h95=h95,
-        )
-    )
-    per_seed_arrays.append({
-        "pred_cost": pred_cost_p, "oracle_cost": oracle_cost,
-        "success":   success,     "violation":   violation,
-        "assd":      assd,        "h95":         h95,
-    })
 
-# Three-seed mean for the headline display
-import pandas as pd
-df = pd.DataFrame(per_seed_metrics).agg(["mean", "std"])
-print(df.round(4))
+A, B, geographic_blocks = {}, {}, None
+for training_seed in DEFAULT_SEEDS:
+    A[training_seed], blocks_A = load_primary(runs_A[training_seed])
+    B[training_seed], blocks_B = load_primary(runs_B[training_seed])
+    assert np.array_equal(A[training_seed]["task_id"], B[training_seed]["task_id"])
+    assert np.array_equal(blocks_A, blocks_B)
+    if geographic_blocks is None:
+        geographic_blocks = blocks_A
+    else:
+        assert np.array_equal(geographic_blocks, blocks_A)
 ```
 
-You now have the six headline metrics (mean over three seeds).
+These checks supplement the manifest and sidecar review; equal sample IDs alone
+do not establish equal data or task conditions. `compare_primary_metrics` also
+checks the exact ordered task roster across both methods and all seeds. It
+requires at least two known geographic blocks. Unknown block identities cannot
+be replaced with task IDs to create an uncertainty estimate.
 
----
+Failed paths retain their finite censored regret. Reliability metrics use every
+task. Geometry uses each method's own valid-path subset, so report both methods'
+retained counts as well as their success and obstacle-violation rates.
 
-## 3. Paired bootstrap vs a baseline
-
-Pre-register the baseline (e.g. the dense-vision regression
-finalist `repvit_m1+Bellman+V_bridge`) and run it on the same test
-split with the same three seeds.
-
-```python
-from passage_eval.protocol import multiseed_paired_bootstrap
-
-# For each metric, we need (per_seed_pairs) where each entry is a
-# tuple (per-sample metric for A, per-sample metric for B).
-pairs_per_metric = {
-    "cost_regret_median":      [],
-    "cost_regret_p90":         [],
-    "path_assd":               [],
-    "path_hausdorff_p95":      [],
-    "success_rate":            [],
-    "obstacle_violation_rate": [],
-}
-# ... fill from per_seed_arrays for A (your planner) and B (baseline)
-
-agg = {}
-for m, pairs in pairs_per_metric.items():
-    agg[m] = multiseed_paired_bootstrap(pairs, n_resamples=10_000)
-```
-
-Each `agg[m]` carries the pooled point estimate, $95\%$ CI on
-$\Delta_m$, and the two-sided $p$-value for $\Delta_m = 0$.
-
----
-
-## 4. Holm–Bonferroni and the decision
+## 3. Estimate all six metric contrasts
 
 ```python
-from passage_eval.protocol import holm_bonferroni, decide_pairwise
-
-p_values = {m: agg[m].p_value for m in agg}
-hb = holm_bonferroni(p_values, alpha=0.05)
-
-decision = decide_pairwise(agg, hb=hb)
-print(decision)
-# -> 'pareto_dominant' | 'trade_off' | 'indistinguishable'
-```
-
-If your planner is `pareto_dominant`, you may report it as a win on
-every primary metric. If `trade_off`, you must report it with the
-paired CI bands and a one-sentence narrative noting the lost
-metrics. If `indistinguishable`, the claim is **rejected, not
-rounded**.
-
----
-
-## 5. Trustworthiness axes
-
-Beyond the primary headline, run the four axes:
-
-```python
-import numpy as np
-
-# 5.1 Stability — three-seed CV of regret_p90
-regret_p90_seeds = np.array([m["cost_regret_p90"] for m in per_seed_metrics])
-stability_cv = regret_p90_seeds.std() / regret_p90_seeds.mean()
-
-# 5.2 Geographic generalisation — paired delta against a matched random split
-#    (run a separate evaluation on the matched-marginal random split, then
-#     compute the paired Δ over the same per-sample arrays).
-
-# 5.3 ODD-boundary behaviour — re-run the six metrics on the boundary subset
-#    (extremal obstacle coverage, super-ellipse exponents in {1, 80},
-#     elevation-band edges).
-
-# 5.4 End-to-end efficiency — fall through to step 6 below.
-```
-
----
-
-## 6. Deployment footprint
-
-```python
-from passage_eval.deployment import (
-    forward_timing, decoder_timing, end_to_end_percentiles,
-    flops_and_params,
+comparison = compare_primary_metrics(
+    A, B, blocks=geographic_blocks,
+    n_bootstrap=10_000, alpha=0.05, seed=1234,
 )
-
-fwd_ms = forward_timing(model, sample_input, n_warmup=10, n_iters=100)
-dec_ms = decoder_timing(decoder_fn, output, n_warmup=10, n_iters=100)
-e2e    = end_to_end_percentiles(pipeline_fn, sample_input,
-                                 n_warmup=10, n_iters=100)
-flops, params = flops_and_params(model, sample_input)
-
-print(f"forward p50:        {fwd_ms.p50:.3f} ms")
-print(f"decoder p50:        {dec_ms.p50:.3f} ms")
-print(f"end-to-end p50/p95: {e2e.p50:.3f} / {e2e.p95:.3f} ms")
-print(f"params: {params:,}; MACs: {flops:.2e}")
+for metric, record in comparison.deltas.items():
+    print(metric, record.delta, record.ci_low, record.ci_high,
+          "finite outcomes A/B:", record.n_a, record.n_b)
+    for training_seed, seed_record in record.per_seed.items():
+        print(training_seed, seed_record.delta,
+              seed_record.ci_low, seed_record.ci_high,
+              seed_record.n_a, seed_record.n_b)
+print(comparison.inference_status)  # test_not_provided
 ```
 
-End-to-end latency is the **headline** number for the deployment row;
-forward and decoder times are reported as a decomposition.
+For each metric, the contrast is `T(A) - T(B)`. The prescribed reduction `T`
+is median or p90 for regret, and mean for geometry and reliability. Each draw
+resamples whole geographic blocks, identically for both methods, every training
+seed and every metric. The API computes each seed's contrast inside that draw,
+then averages the three contrasts. The interval uses 10,000 draws of this seed
+mean and is conditional on the three fitted checkpoints.
 
----
+A geometry draw with an empty valid subset makes its interval unavailable;
+the API retains undefined draws. Its per-seed and aggregate outcome counts make
+that coverage visible. These descriptive estimates do not supply a confirmatory
+p-value or establish superiority.
 
-## 7. Reproducibility sidecar
+## 4. Supply the declared paired-test evidence
+
+If the analysis plan includes a valid paired test of the same geographic-block,
+seed-mean contrast, supply its six measured p-values and the declared test and
+assumptions. The file below is an input produced by that separate analysis,
+not by the bootstrap interval helper:
 
 ```python
-from passage_eval.sidecar import ReproducibilitySidecar
+import json
 
-sidecar = ReproducibilitySidecar(
-    dataset_version="passage-1.1",
-    seeds=(1234, 2026, 3407),
-    calibration_decisions={
-        "threshold":      0.5,
-        "bridge_to_goal": True,
-        "max_steps":      512,
-    },
-    hardware={"gpu": "H100", "cpu": "Xeon Platinum 8480"},
-    inference={"batch_size": 1, "precision": "fp16"},
-    determinism="algorithmically_deterministic",
+# Required fields: p_values (all six primary metric names),
+# paired_test (the declared test), and test_assumptions (its justification).
+test_evidence = json.loads(Path("paired-test-evidence.json").read_text())
+confirmed = compare_primary_metrics(
+    A, B, blocks=geographic_blocks,
+    n_bootstrap=10_000, alpha=0.05, seed=1234,
+    p_values=test_evidence["p_values"],
+    paired_test=test_evidence["paired_test"],
+    test_assumptions=test_evidence["test_assumptions"],
 )
-sidecar.write("results/my_planner.sidecar.json")
-print(sidecar.calibration_hash)        # e.g. 'a3f7…'
+print(confirmed.inference_status, confirmed.decision.value, confirmed.votes)
 ```
 
-The sidecar must accompany every headline row. An auditor can
-recompute the deterministic hash and verify the test pass used
-calibration-time values.
+The API applies Holm–Bonferroni across all six tests at family-wise alpha 0.05.
+An unavailable test is `NaN` and keeps its place in that family. The API checks
+availability and input shape; a test name does not establish its validity.
+Bootstrap tail fractions and confidence-interval proxies cannot replace the
+paired-test evidence. Claims over additional method pairs need their own
+prespecified correction family.
 
----
+A Pareto decision requires demonstrated wins on every primary metric. Wins in
+both directions are a trade-off; wins in one direction with inconclusive metrics
+are partial evidence. No demonstrated difference does not establish equivalence.
 
-## 8. What you submit
+## 5. Complete the reporting campaign
 
-A complete **PASSAGE** headline submission carries:
+Report per-seed estimates and intervals, the mean of the three seed contrasts,
+method-specific geometry coverage, the block definition, resampling seed, and
+all test assumptions and Holm decisions. Add the stability, geographic versus
+matched-random, domain-boundary, and same-device efficiency studies. Deploy on
+each real target to measure latency, precision sensitivity, memory, parameter
+count, and forward/decoder decomposition.
 
-- The **six primary metrics** with paired-bootstrap $95\%$ CIs (per
-  seed and pooled).
-- The **decision** vs the declared baseline (pareto-dominant /
-  trade-off / indistinguishable).
-- The **four trustworthiness axes** as point statistics.
-- The **deployment-footprint row** for stack R1 (server) and stack
-  R2 (edge), per [Rule 7](protocol.md#rule-7-decoding-is-part-of-inference)
-  — end-to-end including the decoder.
-- The **reproducibility sidecar** JSON.
-
-If any of the above is missing, the entry is **separated from the
-reproducible rows in the headline table** ([Rule 8](protocol.md#rule-8-tool-transparency)).
-
----
-
-## Cross-references
-
-- [Evaluation protocol](protocol.md) — formal rules.
-- [`passage-eval` package](passage-eval.md) — module-by-module reference.
-- [API reference](api.md) — auto-generated docstrings.
-- Notebook walkthrough: [`notebooks/_passage_eval_metrics.ipynb`](https://github.com/ThalesGroup/passage/blob/main/notebooks/_passage_eval_metrics.ipynb).
-- Tests as specification: 49 unit tests in `src/passage-eval/tests/`.
+Sidecars record the hash of supplied calibration decisions and the container
+digest. Retain the original calibration record separately. Publish a headline
+with candidate source, the three checkpoint artifacts, frozen data and runtime
+identities, the analysis plan, and the measured campaign evidence. The separately released paper results remain unchanged and cannot
+supply missing measurements for a new method.

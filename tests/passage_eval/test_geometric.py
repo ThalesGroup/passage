@@ -52,11 +52,11 @@ def test_path_hausdorff_p95_is_zero_for_identical_paths():
 
 def test_path_assd_normalised_by_oracle_length():
     # Predicted shifted by one pixel uniformly along the row axis.
-    p = _line((0, 0), (10, 10), 50)
+    p = np.array([(0, c) for c in range(11)])
     q = p + np.array([1.0, 0.0])
     out = path_assd([q], [p])
-    # ASSD = 1 px; oracle length ~ 10*sqrt(2) ~ 14.14
-    assert 0.05 < float(out[0]) < 0.10
+    # ASSD = 1 px, divided by the 11 oracle waypoints (paper App. B).
+    np.testing.assert_allclose(out, 1 / 11)
 
 
 def test_path_iou_diagnostic_is_one_for_identical_paths():

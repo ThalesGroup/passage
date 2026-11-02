@@ -3,6 +3,7 @@
 # Copyright (c) 2026 THALES
 
 """Geographic generalisation axis: paired delta hold-out vs random split."""
+
 from __future__ import annotations
 
 import numpy as np
@@ -20,19 +21,16 @@ def geographic_generalisation(
     metric_name: str = "cost_regret_p90",
     higher_is_better: bool = False,
 ) -> TrustworthinessAxis:
-    """Paired difference of a primary metric between the geographic
-    hold-out split and a matched-marginal random split (§5.4 / App. K,
-    axis "Geo").
+    """Difference in the mean of a primary metric between the geographic
+    hold-out split and a matched-marginal random split (axis "Geo").
 
     Both inputs are per-sample arrays for the *same metric*. The output
-    ``value`` is ``mean(holdout) - mean(matched_random)`` (i.e.\\ the
-    sign matches the metric's "better-is-..." convention as stated by
-    ``higher_is_better``).
+    ``value`` is ``mean(holdout) - mean(matched_random)``;
+    ``higher_is_better`` sets which sign counts as worse.
 
-    The axis fires when the hold-out is meaningfully worse than the
-    matched random sample (below the bootstrap CI on the difference is
-    a stricter check the user can run separately via
-    :func:`passage_eval.protocol.discipline.paired_bootstrap_delta`).
+    The axis fires when the hold-out mean is worse than the matched
+    random mean. The flag uses the sign of the difference only; it is
+    not a significance test.
     """
     a = np.asarray(holdout_per_sample, dtype=np.float64)
     b = np.asarray(matched_random_per_sample, dtype=np.float64)

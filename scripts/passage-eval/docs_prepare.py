@@ -4,9 +4,11 @@ Run from the repo root via ``make docs-prepare``. Idempotent.
 
 Two notebook tracks are produced:
 
-* ``benchmark`` — passage-eval canonical workflow; lives at
-  ``notebooks/passage-eval/{01..03}.ipynb``. Always executed: these are
-  fast and have no external data dependencies.
+* ``benchmark`` — passage-eval notebooks at
+  ``notebooks/passage-eval/{01..03}.ipynb``. The paper-results and
+  leaderboard reports read released result files only and are always
+  executed. The walkthrough needs a local dataset copy; without one it is
+  rendered unexecuted and flagged.
 
 * ``generation`` — top-level dataset / solver demos at
   ``notebooks/{demo,obstacles,costmodel,solve,astar_inference_timing}.ipynb``.
@@ -21,7 +23,7 @@ Layout produced:
     ├── gen/
     │   └── notebooks/
     │       ├── 01_astar_walkthrough.html
-    │       ├── 02_score_released_baselines.html
+    │       ├── 02_paper_results.html
     │       ├── 03_leaderboard.html
     │       ├── demo.html
     │       ├── obstacles.html
@@ -31,7 +33,7 @@ Layout produced:
     ├── benchmark/notebooks/
     │   ├── index.md
     │   ├── 01-astar-walkthrough.md
-    │   ├── 02-score-released-baselines.md
+    │   ├── 02-paper-results.md
     │   └── 03-leaderboard.md
     └── generation/notebooks/
         ├── demo.md
@@ -101,14 +103,26 @@ BENCHMARK_NOTEBOOKS: Sequence[NotebookSpec] = (
         stem="01_astar_walkthrough",
         source=REPO_ROOT / "notebooks" / "passage-eval" / "01_astar_walkthrough.ipynb",
         section="benchmark",
-        title="A* walkthrough — `Planner` ABC end-to-end",
-        nav_label="A* walkthrough",
+        title="Evaluating a planner, step by step",
+        nav_label="Evaluator walkthrough",
         intro=(
-            "Implements the canonical cross-family abstraction end-to-end: "
-            "score the bundled `AStarPlanner` through the `Planner` ABC, "
-            "emit one run bundle to `outputs/passage-eval/results/`. This "
-            "is the first notebook to run on a fresh checkout — it doubles "
-            "as an integration test for the on-disk leaderboard layout."
+            "Writes a planner in a few lines, scores it next to the exact A* "
+            "planner on one released task, reads each of the six primary "
+            "metrics, then scores both on a small validation sample. It needs "
+            "the local dataset copy declared by `dataset_path`; without it, "
+            "the page shows the notebook unexecuted."
+        ),
+    ),
+    NotebookSpec(
+        stem="02_paper_results",
+        source=REPO_ROOT / "notebooks" / "passage-eval" / "02_paper_results.ipynb",
+        section="benchmark",
+        title="Paper results",
+        nav_label="Paper results",
+        intro=(
+            "Reads the per-task results of the two paper finalists released "
+            "under `src/passage-eval/results/paper-results/`. "
+            "These are not leaderboard entries."
         ),
         required=True,
     ),
@@ -116,30 +130,28 @@ BENCHMARK_NOTEBOOKS: Sequence[NotebookSpec] = (
         stem="02_score_released_baselines",
         source=REPO_ROOT / "notebooks" / "passage-eval" / "02_score_released_baselines.ipynb",
         section="benchmark",
-        title="Score released baselines from per-sample NPZ",
-        nav_label="Score released baselines",
+        title="Classical baselines on the validation split",
+        nav_label="Classical baselines",
         intro=(
-            "Replay the released vision (`seg`, `reg`) and graph (Edge-MLP) "
-            "per-sample NPZ artefacts through `passage_eval.io.predictions`. "
-            "Each (config × seed × host_accelerator) cell becomes one "
-            "leaderboard row in `outputs/passage-eval/results/runs/r256/...`."
+            "Scores the three classical planners shipped with `passage-eval` "
+            "(exact A*, greedy, random walk) on 64 validation tasks for each "
+            "objective, with a distribution-free interval for each median "
+            "regret. Reference points for reading the metrics, not benchmark "
+            "results. Needs the local dataset copy."
         ),
-        required=True,
     ),
     NotebookSpec(
         stem="03_leaderboard",
         source=REPO_ROOT / "notebooks" / "passage-eval" / "03_leaderboard.ipynb",
         section="benchmark",
-        title="Leaderboard visualisation",
-        nav_label="Leaderboard visualisation",
+        title="Recording results in the passage-eval format",
+        nav_label="Results format",
         intro=(
-            "Aggregate everything emitted by the previous two notebooks and "
-            "produce the four canonical figures: bar chart of CR-median "
-            "per (method × accelerator), method × accelerator latency "
-            "heatmap, accuracy-vs-latency Pareto frontier, pairwise verdict "
-            "heatmap."
+            "Scores two classical planners, records them as `Submission` "
+            "records in a temporary results folder and reads the table back: "
+            "benchmark cell, six metrics, data revision and code version, "
+            "without host or user names. Needs the local dataset copy."
         ),
-        required=True,
     ),
 )
 
@@ -148,14 +160,12 @@ GENERATION_NOTEBOOKS: Sequence[NotebookSpec] = (
         stem="demo",
         source=REPO_ROOT / "notebooks" / "demo.ipynb",
         section="generation",
-        title="Demo · load + visualise a sample",
-        nav_label="Demo (load + visualise)",
+        title="Getting started with PASSAGE",
+        nav_label="Getting started",
         intro=(
-            "Quick-start: load one PASSAGE sample at the requested "
-            "resolution + split, decode the compressed tensor, render the "
-            "elevation field, the markers, the obstacle mask, and the "
-            "oracle paths. This is the canonical first notebook to run "
-            "after `make download && make calibrate`."
+            "The shortest path from the dataset to a training example: load "
+            "one released scene, decode its tensor, draw a reference route "
+            "and turn it into a segmentation target."
         ),
         execute_by_default=False,
     ),
@@ -163,13 +173,12 @@ GENERATION_NOTEBOOKS: Sequence[NotebookSpec] = (
         stem="obstacles",
         source=REPO_ROOT / "notebooks" / "obstacles.ipynb",
         section="generation",
-        title="Obstacle generation",
-        nav_label="Obstacle generation",
+        title="Obstacles: how much they cover and what they cost",
+        nav_label="Obstacles",
         intro=(
-            "Walks through the PASSAGE obstacle generation pipeline: "
-            "super-ellipse shape gallery, coverage histograms across "
-            "configurations, and the pseudo-random seeding contract that "
-            "guarantees per-sample reproducibility."
+            "Obstacle masks from least to most covered, drawn coverage "
+            "against its target, and the detour that obstacles force on the "
+            "optimal route over a whole validation split."
         ),
         execute_by_default=False,
     ),
@@ -177,13 +186,12 @@ GENERATION_NOTEBOOKS: Sequence[NotebookSpec] = (
         stem="costmodel",
         source=REPO_ROOT / "notebooks" / "costmodel.ipynb",
         section="generation",
-        title="Cost model comparison",
-        nav_label="Cost model comparison",
+        title="The three routing objectives",
+        nav_label="The three objectives",
         intro=(
-            "Compare all five PASSAGE cost models — `distance`, "
-            "`elevation`, `absolute_elevation`, `slope_uphill`, `energy` — "
-            "on the same terrain crop, side-by-side. Includes the weight "
-            "calibration explanation."
+            "What the `elevation`, `slope_uphill` and `energy` objectives "
+            "reward on one scene, their elevation profiles, and the extra "
+            "cost of a route optimised for the wrong objective."
         ),
         execute_by_default=False,
     ),
@@ -191,13 +199,12 @@ GENERATION_NOTEBOOKS: Sequence[NotebookSpec] = (
         stem="solve",
         source=REPO_ROOT / "notebooks" / "solve.ipynb",
         section="generation",
-        title="Solver comparison · NetworkX vs pathfinding vs grid",
-        nav_label="Solver comparison",
+        title="Solving a task with the exact reference",
+        nav_label="Exact re-solve",
         intro=(
-            "Side-by-side timing and quality comparison of three "
-            "shortest-path solver back-ends used during data generation: "
-            "NetworkX, the `pathfinding` package, and the PASSAGE grid "
-            "back-end."
+            "Solves stored labels again with the exact float64 A* reference, "
+            "compares costs and routes, shows why the search budget matters, "
+            "and repeats the check on a sample of validation scenes."
         ),
         execute_by_default=False,
     ),
@@ -205,13 +212,12 @@ GENERATION_NOTEBOOKS: Sequence[NotebookSpec] = (
         stem="astar_inference_timing",
         source=REPO_ROOT / "notebooks" / "astar_inference_timing.ipynb",
         section="generation",
-        title="A* inference-timing benchmark",
-        nav_label="A* inference timing",
+        title="Timing a planner fairly",
+        nav_label="Timing a planner",
         intro=(
-            "Reference deployment-side benchmark for the A* oracle "
-            "implementation used as the dataset's labelling solver. The "
-            "numbers here power the oracle reference rows in the "
-            "leaderboard's latency heatmap."
+            "Times the canonical A* planner of `passage-eval` with the "
+            "practices that make a timing meaningful: warm-up, repetitions, "
+            "percentiles and a stated machine."
         ),
         execute_by_default=False,
     ),
@@ -272,6 +278,7 @@ def _export_html(nb: nbformat.NotebookNode, out_path: Path) -> None:
 def _wrapper_md(spec: NotebookSpec, *, executed: bool, message: str) -> str:
     rel_html = f"../../../gen/notebooks/{spec.stem}.html"
     rel_source = f"notebooks/{spec.source.parent.name}/{spec.source.name}" if spec.source.parent.name != "notebooks" else f"notebooks/{spec.source.name}"
+    rerun = "make docs-prepare" if spec.execute_by_default else "make docs-prepare-all"
     body = f"""---
 title: "{spec.title}"
 hide:
@@ -284,16 +291,16 @@ hide:
 
 !!! info "Source notebook"
 
-    `{rel_source}` — re-execute with `make docs-prepare` after editing.
+    `{rel_source}` — re-execute with `{rerun}` after editing.
 """
     if not executed:
         body += f"""
 !!! warning "This notebook was rendered without executing"
 
-    `make docs-prepare` could not execute the source notebook on this
+    `{rerun}` could not execute the source notebook on this
     checkout ({message}). The HTML below shows the most recent stored
     outputs, which may be stale or empty. Re-run the notebook locally
-    after fetching the data it needs (e.g.\\ `make download && make
+    after fetching the data it needs (for example `make download && make
     calibrate`) to refresh.
 """
     body += f"""
@@ -322,17 +329,17 @@ def _index_md(specs: Sequence[NotebookSpec], section: str) -> str:
     )
     title = "Benchmark notebooks" if section == "benchmark" else "Dataset / solver notebooks"
     summary = (
-        "Three reproducible notebooks walk through the canonical "
-        "`passage-eval` workflow end-to-end. Each notebook is executed "
-        "during `make docs-prepare` and exported as a standalone HTML "
-        "file embedded below."
+        "Four notebooks cover the `passage-eval` side: an evaluator "
+        "walkthrough, the paper results, the classical baselines and the "
+        "results format. `make docs-prepare` executes them and exports "
+        "standalone HTML files embedded below; a notebook that needs a "
+        "local dataset copy is rendered unexecuted and flagged."
         if section == "benchmark"
         else
-        "Top-level demo and analysis notebooks for the data-generation "
-        "side. Each notebook is best-effort executed during "
-        "`make docs-prepare`; notebooks that need a downloaded dataset "
-        "fall back to their last stored outputs and are flagged with a "
-        "warning admonition."
+        "Demo and analysis notebooks for the data-generation side. "
+        "`make docs-prepare` executes the light ones; `make docs-prepare-all` "
+        "also executes those that need a local dataset copy. A notebook "
+        "that could not run shows its last stored outputs under a warning."
     )
     return f"""---
 title: "Notebooks"
@@ -391,9 +398,8 @@ def main(argv: list[str] | None = None) -> int:
             executed, message = False, f"execution skipped ({why})"
         else:
             print(f"[docs-prepare] executing {spec.source.name} ...")
+            # Execute in memory only: committed sources stay output-free.
             nb, executed, message = _execute(spec)
-            if executed:
-                nbformat.write(nb, spec.source)
 
         _export_html(nb, spec.html_out())
         spec.wrapper_out().parent.mkdir(parents=True, exist_ok=True)

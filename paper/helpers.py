@@ -137,7 +137,7 @@ def load_tile(tile_id: str, resolution: int):
     np.ndarray | None
         A ``(resolution, resolution, 3)`` ``float32`` array with
         ``(elevation, markers, obstacles)`` channels, or ``None`` if the
-        real loader / data share is not available in this environment.
+        real loader / data share is not mounted in this environment.
     """
     np = _require_numpy()
     try:

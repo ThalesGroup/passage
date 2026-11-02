@@ -1,326 +1,280 @@
 ---
-title: "Submit a candidate"
+title: Evaluate your planner
 icon: material/account-plus-outline
 ---
 
-# Submit a candidate
+# Evaluate your planner
 
-This page is the **canonical entry point** for any third party who
-wants their planner scored under PASSAGE — vision baseline, GNN, RL
-agent, or classical search. The flow is identical for all of them
-because the contract is approach-agnostic.
+| Author | Date | Version |
+|---|---|---|
+| Geoffrey Delhomme | 2026-10-20 | 1.0 |
 
-```mermaid
-flowchart LR
-    A[Your inference function] -->|module:attr| B[BenchSpec YAML]
-    B --> C[passage-eval bench]
-    C --> D[Load PASSAGE val split]
-    D --> E[Run inference per sample]
-    E --> F[Score primary metrics]
-    F --> G[Optional: latency on edge]
-    G --> H[Append leaderboard row + run bundle]
-```
+The evaluator measures the complete procedure that emits a route, then scores that
+same persisted route against an independently qualified reference. This guide
+covers wrapping an existing classical, graph, policy or vision algorithm,
+freezing its inputs and budgets, and producing a matched comparison report.
+The [protocol](protocol.md) gives the metric definitions and how the evaluator
+reads the paper. The [Benchmark overview](index.md) defines the terms used
+here: ordinary input, complete request, qualified reference, cohort and
+censored cost.
 
-!!! tip "TL;DR — score a planner in three commands"
+> **Evidence boundary**
+>
+> A small CPU run checks the interface. It establishes neither learned-model
+> performance nor accelerator speed. Training and device measurements produce
+> their own identified artifacts.
 
-    ```bash
-    passage-eval init-spec --out my_method.passage-bench.yaml      # 1. starter spec
-    # edit my_method.passage-bench.yaml: set `inference:` + `edge_accelerator:`
-    passage-eval bench --spec my_method.passage-bench.yaml          # 2. score it
-    passage-eval leaderboard --metric cost_regret_median            # 3. inspect
-    ```
+> **Official entries**
+>
+> The leaderboard submission service is not deployed yet. This guide covers
+> local evaluation: the commands below produce local results, not official
+> leaderboard entries.
 
-## 1. Implement the inference signature
+## 1. Implement the complete procedure
 
-You can ship either a [`Planner`][passage_eval.Planner] subclass or
-a plain function. The CLI auto-detects which one you handed in.
-
-=== "`Planner` subclass (recommended)"
-
-    ```python
-    # my_method/planner.py
-    import passage_eval as pe
-
-    class MyPlanner(pe.Planner):
-        name = "my_method"
-
-        def __init__(self, checkpoint: str, *, device: str = "cuda"):
-            self.model = load_my_model(checkpoint, device=device)
-
-        def predict_path(self, scene: pe.Scene) -> pe.PlannerOutput:
-            path = self.model.run(
-                elevation=scene.elevation,
-                obstacles=scene.obstacles,
-                start=scene.start,
-                goal=scene.goal,
-                cost_model=scene.cost_model,
-                cost_weight=scene.cost_weight,
-            )
-            return pe.PlannerOutput(predicted_path=path, predicted_cost=0.0)
-    ```
-
-=== "Free function (quickest)"
-
-    ```python
-    # my_method/predict.py
-    import numpy as np
-
-    def my_predict_fn(*, elevation: np.ndarray, obstacles: np.ndarray,
-                      start: tuple[int, int], goal: tuple[int, int],
-                      cost_model: str, cost_weight: float, **kwargs
-                      ) -> list[tuple[int, int]]:
-        """Return the ordered (i, j) cells of the path from start to goal."""
-        ...
-    ```
-
-The required signature is **kwargs-only** for forward compatibility.
-Future PASSAGE releases may add fields without breaking your method.
-
-## 2. Declare your submission
-
-`passage-eval` consumes a single declarative spec — every flag you
-might pass on the CLI lives in this file:
-
-```yaml title="my_method.passage-bench.yaml"
-method_name: my_method                       # short identifier, snake_case
-family: rl                                    # dense_regression / dense_segmentation / graph / classical / rl
-architecture: ppo_actor_critic                # backbone or class label
-decoder_variant: argmax_policy
-
-inference: my_method.planner:MyPlanner        # 'module:Class' OR 'module:callable'
-inference_kwargs:
-  checkpoint: outputs/my_method/best.pt
-
-resolution: 256                               # PASSAGE input resolution
-cost_model: elevation                         # elevation / slope_uphill / energy
-cost_weight: 1.0
-split: val
-n_samples: 1024
-seeds: [1234, 2026, 3407]                     # MUST match passage_eval.DEFAULT_SEEDS
-
-edge_accelerator: Thor-GPU                    # h100 / Thor-GPU / Orin-GPU / Orin-NPU / Tiger-iGPU / null
-batch_size: 1
-dtype: fp16
-measure_latency: true
-latency_warmup: 5
-latency_repeats: 30
-
-results_root: outputs/passage-eval/results
-dataset_version: thalesgroup/passage:v0.4
-extra:
-  notes: "first end-to-end submission"
-```
-
-Generate a starter file with `passage-eval init-spec`.
-
-## 3. Score it
+From the repository root, use the locked environment:
 
 ```bash
-passage-eval bench --spec my_method.passage-bench.yaml
+uv sync --frozen
+uv run --frozen passage-eval --help
 ```
 
-Behind the scenes the CLI:
+Alternatively, activate it once with `source .venv/bin/activate` before using the
+entry points directly. Keep the existing algorithm's dependencies and adapter
+importable in this environment. The adapter is the complete deployed procedure:
+its input conversion, inference/search, decoding, repair and fallback all belong
+inside `plan`.
 
-1. Imports `MyPlanner` from `my_method.planner` and instantiates it with `inference_kwargs`.
-2. Loads the released PASSAGE val split for the declared `(resolution, cost_model)` cell.
-3. Runs your `predict_path` once per sample.
-4. Computes the **six primary metrics** — `cost_regret_median`,
-   `cost_regret_p90`, `path_assd`, `path_hausdorff_p95`,
-   `success_rate`, `obstacle_violation_rate` — applying the
-   pre-registered censored-penalty rule.
-5. (If `measure_latency: true`) repeats `predict_path` on a
-   reference scene `latency_warmup + latency_repeats` times and
-   records `latency_e2e_ms_p50`.
-6. For each seed, builds a `Submission`
-   record and calls `pe.submit(...)`. The on-disk bundle lands at:
+```python
+from passage_eval.protocol.contracts import PlanRequest, PlanResult
+from your_algorithm import solve
 
-```
-outputs/passage-eval/results/runs/r256/elevation/<accelerator>/
-└── my_method__seed1234__<timestamp>/
-    ├── metrics.json
-    └── per_sample.npz   (when supplied)
+class MyPlanner:
+    def plan(self, request: PlanRequest) -> PlanResult:
+        route, work = solve(
+            elevation=request.elevation, obstacles=request.obstacles,
+            start=request.start, goal=request.goal, graph=request.graph,
+            budget=request.budget, deadline=request.deadline_monotonic,
+        )
+        return PlanResult(path=route, work=work, precision="fp32")
 ```
 
-The leaderboard CSV is atomically appended.
+This sketch assumes your `solve` returns a route and counters; adapt its arguments
+to the real API. For a runnable external example, see Section 3.A. A plain
+`module:function` can also accept a request and return `PlanResult`.
 
-## 4. Same flow on a different accelerator
+A request contains calibrated metre elevation, obstacles, endpoints, graph and
+objective parameters, an optional normalized `(H,W,3)` tensor, and declared
+budgets. Metadata uses a finite allowlist. Reference routes, optimum costs,
+reference reachability and target-field scales remain evaluator-owned.
 
-Run the bench on the actual edge target — the spec changes only
-in the deployment block:
+Return the original ordered integer `(row, column)` route without rounding or
+clipping. Report search work, repair/fallback stages, precision and available
+resource peaks. Configured work limits require their counters; fallback consumes
+the same budget. Work keys are `expansions`, `queue_operations` and `live_states`
+for the corresponding `BudgetSpec` limits. Use `stage_work` for primary, repair
+and fallback subtotals; resource peaks use maximum rather than summed values.
+`request.remaining_wall_ms()` reads the shared absolute deadline. Starting a new
+timer for fallback would change the declared budget. Record `ok`, `no_path`,
+`invalid_path`, `budget_exhausted`, `timeout`, `oom`, `runtime_error` or `cancelled`
+as appropriate. Each decoder and budget defines a separate procedure.
+
+Existing `Planner.predict_path(scene)` implementations and tensor/scene callables
+remain supported. Use `inference_format: request` for the new interface.
+
+The timer covers candidate-input preparation, inference, decoding, repair,
+fallback, device completion synchronization, route snapshot, legality and physical
+recosting. Device work completes before route snapshot and recosting. Persistence and
+reference/geometry scoring follow outside it. Model construction is excluded;
+the `cold` series is the first pass over the tasks after construction. Warmup and
+warm outputs are retained and scored separately.
+
+> **Deadline semantics**
+>
+> The runner cannot stop a Python or device call in the middle: the planner must
+> check `request.remaining_wall_ms()` and stop itself (cooperative cancellation).
+> The runner waits for each call to return before it starts the next request. A
+> late return is a timeout even when it contains a legal route; the time spent
+> before and after the deadline is recorded.
+
+## 2. Freeze inputs, references and budgets
+
+`uv run --frozen passage-eval init-spec --out outputs/method.yaml` writes a starter spec.
+For a task specification on a local export of PASSAGE v1.0, use the following as a starting point.
+This requires an existing exported dataset and sufficient reference-solve budget:
 
 ```yaml
-# my_method.thor-gpu.yaml
-edge_accelerator: Thor-GPU
-batch_size: 1
-dtype: fp16
-measure_latency: true
-results_root: outputs/passage-eval/results
-```
-
-```bash
-passage-eval bench --spec my_method.thor-gpu.yaml \
-                   --edge-accelerator Thor-GPU \
-                   --inference my_method.planner_thor:MyTRTPlanner
-```
-
-The metrics are *seed-invariant* across accelerators (same checkpoint
-runs everywhere), so the second call writes a row that differs from
-the first only in the `latency_*` columns and the `host_accelerator`
-directory it lands under. The leaderboard heatmap and grouped-bar
-plots automatically pick up the new row.
-
-## 5. Inspect
-
-```bash
-passage-eval leaderboard --metric cost_regret_median
-```
-
-```bash
-# Refresh figures + SCOREBOARD.md + docs/benchmark/leaderboard.md +
-# README leaderboard section, all from one CSV:
-uv run python scripts/passage-eval/render_leaderboard.py
-```
-
----
-title: "Submit a candidate"
-icon: material/account-plus-outline
-
-## Concrete worked example — score the A* oracle as a candidate
-
-The simplest possible submission: hand the CLI the bundled
-`passage_eval.AStarPlanner` (the analytic A\* oracle). It implements
-the [`Planner`][passage_eval.Planner] ABC out of the box, so we don't
-have to write any glue code — we only need a YAML spec and one
-command. This walks through the exact bytes that pass through the CLI
-on a fresh checkout.
-
-### Step 1 · Generate the starter spec
-
-```bash
-passage-eval init-spec --out astar.passage-bench.yaml
-```
-
-Replace its contents with the entry point that points at the bundled
-oracle:
-
-```yaml title="astar.passage-bench.yaml"
-method_name: astar-oracle-demo
+method_name: bounded_exact
 family: classical
-architecture: analytic
-decoder_variant: analytic_a_star
-inference: passage_eval.baselines.classical:AStarPlanner
-inference_kwargs: {}
-
-resolution: 64           # 64² keeps the demo runnable on a CPU laptop
-cost_model: elevation
-cost_weight: 1.0
-split: val
-n_samples: 8
+architecture: dijkstra_prototype
+inference: passage_eval.baselines.classical:BoundedExactPlanner
+inference_format: request
+inference_kwargs: {max_expansions: 10000}
+resolution: 256
+cost_model: energy
+split: validation
+task_variant: obstacles
+n_samples: 1
 seeds: [1234]
-measure_latency: false
-
-results_root: outputs/passage-eval/results
-dataset_version: thalesgroup/passage:demo
-extra:
-  notes: "oracle baseline reference"
+dataset_path: outputs/release/dataset
+dataset_repo: thalesgroup/passage
+dataset_revision: null
+latency_warmup: 1
+latency_repeats: 2
+quality_repeat_index: 0
+budget: {max_expansions: 10000}
+reference_max_expansions: 10000
+reference_policy: released_labels
+results_root: outputs/passage-eval/qualified-v1
 ```
 
-### Step 2 · Run the bench
+The local root must contain core `<N>x<N>/<split>/*.parquet` shards. An absent
+local root fails; it never triggers a remote fallback. Remote access requires an
+explicit repository and immutable 40-character commit SHA. `_samples` configs
+are previews, not the training or evaluation population. Local revision metadata
+alone does not verify file contents.
 
-```console
-$ passage-eval bench --spec astar.passage-bench.yaml
-[passage-eval] bench v0.3.0: method='astar-oracle-demo' on r64/elevation
-[passage-eval] loaded 8 scenes; planner = AStarPlanner
-[passage-eval] seed 1234: CR-med=0.0000 -> runs/r64/elevation/<host>-cpu/astar-oracle-demo__seed1234__<timestamp>
+Freeze the sample roster and declare its split role before execution: development
+for choosing algorithms, calibration for decoder/budget selection, validation for
+declared intermediate checks and test for the final frozen pass. The cap selects
+a deterministic prefix, not a random population sample. Keep source identity,
+scene tensor/graph identity, geographic cluster assignments and exact-reference
+qualification receipts with the cohort. Cohorts drawn from different data are
+different cohorts, even when their scene counts match.
+
+The default reference policy requires legal stored routes, stored-cost agreement
+and independently solved optimality under the recorded tolerance. Admission
+fails for an invalid or censored reference rather than penalizing the candidate.
+For a deliberately new reference cohort, select
+`reference_policy: independent_analytic_reference` and provide
+`reference_cohort_id`. This recomputes exact references while retaining source
+label defects; it creates a different cohort and does not repair training labels.
+
+For learned methods, declare actual checkpoint files through `inference_kwargs`
+or `inference_kwargs_by_seed`; missing files fail admission and their hashes are
+recorded. Seeding inference does not retrain a checkpoint or prove determinism.
+Batch sizes greater than one need their own supported, scored procedure; this
+complete-request runner currently admits batch size one.
+
+The run manifest binds the selected specification, procedure, candidate entry-point
+source bytes and loaded code, checkpoints, evaluator source, admitted input hash
+and reference identities. Include non-entry helpers and native runtime dependencies
+using `runtime_bundle_manifest`, a JSON file with schema
+`passage-runtime-bundle-v1` and a nonempty `files` list of `{path, sha256}` entries.
+Paths resolve relative to the manifest; checksums must match readable files.
+Record calibration decisions, hardware/runtime and actual precision.
+
+## 3. Run, rescore and compare
+
+```bash
+uv run --frozen passage-eval conform --spec outputs/method.yaml --output outputs/check
+uv run --frozen passage-eval run --spec outputs/method.yaml --output outputs/run-a
+uv run --frozen passage-eval score --run outputs/run-a
+uv run --frozen passage-eval compare --score outputs/run-a/seed-1234 --score outputs/run-b/seed-1234 --output outputs/comparison.json
+uv run --frozen passage-eval report --compare outputs/comparison.json --output outputs/report.md
 ```
 
-Because the candidate planner *is* the analytic oracle, every primary
-metric is exactly zero (`cost_regret_*`, `path_assd`,
-`path_hausdorff_p95`) and `success_rate = 1.0`. That's the canonical
-self-consistency check: if your wired-up CLI does not zero out the
-oracle, something is wrong with the metric pipeline before it's wrong
-with your planner.
+Create `run-b` with a second frozen method specification on the same tasks before
+comparing. `bench --spec outputs/method.yaml` is a convenience entry point: it uses the
+same measured-route workflow and writes a `Submission` record and a sidecar to its
+results folder.
 
-### Step 3 · Inspect the artefacts
+The conformance receipt identifies CPU checks for ordinary-input isolation,
+terminal failure penalties, absolute deadlines, accumulated stage work and
+malformed coordinates. It also checks an analytic graph and executes one admitted
+candidate task. Its passed status certifies that bounded interface check, not
+device synchronization, population label validity or candidate optimality.
 
-```text
-outputs/passage-eval/results/
-├── leaderboard.csv
-└── runs/r64/elevation/<host>-cpu/
-    └── astar-oracle-demo__seed1234__<timestamp>/
-        └── metrics.json
+Each run preserves its manifest, terminal `requests.jsonl`, numeric route bytes
+and offsets in `paths.npz`, reference identities, `per_sample.npz`, `metrics.json`
+and `score_receipt.json`. Arrays need no object pickle. Every declared task/repeat
+has one terminal record; failures and route/status divergence remain in the
+latency denominator. The frozen warm `quality_repeat_index` selects headline
+quality; other repeats retain their own scored quality and latency summaries.
+
+Comparisons require identical task, input, graph, reference and source identities.
+All-task regret applies the disclosed failure cost multiplier of one million;
+a failed request consequently has regret 999,999. Reports also show each method's
+valid-route denominator and the both-valid geometry intersection. Empty
+intersections are explicit. Connected paths and legal traversable routes have
+separate rates. Geometry measures agreement with one tie-selected reference.
+
+Geographic intervals resample whole declared geographic/source-footprint blocks
+and recompute the selected statistic for each paired draw. Missing block identities
+produce an unknown uncertainty status. Seed variation remains descriptive.
+`compare --odd-spec bins.json` accepts a frozen joint Operational Design Domain
+(ODD) stratification specification; missing support remains visible. Occupied bins
+do not establish independence, representativeness or a causal geographic effect.
+
+### 3.A. Run the external CPU example
+
+The checked-in breadth-first-search adapter implements its own algorithm and
+ordinary-input interface. The fixture producer writes two analytic Parquet tasks.
+Use an unused `outputs/eval-example` destination:
+
+```bash
+uv run --frozen python -m examples.make_fixture
+uv run --frozen passage-eval conform --spec examples/external_algorithm.json --output outputs/eval-example/conformance
+uv run --frozen passage-eval run --spec examples/external_algorithm.json --output outputs/eval-example/bfs
+uv run --frozen passage-eval score --run outputs/eval-example/bfs
+uv run --frozen passage-eval run --spec examples/exact_algorithm.json --output outputs/eval-example/exact
+uv run --frozen passage-eval score --run outputs/eval-example/exact
+uv run --frozen passage-eval compare --score outputs/eval-example/bfs/seed-1234 --score outputs/eval-example/exact/seed-1234 --output outputs/eval-example/comparison.json --bootstrap-resamples 100
+uv run --frozen passage-eval report --compare outputs/eval-example/comparison.json --output outputs/eval-example/report.md
 ```
 
-`metrics.json` (annotated):
+The exact example uses the bounded CPU Dijkstra prototype. These commands check
+adapter interoperability, failure retention and persisted artifacts. Two tiny
+analytic tasks provide no real-terrain generalization or accelerator-speed evidence.
+Replace their dataset and procedure specifications with a frozen real cohort for
+scientific comparisons; keep the example receipts identified as fixture results.
 
-```json
-{
-  "method_name": "astar-oracle-demo",
-  "family": "classical",
-  "resolution": 64,
-  "cost_model": "elevation",
-  "seed": 1234,
-  "metrics": {
-    "cost_regret_median": 0.0,
-    "cost_regret_p90": 0.0,
-    "path_assd": 0.0,
-    "path_hausdorff_p95": 0.0,
-    "success_rate": 1.0,
-    "obstacle_violation_rate": 0.0,
-    "n_samples": 8,
-    "n_regret_valid": 8
-  }
-}
+### 3.B. Attribute improvement to algorithm components
+
+A learned prediction claim needs more than a learned-versus-exact comparison.
+Evaluate direct decoding, bounded repair with the learned guide, the same repair
+machinery and budget with a prediction-free guide, an explicitly named exact
+fallback, and exact and budgeted classical procedures. Reuse checkpoints across
+decoder variants and charge every stage's search work and latency. An oracle guide
+belongs to a separately labelled diagnostic and cannot represent ordinary input.
+
+Declare `component_control` in each specification when producing the attribution
+table. Its finite fields are `variant`, `guide`, `checkpoint_id`, `machinery_id`
+and `primary_learned`. Supported variants are `direct`, `bounded_repair`,
+`prediction_free`, `exact_fallback`, `exact_classical`, `budgeted_classical` and
+`oracle_diagnostic`; guides are `learned`, `prediction_free`, `none` and `oracle`.
+Learned variants need a checkpoint identity; bounded repair, prediction-free
+repair and exact fallback need a machinery identity. Exact fallback cannot be
+declared a primary learned result. The report
+checks repair/prediction-free machinery and budgets, retains incomplete work
+reporting, and marks missing controls rather than inferring a complete experiment.
+
+Compare complete procedures on the same device and workload. Show legal-route
+rate, all-task regret, expansions/queue/live-state work, fallback frequency and
+latency together. Missing counters do not mean zero work. Stage spans help explain
+the procedure but sums of stage medians do not reconstruct total latency.
+
+## 4. Audit data and prepare notebooks
+
+```bash
+uv run --frozen passage audit --dataset-path dataset --resolution 64 128 256 512 1024 2048 4096
+uv run --frozen passage analyze --dataset-path dataset --staging-root outputs/notebook-export --execute
 ```
 
-```console
-$ passage-eval leaderboard --metric cost_regret_median --root outputs/passage-eval/results
-       method_name    family architecture  edge_accelerator  seed  cost_regret_median  latency_e2e_ms_p50  n_samples
-astar-oracle-demo classical     analytic               NaN  1234                0.0                 NaN          8
-```
+The audit is bounded by default and reports exact-solve censoring. Notebook
+execution performs a full four-split metadata census and bounded classical
+checks. For a clearly labelled smoke run, add `--census-limit 4`,
+`--classical-budget 1` and `--max-expansions 128`.
 
-### Step 4 · Repeat on a real accelerator
+Analysis exports four notebooks per resolution (`dataset`, `display`, `metrics`
+and `passage_eval_metrics`), a copy of every source notebook under `notebooks/`,
+and the five dataset studies of `paper/notebooks/`, exported to
+`notebooks/paper/`. The exported per-resolution notebooks drop the leading
+underscore of their source templates (`_dataset.ipynb` becomes `dataset.ipynb`).
 
-Once your planner has GPU-side latency to report, the only edit is a
-two-key block in the spec — *no other change*:
-
-```yaml
-edge_accelerator: Thor-GPU
-batch_size: 1
-dtype: fp16
-measure_latency: true
-latency_warmup: 5
-latency_repeats: 30
-```
-
-The CLI then drops the row under
-`runs/r64/elevation/thor-gpu/...`, populates `latency_e2e_ms_p50`,
-and the leaderboard's per-accelerator heatmap and per-method bar
-chart pick the new entry up automatically.
-
-!!! note "Why this is the right sanity-check"
-
-    The A* oracle is not just *any* baseline — it is the planner that
-    produced the dataset's reference labels. Scoring it against itself
-    must yield zeros, by construction. Any submission whose CLI
-    pipeline does not reproduce that property has wired the metric
-    machinery wrong; until the oracle row collapses to zero, no
-    headline number is trustworthy. This is exactly why
-    `passage-eval bench` ships with `AStarPlanner` already importable.
-
-## API reference
-
-::: passage_eval.cli.BenchSpec
-    handler: python
-    options:
-      show_root_heading: true
-      show_source: false
-
-::: passage_eval.Planner
-    handler: python
-    options:
-      show_root_heading: true
-      show_source: false
-
-::: passage_eval.score_planner
-    handler: python
+This command prepares notebooks in separate staging. Its manifest records
+notebook readiness, Parquet staging and publication admission separately. Executed cells,
+report/figure outputs and producing identities are checked before reuse. Snapshot
+staging uses read-only hardlinks or reflinks when available and fails rather than
+silently copying the full dataset; an ordinary copy requires explicit API opt-in
+and adequate storage. No command in this sequence uploads or launches training.

@@ -1,12 +1,12 @@
 ---
-title: "Leaderboard visualisation"
+title: "Recording results in the passage-eval format"
 hide:
   - toc
 ---
 
-# Leaderboard visualisation
+# Recording results in the passage-eval format
 
-Aggregate everything emitted by the previous two notebooks and produce the four canonical figures: bar chart of CR-median per (method × accelerator), method × accelerator latency heatmap, accuracy-vs-latency Pareto frontier, pairwise verdict heatmap.
+Scores two classical planners, records them as `Submission` records in a temporary results folder and reads the table back: benchmark cell, six metrics, data revision and code version, without host or user names. Needs the local dataset copy.
 
 !!! info "Source notebook"
 

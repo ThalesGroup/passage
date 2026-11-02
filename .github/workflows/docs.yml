@@ -6,7 +6,8 @@ name: Deploy Documentation
 
 on:
   push:
-    branches: [main]
+    # develop carries the camera-ready work until it is merged into main.
+    branches: [main, develop]
     paths:
       - "docs/**"
       - "mkdocs.yml"
@@ -73,12 +74,17 @@ jobs:
             mkdocs-minify-plugin \
             pymdown-extensions
 
-      - name: Configure Pages
-        if: github.event_name == 'push'
-        uses: actions/configure-pages@v5
-
       - name: Build documentation
         run: uv run mkdocs build --strict
+
+      # Downloadable copy of the built site from the run page, also while
+      # GitHub Pages is unavailable (see the deploy job).
+      - name: Upload site archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: passage-docs-site
+          path: ./site
+          retention-days: 30
 
       - name: Upload Pages artifact
         if: github.event_name == 'push'
@@ -87,18 +93,26 @@ jobs:
           path: ./site
 
   # -----------------------------------------------------------------------
-  # Deploy — only on push to main. Independent of CI; deploys as soon as
-  # `build` succeeds, regardless of lint/test job state.
+  # Deploy — on push to main or develop, once GitHub Pages is available.
+  # The organisation's plan offers no Pages site for a private repository.
+  # When the repository is public: enable Pages with "GitHub Actions" as the
+  # source, set the repository variable DEPLOY_PAGES to "true", and re-run
+  # this workflow. Independent of CI; deploys as soon as `build` succeeds.
   # -----------------------------------------------------------------------
   deploy:
     name: Deploy to GitHub Pages
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: >-
+      github.event_name == 'push' && vars.DEPLOY_PAGES == 'true' &&
+      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
     needs: build
     runs-on: ubuntu-latest
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4

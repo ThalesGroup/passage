@@ -3,6 +3,7 @@
 # Copyright (c) 2026 THALES
 
 """ODD-boundary axis: performance regression at the envelope edge."""
+
 from __future__ import annotations
 
 import numpy as np
@@ -23,15 +24,14 @@ def odd_boundary_delta(
     higher_is_better: bool = False,
 ) -> TrustworthinessAxis:
     """Difference between the top-quantile (boundary) slice and the
-    full-split mean of a primary metric (§5.4 / App. K, axis "ODDe").
+    full-split mean of a primary metric (axis "ODDe").
 
     ``stratifier_per_sample`` carries one of the four declared per-sample
     ODD axes (obstacle coverage, super-ellipse exponent, elevation
     band, start-goal distance). Samples whose stratifier sits in the
     top ``top_quantile`` are designated the "boundary" slice. The axis
     value is
-
-        $\\Delta = \\mathrm{mean}(\\text{boundary}) - \\mathrm{mean}(\\text{full})$.
+    $\\Delta = \\mathrm{mean}(\\text{boundary}) - \\mathrm{mean}(\\text{full})$.
 
     For smaller-is-better metrics, a positive $\\Delta$ means the
     planner *worsens* at the envelope edge — the axis fires.
@@ -39,9 +39,7 @@ def odd_boundary_delta(
     metric_arr = np.asarray(metric_per_sample, dtype=np.float64)
     strat_arr = np.asarray(stratifier_per_sample, dtype=np.float64)
     if metric_arr.shape != strat_arr.shape:
-        raise ValueError(
-            f"metric/stratifier shape mismatch: {metric_arr.shape} vs {strat_arr.shape}"
-        )
+        raise ValueError(f"metric/stratifier shape mismatch: {metric_arr.shape} vs {strat_arr.shape}")
     valid = np.isfinite(metric_arr) & np.isfinite(strat_arr)
     metric_arr = metric_arr[valid]
     strat_arr = strat_arr[valid]

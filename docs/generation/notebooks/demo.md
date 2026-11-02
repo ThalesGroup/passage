@@ -1,24 +1,16 @@
 ---
-title: "Demo · load + visualise a sample"
+title: "Getting started with PASSAGE"
 hide:
   - toc
 ---
 
-# Demo · load + visualise a sample
+# Getting started with PASSAGE
 
-Quick-start: load one PASSAGE sample at the requested resolution + split, decode the compressed tensor, render the elevation field, the markers, the obstacle mask, and the oracle paths. This is the canonical first notebook to run after `make download && make calibrate`.
+The shortest path from the dataset to a training example: load one released scene, decode its tensor, draw a reference route and turn it into a segmentation target.
 
 !!! info "Source notebook"
 
-    `notebooks/demo.ipynb` — re-execute with `make docs-prepare` after editing.
-
-!!! warning "This notebook was rendered without executing"
-
-    `make docs-prepare` could not execute the source notebook on this
-    checkout (execution skipped (opt-in (run with --all or `make docs-prepare-all`))). The HTML below shows the most recent stored
-    outputs, which may be stale or empty. Re-run the notebook locally
-    after fetching the data it needs (e.g.\ `make download && make
-    calibrate`) to refresh.
+    `notebooks/demo.ipynb` — re-execute with `make docs-prepare-all` after editing.
 
 <iframe
     src="../../../gen/notebooks/demo.html"

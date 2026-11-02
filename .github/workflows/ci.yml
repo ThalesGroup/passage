@@ -6,9 +6,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
   pull_request:
-    branches: [main]
+    branches: [main, develop]
   workflow_dispatch:
 
 permissions:
@@ -58,6 +58,8 @@ jobs:
   test:
     name: Test (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
+    env:
+      UV_PYTHON: ${{ matrix.python-version }}
     strategy:
       fail-fast: false
       matrix:
@@ -88,6 +90,7 @@ jobs:
 
       - name: Run tests with coverage
         run: |
+          uv run python --version
           uv run pytest \
             --cov \
             --cov-report=xml:coverage.xml \

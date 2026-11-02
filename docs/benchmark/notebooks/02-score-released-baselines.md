@@ -1,12 +1,12 @@
 ---
-title: "Score released baselines from per-sample NPZ"
+title: "Classical baselines on the validation split"
 hide:
   - toc
 ---
 
-# Score released baselines from per-sample NPZ
+# Classical baselines on the validation split
 
-Replay the released vision (`seg`, `reg`) and graph (Edge-MLP) per-sample NPZ artefacts through `passage_eval.io.predictions`. Each (config × seed × host_accelerator) cell becomes one leaderboard row in `outputs/passage-eval/results/runs/r256/...`.
+Scores the three classical planners shipped with `passage-eval` (exact A*, greedy, random walk) on 64 validation tasks for each objective, with a distribution-free interval for each median regret. Reference points for reading the metrics, not benchmark results. Needs the local dataset copy.
 
 !!! info "Source notebook"
 

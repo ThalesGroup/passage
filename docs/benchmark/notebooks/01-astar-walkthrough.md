@@ -1,12 +1,12 @@
 ---
-title: "A* walkthrough — `Planner` ABC end-to-end"
+title: "Evaluating a planner, step by step"
 hide:
   - toc
 ---
 
-# A* walkthrough — `Planner` ABC end-to-end
+# Evaluating a planner, step by step
 
-Implements the canonical cross-family abstraction end-to-end: score the bundled `AStarPlanner` through the `Planner` ABC, emit one run bundle to `outputs/passage-eval/results/`. This is the first notebook to run on a fresh checkout — it doubles as an integration test for the on-disk leaderboard layout.
+Writes a planner in a few lines, scores it next to the exact A* planner on one released task, reads each of the six primary metrics, then scores both on a small validation sample. It needs the local dataset copy declared by `dataset_path`; without it, the page shows the notebook unexecuted.
 
 !!! info "Source notebook"
 

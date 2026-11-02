@@ -21,6 +21,7 @@
 # SOFTWARE.
 
 import numpy as np
+import pytest
 
 from passage_eval import (
     obstacle_cells_traversed_per_path,
@@ -71,3 +72,17 @@ def test_obstacle_cells_traversed_conditional_on_violation():
     obs[5, 5] = True
     out = obstacle_cells_traversed_per_path([p], [obs])
     assert out == 2.0
+
+
+def test_fractional_and_out_of_bounds_cells_are_not_snapped_to_obstacles():
+    obs = np.zeros((3, 3), dtype=bool)
+    obs[1, 1] = True
+    obs[2, 2] = True
+    paths = [[(0, 0), (0.6, 0.6)], [(0, 0), (3, 3)]]
+    assert obstacle_violation_rate(paths, [obs, obs]) == 0
+    assert np.isnan(obstacle_cells_traversed_per_path(paths, [obs, obs]))
+
+
+@pytest.mark.parametrize("path", [[], [(0, 0)], [(0, 0), (0, 0)], [(0, 0), (np.nan, 1)]])
+def test_invalid_path_cannot_connect(path):
+    assert success_rate([path], starts=[(0, 0)], goals=[(2, 2)]) == 0

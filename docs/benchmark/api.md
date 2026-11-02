@@ -9,9 +9,62 @@ Auto-generated documentation for every public symbol exported by the
 [`passage-eval`](https://github.com/ThalesGroup/passage/tree/main/src/passage-eval)
 sub-package. The narrative usage guide lives at the
 [`passage-eval` package page](passage-eval.md); the formal protocol
-sits at [Evaluation protocol](protocol.md); a complete worked example
-is at [End-to-end walkthrough](walkthrough.md). This page is the
+sits at [Evaluation protocol](protocol.md); the paper's paired statistics
+are at [Paired statistics](walkthrough.md). This page is the
 canonical docstring view.
+
+---
+
+## Ordinary-input requests — `passage_eval.protocol.contracts`
+
+Existing algorithms implement `plan(PlanRequest) -> PlanResult`. The request
+contains candidate-visible terrain, endpoints, graph and shared budget; reference
+labels stay evaluator-owned. See
+[Evaluate your planner](contributing-a-method.md) for runnable specifications.
+
+::: passage_eval.protocol.contracts.GraphSpec
+    options:
+      show_root_heading: true
+      show_source: false
+
+::: passage_eval.protocol.contracts.BudgetSpec
+    options:
+      show_root_heading: true
+      show_source: false
+
+::: passage_eval.protocol.contracts.PlanRequest
+    options:
+      show_root_heading: true
+      show_source: false
+
+::: passage_eval.protocol.contracts.PlanResult
+    options:
+      show_root_heading: true
+      show_source: false
+
+---
+
+## Complete requests and offline scores
+
+::: passage_eval.execution.runner.run_requests
+    options:
+      show_root_heading: true
+      show_source: false
+
+::: passage_eval.execution.scoring.score_run_artifact
+    options:
+      show_root_heading: true
+      show_source: false
+
+::: passage_eval.metrics.comparison.compare_artifacts
+    options:
+      show_root_heading: true
+      show_source: false
+
+::: passage_eval.metrics.comparison.paired_cluster_bootstrap
+    options:
+      show_root_heading: true
+      show_source: false
 
 ---
 
@@ -28,8 +81,8 @@ canonical docstring view.
 
 ## Primary metrics — `passage_eval.metrics`
 
-Six headline decoded-path metrics under the Holm--Bonferroni umbrella
-in §5.2 of the PASSAGE paper.
+The paper's six headline decoded-path metrics, tested together under the
+Holm–Bonferroni correction.
 
 ::: passage_eval.metrics.regret
     options:
@@ -63,9 +116,10 @@ in §5.2 of the PASSAGE paper.
 
 ## Statistical discipline — `passage_eval.protocol`
 
-Pre-registered seed set, paired-bootstrap CI on the mean of paired
-differences, three-seed pooled aggregation, Holm--Bonferroni step-down
-correction, and the family-wise decision rule.
+Six primary metrics and three declared training seeds. The canonical
+comparison estimates contrasts of metric aggregates with shared geographic-block
+draws, then applies Holm–Bonferroni only to separately supplied paired-test
+p-values. It reports partial evidence when remaining metrics are inconclusive.
 
 ::: passage_eval.protocol.discipline
     options:
@@ -76,9 +130,10 @@ correction, and the family-wise decision rule.
 
 ---
 
-## Trustworthiness diagnostics — `passage_eval.diagnostics`
+## Decoder-readiness diagnostics — `passage_eval.diagnostics`
 
-Family-specific decoder-readiness checks. **Never headline.**
+Checks that a predicted path mask or cost-to-go field is ready for its
+decoder. They are diagnostics, **never headline metrics**.
 
 ::: passage_eval.diagnostics
     options:
@@ -89,11 +144,26 @@ Family-specific decoder-readiness checks. **Never headline.**
 
 ---
 
+## Trustworthiness axes — `passage_eval.trustworthiness`
+
+Stability across training seeds, geographic generalization, behavior at the
+edge of the operational design domain (ODD), and latency relative to the exact
+A$^{\star}$ oracle on the same device. Each function returns one
+`TrustworthinessAxis` record.
+
+::: passage_eval.trustworthiness
+    options:
+      show_root_heading: true
+      members_order: source
+      show_source: false
+      filters: ["!^_"]
+
+---
+
 ## Deployment footprint — `passage_eval.deployment`
 
-Wall-clock latency, decoder timing, end-to-end percentiles, FLOPs +
-parameter count, A$^{\star}$-expansions ratio, and decoder-recovery
-rate.
+Wall-clock latency, decoder timing, end-to-end percentiles, parameter
+count, A$^{\star}$-expansions ratio, and decoder-recovery rate.
 
 ::: passage_eval.deployment
     options:
@@ -106,7 +176,7 @@ rate.
 
 ## Reproducibility sidecar — `passage_eval.sidecar`
 
-Manifest writer + deterministic calibration-decisions hash so every
+Manifest writer and deterministic calibration-decisions hash so every
 reported number can be mapped back to its dataset version, seeds,
 calibration decisions, hardware stack, batch size, dtype, and
 determinism flag.

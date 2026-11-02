@@ -75,7 +75,7 @@ We open-source this toolkit to make terrain-routing methods easier to compare, r
   <img src="assets/sample.png" alt="Representative PASSAGE sample" width="720"/>
 </p>
 
-<p align="center"><em>Normalized elevation with start/end markers, procedural superellipse obstacles, and two computed paths (free terrain vs. obstacle-aware).</em></p>
+<p align="center"><em>Six stored routes under three travel costs. Green continuous lines show free-terrain routes; blue short dashes show obstacle-aware routes. Calibrated terrain uses the paper's sage–sand palette, with charcoal hatched obstacles and white start/goal markers.</em></p>
 
 ### Dataset World Coverage
 
@@ -359,7 +359,7 @@ These equations match the runtime implementation used by the grid-backend A* exp
 
 ## 📝 Citation
 
-Use the metadata in [`CITATION.cff`](CITATION.cff). Anonymous submission mirrors intentionally omit author-identifying citation fields until de-anonymisation.
+Use the metadata in [`CITATION.cff`](CITATION.cff).
 
 ---
 

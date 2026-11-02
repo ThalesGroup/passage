@@ -20,7 +20,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-"""Reproducibility-sidecar manifest (App. J Rule 8).
+"""Reproducibility-sidecar manifest.
 
 Every headline row of the PASSAGE results table carries a sidecar JSON
 manifest pinning, at minimum, the artefacts needed to map a number back
@@ -29,7 +29,8 @@ to the configuration that produced it:
 * dataset version + content hash
 * seed set and split seed
 * deterministic hash of every calibration-split decision
-* reference hardware stack ({"R1", "R2"} or arbitrary string)
+* hardware stack label (``R1`` for a server GPU, ``R2`` for an edge GPU,
+  or any other string)
 * inference batch size and numerical precision
 * determinism flag
 
@@ -84,10 +85,10 @@ def _normalise_for_json(obj: Any) -> Any:
 class ReproducibilitySidecar:
     """Sidecar manifest for one headline row.
 
-    Required minimum fields are taken from App. J §Reproducibility
-    Sidecar of the PASSAGE paper. Extra information goes under
+    Required minimum fields follow the reproducibility sidecar of the
+    PASSAGE paper. Extra information goes under
     ``extra``; the calibration_decisions_hash should be computed via
-    :func:`compute_calibration_decisions_hash` on the original mapping.
+    ``compute_calibration_decisions_hash`` on the original mapping.
     """
 
     method_name: str

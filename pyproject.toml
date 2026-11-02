@@ -3,17 +3,18 @@
 # Copyright (c) 2026 THALES
 
 [build-system]
-# Switched from uv_build to hatchling so a single pyproject.toml can ship
+# A single setuptools project ships
 # both `passage` (data-generation pipeline) and `passage_eval` (canonical
 # evaluation contract) as a single distribution. Source trees are
-# isolated under src/passage/ and src/passage-eval/src/passage_eval/.
-requires = ["setuptools>=64"]
+# isolated under src/passage/ and src/passage-eval/.
+requires = ["setuptools>=83.0.0"]
 build-backend = "setuptools.build_meta"
 
 [dependency-groups]
 dev = [
   "ipykernel>=7.1.0",
   "nbclient>=0.10.4",
+  "plotly>=5.20.0",
   "pre-commit>=4.5.1",
   "pytest>=9.0.3",
   "pytest-cov>=6.0.0",
@@ -23,17 +24,17 @@ dev = [
 ]
 docs = [
   "mkdocs>=1.6",
-  "mkdocs-material>=9.6",
+  "mkdocs-material>=9.7.7",
   "mkdocstrings[python]>=0.28",
   "mkdocs-include-markdown-plugin>=7.1.7",
   "mkdocs-minify-plugin>=0.8",
   "mkdocs-glightbox>=0.4",
-  "pymdown-extensions>=10.0",
+  "pymdown-extensions>=11.0.1",
   # `make docs-prepare` executes the benchmark notebooks and exports them
   # to standalone HTML under docs/gen/. The renderer + executor pair below
   # keeps the docs build step fully reproducible from a clean checkout.
   "nbclient>=0.10.4",
-  "nbconvert>=7.0.0",
+  "nbconvert>=7.17.2",
   "ipykernel>=7.0.0",
   "jupyter_client>=8.0.0",
   # Interactive HTML leaderboard charts embedded in docs/index.md.
@@ -42,7 +43,7 @@ docs = [
 
 [project]
 name = "passage"
-version = "0.1.0"
+version = "1.0.0"
 description = "PASSAGE: Path Solving Dataset and Generator + canonical evaluation contract (passage_eval)."
 readme = "README.md"
 license = {file = "LICENSE"}
@@ -65,7 +66,7 @@ dependencies = [
   "papermill>=2.5.0",
   "imageio>=2.34.0",
   "pyarrow>=23.0.0",
-  "datasets>=2.10.2",
+  "datasets>=5.0.1",
   "zstandard>=0.25.0",
   "python-dotenv>=1.0.0",
   "hf-transfer>=0.1.9",
@@ -118,6 +119,7 @@ packages = [
     "passage_eval.baselines",
     "passage_eval.deployment",
     "passage_eval.diagnostics",
+    "passage_eval.execution",
     "passage_eval.io",
     "passage_eval.metrics",
     "passage_eval.protocol",
@@ -166,5 +168,17 @@ show-fixes = true
 # to a vulnerable version, without making them direct project deps.
 constraint-dependencies = [
   "pygments>=2.20.0",   # CVE-2026-4539
-  "aiohttp>=3.13.5",    # CVE-2026-22815, -34513..-34520, -34525
+  "aiohttp>=3.14.4",    # GHSA-9xw5-w5jj-pvcg and related advisories
+  "anyio>=4.14.2",      # GHSA-82r6-8w77-94w6
+  "bleach>=6.4.0",      # Patched URI sanitization; email-linkify issue remains upstream
+  "certifi>=2026.10.19", # GHSA-6q48-6c7w-9gw2
+  "fsspec>=2026.6.0",   # GHSA-27vj-qcqg-25rc; requires datasets>=5
+  "idna>=3.15",         # GHSA-65pc-fj4g-8rjx
+  "mistune>=3.3.0",     # GHSA-c8j7-8cv4-2xmq and related advisories
+  "multidict>=6.9.1",   # GHSA-54p9-h82j-f925
+  "pillow>=13.0.0",     # GHSA-v9pv-5gc8-w2m6 and related advisories
+  "soupsieve>=2.9.0",   # Includes fixes for high and moderate parser issues
+  "tornado>=6.5.9",     # GHSA-c2m8-h5v5-343r and related advisories
+  "urllib3>=2.8.0",     # GHSA-vxq7-64xx-v4gw and related advisories
+  "virtualenv>=21.14.9", # GHSA-c978-59m8-c77v and related advisories
 ]

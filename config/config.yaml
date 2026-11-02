@@ -68,7 +68,13 @@ splits:
 #   crop placement, marker placement, and obstacle synthesis.
 # - Split assignment remains controlled independently by `splits.seed`.
 generation:
+  dataset_version: passage-successor-v1
   seed: 42
+  max_scene_attempts: 100
+  max_reference_expansions: null
+  geographic_policy:
+    block_degrees: 5
+    buffer_tiles: 1
   preview_images:
     enabled: true
     resolutions: [64, 128, 256, 512, 1024, 2048, 4096]

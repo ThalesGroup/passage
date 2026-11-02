@@ -24,16 +24,16 @@
 
 Headline:
     path_assd        : average symmetric surface distance, normalised by
-                       the oracle path length, averaged over the batch.
+                       the oracle waypoint count, averaged over the batch.
     path_hausdorff_p95 : 95-th-percentile symmetric Hausdorff,
-                       normalised by the oracle path length.
+                       in pixels, without length normalisation.
 
 Diagnostic:
     path_iou_diagnostic : raw mask-overlap of the rasterised decoded
-                       path against the rasterised oracle path. Kept for
-                       App. B / App. C reporting; never headline.
+                       path against the rasterised oracle path. Kept as
+                       a diagnostic; never headline.
 
-Per-sample distances are normalised by the oracle path length so the
+Per-sample ASSD is normalised by the oracle waypoint count so the
 metric is commensurate across the seven PASSAGE resolutions
 (64x64 to 4096x4096).
 """
@@ -72,11 +72,8 @@ def _per_sample_hausdorff_p(predicted: np.ndarray, oracle: np.ndarray, percentil
 
 
 def _oracle_length(oracle: np.ndarray) -> float:
-    """Polyline length in pixel units; floor at 1.0 to keep normalisation finite."""
-    if oracle.shape[0] < 2:
-        return 1.0
-    diffs = np.diff(oracle, axis=0)
-    return max(float(np.sum(np.linalg.norm(diffs, axis=1))), 1.0)
+    """Number of oracle waypoints, as defined in the paper's Appendix B."""
+    return max(float(len(oracle)), 1.0)
 
 
 def path_assd(
@@ -109,7 +106,7 @@ def path_hausdorff_p95(
     *,
     percentile: float = 95.0,
 ) -> np.ndarray:
-    """Per-sample normalised symmetric percentile-Hausdorff."""
+    """Per-sample symmetric percentile-Hausdorff in pixels."""
     if len(predicted_paths) != len(oracle_paths):
         raise ValueError(f"Batch length mismatch: {len(predicted_paths)} vs {len(oracle_paths)}.")
     if not (0.0 <= percentile <= 100.0):
@@ -121,8 +118,7 @@ def path_hausdorff_p95(
         if p.size == 0 or o.size == 0:
             continue
         d = _per_sample_hausdorff_p(p, o, percentile)
-        norm = _oracle_length(o)
-        out[i] = d / norm
+        out[i] = d
     return out
 
 

@@ -4,7 +4,17 @@ title: "Step 3 — Generate Dataset"
 
 # Step 3 — Generate Dataset
 
-This is the **core step** of the PASSAGE pipeline. It creates multi-resolution pathfinding samples — each containing normalized elevation data, start/end markers, procedural obstacles, and computed paths from multiple solvers.
+This is the **core step** of the PASSAGE pipeline. It creates the scenes. A
+scene is a square crop of real terrain with a start cell, a goal cell,
+procedural obstacles and six reference routes: three cost objectives
+(`elevation`, `slope_uphill`, `energy`), each solved once on free terrain and
+once with the obstacle cells blocked.
+
+With the shipped `config/config.yaml`, `passage generate` runs the generator
+that built PASSAGE v1.0. The key `generation.dataset_version` selects it; keep
+the value shipped in `config/config.yaml`. Without that key, `passage generate`
+runs another generation path, which the v1.0 release does not use and this
+guide does not cover.
 
 ---
 
@@ -16,24 +26,30 @@ This is the **core step** of the PASSAGE pipeline. It creates multi-resolution p
 passage generate
 ```
 
+This reads the tiles in `outputs/download/tiles` and the calibration in
+`outputs/calibrate/calibrate.json`, and writes to `outputs/dataset`. With the
+default configuration it requests all 4,400,000 scenes of the release.
+
 ### Common options
 
 ```bash
-# Generate 1000 samples at 256×256 resolution using 8 workers
+# A small trial: 1,000 scenes at 256×256 with 8 workers, in its own output root
 passage generate \
   --resolution 256 \
   --num-samples 1000 \
-  --num-cpus 8
+  --num-cpus 8 \
+  --outputs-dirpath outputs/trial
 
-# Multiple resolutions at once
+# Several resolutions in one run
 passage generate --resolution 64 128 256 512
 
-# Skip image generation (tensors only — faster)
-passage generate --no-images
-
-# Force regeneration (overwrite existing samples)
-passage generate --force
+# Resume an interrupted run: repeat the same command
+passage generate
 ```
+
+To start again from scratch, choose a new `--outputs-dirpath`. With the release
+configuration, `--force` stops with an error when the output root already
+exists, so finished scenes are never overwritten.
 
 ---
 
@@ -41,124 +57,181 @@ passage generate --force
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--outputs-dirpath` | `outputs/dataset` | Output directory for generated samples |
-| `--tiles-dirpath` | `outputs/download/tiles` | Path to extracted tiles |
+| `--outputs-dirpath` | `outputs/dataset` | Output root for the generated scenes |
+| `--tiles-dirpath` | `outputs/download/tiles` | Folder of extracted DSM tiles |
+| `--calibration-filepath` | `outputs/calibrate/calibrate.json` | Calibration receipt from step 2 |
 | `--config` | `config/config.yaml` | Configuration file |
-| `--resolution` | All configured | Resolution(s) to generate |
-| `--num-samples` | From config | Number of samples per resolution |
-| `--num-cpus` | All visible CPUs | Parallel generation workers (`0` = sequential) |
-| `--no-images` | `false` | Skip PNG image generation |
-| `--force` | `false` | Overwrite existing samples |
-| `--log-level` | `INFO` | Logging verbosity |
+| `--resolution` | All values in `resolutions` | One or more resolutions to generate |
+| `--num-samples` | `num_samples` from the configuration | Scenes per resolution; one value for every selected resolution |
+| `--num-cpus` | All CPUs, capped at 16 for 2048 and 8 for 4096 | Worker processes; `0` runs sequentially |
+| `--no-images` | off | No effect with the release configuration: `generate` writes no images, and `passage compress` renders the preview images |
+| `--force` | off | Refused when the output root exists; use a fresh `--outputs-dirpath` instead |
+| `--log-level` | `info` | Logging verbosity: `debug`, `info`, `warning`, `error` or `critical` |
 
 ---
 
 ## Generation Pipeline
 
-Each sample goes through the following process:
+Each scene goes through the following process:
 
 ```mermaid
 flowchart TD
-    A[Draw target elevation] --> B[Select matching tile]
-    B --> C[Load & assemble crop]
-    C --> D[Place start/end markers]
-    D --> E[Generate obstacle mask]
-    E --> F[Solve paths — free terrain]
-    F --> G[Apply obstacles to grid]
-    G --> H[Solve paths — with obstacles]
-    H --> I[Encode tensor + metadata]
-    I --> J[Save to disk]
+    A[Pick a center tile<br>from the split's tiles] --> B[Draw a target elevation]
+    B --> C[Start = cell nearest<br>to the target]
+    C --> D[Place the crop around the start]
+    D --> E{Crop and guard ring in the split?<br>Tiles present, no nodata?}
+    E -->|No: next attempt| A
+    E -->|Yes| F[Draw the goal<br>among the other cells]
+    F --> G[Place obstacles]
+    G --> H[Save tensor and metadata]
+    H --> I[Solve six routes<br>with the exact reference]
+    I --> J[Write routes, then the receipt]
 
-    style A fill:#1565C0,color:#fff
-    style E fill:#D32F2F,color:#fff
-    style F fill:#2E7D32,color:#fff
-    style H fill:#2E7D32,color:#fff
-    style I fill:#42A5F5,color:#fff
+    style A fill:#0891b233,stroke:#0891b2,stroke-width:1.5px
+    style G fill:#ff4d5e2e,stroke:#ff4d5e,stroke-width:1.5px
+    style I fill:#ffb93833,stroke:#d99a1b,stroke-width:1.5px
+    style J fill:#a78bfa2e,stroke:#8b6fe0,stroke-width:1.5px
 ```
 
 ### Step-by-step
 
-1. **Target Elevation Sampling** — a random elevation $e_{\text{target}}$ is drawn uniformly from the global range
-2. **Tile Selection** — tiles whose elevation range includes $e_{\text{target}}$ are filtered, and one is randomly selected
-3. **Crop Assembly** — a random crop of the requested resolution is extracted (multi-tile assembly for large resolutions)
-4. **Marker Placement** — start and end points are placed randomly on the crop
-5. **Obstacle Generation** — superellipse obstacles are procedurally placed until a target coverage ratio is reached
-6. **Path Solving (Free)** — each configured solver computes the optimal path on the obstacle-free terrain
-7. **Obstacle Application** — obstacles are applied to the elevation grid as high-penalty regions
-8. **Path Solving (Obstacles)** — solvers recompute paths avoiding obstacles
-9. **Tensor Encoding** — elevation, markers, and obstacles are stacked into a `(H, W, 3)` tensor, compressed with zstd
-10. **Output** — tensor, metadata YAML, path CSVs, and optional PNG image are written to disk
+1. **Split and seed** — each scene index receives a split, so that the split
+   counts match `splits.ratios`, rounded to whole scenes. It also receives its
+   own seed, `blake2b(generation.seed, resolution, index, split)`.
+2. **Center tile** — drawn uniformly among the source tiles of the scene's
+   split (see [Splits](#splits)).
+3. **Start** — a target elevation is drawn uniformly in the calibration range.
+   The start is the cell of the center tile whose elevation is nearest to it.
+4. **Crop** — the R × R crop is placed at a random offset around the start. It
+   can extend into neighboring 1° tiles at any resolution; PASSAGE reads the
+   matching window of every tile it touches.
+5. **Checks** — the attempt is rejected when a source tile of the crop, or of
+   its one-tile guard ring, belongs to another split, when a tile is missing,
+   or when a cell has no data. Missing data is never padded. A scene makes up
+   to `generation.max_scene_attempts` (100) attempts; after that it is recorded
+   as `rejected`.
+6. **Goal** — drawn uniformly among the other cells of the crop.
+7. **Obstacles** — superellipse obstacles are added until the next one would
+   push coverage above a target drawn uniformly between 0 and
+   `obstacles.ratio_max` (30 %). They never cover the start or the goal. If
+   they disconnect the start from the goal on the routing graph, the attempt
+   is rejected like a crop with missing data, and the next attempt draws a new
+   crop.
+8. **Tensor** — three float32 channels are stacked into an (R, R, 3) tensor:
+   elevation scaled with the calibration range, markers (−1 background, 0
+   start, 1 goal) and obstacles (1 = blocked). The tensor is compressed with
+   Zstandard and saved, with its metadata, before any route is solved.
+9. **Labels** — the saved tensor is decoded, and an exact A\* reference solves
+   each objective in float64, once on free terrain and once with the obstacle
+   cells blocked. Each of the six variants is `ok` (an exact optimum), since
+   step 7 keeps only start and goal cells that a route can join. The shipped
+   `max_reference_expansions: null` sets no search budget; with a budget, an
+   unfinished search would be recorded as `failed`.
+10. **Receipt** — the route CSV files are written, then a receipt that lists
+    the SHA-256 hash of every file. The receipt is written last: on resume,
+    scenes with a receipt are checked and skipped, and a scene without one is
+    generated again.
+
+The [dataset card](../dataset/index.md#how-the-scenes-were-made) summarizes the
+same steps, and [Sampling Procedure](../generation/sampling.md),
+[Obstacle Generation](../generation/obstacles.md) and
+[Solvers & Heuristics](../generation/solvers.md) give the details.
 
 ---
 
 ## Splits
 
-Samples are deterministically assigned to splits based on the configured ratios and global seed:
+Splits are geographic: every AW3D30 source tile belongs to exactly one split.
+
+- Tiles inside the hold-out mask (`hold_out.mask_path`, South America) belong
+  to `test` only, and every `test` scene comes from them.
+- The other tiles go to `train`, `calibration` or `validation` by seeded
+  5° × 5° blocks, in proportion to the split ratios.
+- A crop is admitted only if all its source tiles, plus a one-tile guard ring,
+  belong to its split. The source cells of different splits never overlap.
 
 | Split | Default ratio | Purpose |
 |-------|---------------|---------|
 | `train` | 90% | Model training |
-| `calibration` | 2% | Model calibration / threshold tuning |
-| `validation` | 4% | Hyperparameter selection |
-| `test` | 4% | Final evaluation |
+| `calibration` | 2% | Fix a method's free settings (thresholds, steps, schedules) before the test pass |
+| `validation` | 4% | Model and hyperparameter selection |
+| `test` | 4% | Final evaluation on unseen geography (South America) |
 
-The split seed (default: `42`) ensures identical assignments across runs.
+The split seed (`splits.seed`, default `42`) fixes both the scene-to-split
+assignment and the block assignment, so repeated runs give the same splits.
 
 ---
 
 ## Default Sample Counts
 
-| Resolution | Default samples | Approximate coverage |
-|-----------|----------------|---------------------|
-| 64×64 | 10,000 | ~1.9 km patches |
-| 128×128 | 2,500 | ~3.8 km patches |
-| 256×256 | 1,000 | ~7.7 km patches |
-| 512×512 | 500 | ~15.4 km patches |
-| 1024×1024 | 100 | ~30.7 km patches |
-| 2048×2048 | 20 | ~61.4 km patches |
-| 4096×4096 | 10 | ~122.9 km patches |
+These counts come from `num_samples` in `config/config.yaml`. The nominal side
+assumes 30 m cells; the actual ground spacing varies with latitude.
+
+| Resolution | Default scenes | Nominal side |
+|-----------|----------------|--------------|
+| 64×64 | 1,000,000 | 1.92 km |
+| 128×128 | 1,000,000 | 3.84 km |
+| 256×256 | 1,000,000 | 7.68 km |
+| 512×512 | 1,000,000 | 15.36 km |
+| 1024×1024 | 250,000 | 30.72 km |
+| 2048×2048 | 100,000 | 61.44 km |
+| 4096×4096 | 50,000 | 122.88 km |
 
 ---
 
 ## Output Structure
 
-```
+```text
 outputs/dataset/
-├── summary.json              # Global dataset summary
-└── 256/                      # Per-resolution directory
-    ├── summary.json          # Resolution-level summary
+├── generation_manifest.json     # Run provenance: configuration, calibration, tile hashes, code hashes
+├── generation-source-snapshot/  # Copy of the generating source code
+├── generation-input-snapshot/   # Copy of the configuration, calibration and hold-out mask
+└── 256/                         # One folder per resolution
+    ├── roster.json              # Requested scene count and split assignment identity
+    ├── summary.json             # Outcome counts of the last run
     ├── train/
-    │   ├── 000000/
-    │   │   ├── tensor.npy.zst
-    │   │   ├── metadata.yaml
-    │   │   ├── sample.png          # (if images enabled)
-    │   │   ├── path_astar_elevation_free.csv
-    │   │   ├── path_astar_elevation_obstacles.csv
-    │   │   └── ...
-    │   ├── 000001/
-    │   └── ...
+    │   ├── tensors/N045/E006/0000000000.npy.zst
+    │   ├── metadata/N045/E006/0000000000.yaml
+    │   ├── paths/astar_elevation/free/N045/E006/0000000000.csv
+    │   ├── paths/astar_elevation/obstacles/N045/E006/0000000000.csv
+    │   ├── paths/...            # The same for astar_energy and astar_slope
+    │   └── receipts/0000000000.json
+    ├── calibration/
     ├── validation/
-    ├── test/
-    └── calibration/
+    └── test/
 ```
+
+- Scene files are named by the 10-digit scene index. `N045/E006` stands for
+  the latitude and longitude of the scene's center tile.
+- Each route CSV holds one `row,col` cell per line, from start to goal.
+- `passage compress` later adds `images/<solver>/…/<index>.png` for the
+  preview rows of the `_samples` configurations.
 
 ---
 
 ## Performance Tips
 
 !!! tip "Speed up generation"
-    - Use `--num-cpus 8` for typical parallel sample generation
-    - Use `--no-images` to skip PNG rendering — **~2× faster**
-    - Start with a small `--num-samples` to validate your setup before full runs
-    - PASSAGE automatically resumes interrupted runs — no need to start over
+    - `--num-cpus` sets the number of worker processes. Without it, PASSAGE
+      starts one worker per CPU reported by the system, within the caps below.
+    - Start with a small `--num-samples` in a separate output root to check
+      your setup before a full run.
+    - Re-run the same command to resume. Use the same output root, configuration,
+      calibration, tiles, code and `--num-samples`: the run refuses to resume
+      when its provenance or scene roster has changed.
+    - Run the generator from a git clone: its provenance records the commit of
+      the code.
 
 !!! warning "Large resolutions"
-    Resolutions ≥2048 require multiple tiles to be assembled and consume significantly more memory and CPU time.
-    For `4096×4096`, start with `--num-cpus 4` or `--num-cpus 8` instead of relying on the all-CPU default.
-    On Slurm, `--cpus-per-task` controls how many CPUs are visible to the job, while `passage generate --num-cpus ...` controls how many Python workers are actually spawned.
+    Crops at 2048 and 4096 hold many more cells per worker and use much more memory.
+    When `--num-cpus` is omitted, `generate` caps the workers at 16 for 2048 and 8 for 4096.
+    On Slurm, pass `--num-cpus` equal to `--cpus-per-task`: the default counts every CPU of the node,
+    not only the CPUs allocated to the job.
 
 ---
 
 ## Next Step
 
-Once samples are generated, proceed to **[Steps 4-6 — Release](export.md)** to compress Parquet shards, refresh the export tree, and publish them.
+Once scenes are generated, proceed to **[Steps 4-6 — Release](export.md)** to compress Parquet shards, refresh the export tree, and publish them.
+For the full release, [`passage regenerate`](export.md#all-in-one-passage-regenerate)
+runs generation and export together in bounded batches.

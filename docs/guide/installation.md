@@ -10,13 +10,12 @@ This page covers how to set up PASSAGE on your machine, install dependencies, an
 
 ## System Requirements
 
-| Requirement | Minimum | Recommended |
-|-------------|---------|-------------|
-| Python | 3.11+ | 3.12 |
-| Disk space | 10 GB (subset) | 50+ GB (full tiles) |
-| RAM | 4 GB | 16+ GB (large resolutions) |
-| CPU cores | 1 | 8+ (multiprocessing) |
-| OS | Linux, macOS | Linux |
+| Requirement | Details |
+|-------------|---------|
+| Python | 3.11 or later; the repository pins 3.12 in `.python-version`, and the tests run on 3.11 and 3.12 |
+| Operating system | Linux. The calibration and release tools use POSIX file locks (`fcntl`), so Windows is not supported |
+| Disk space | About 463 GB for the 23,993 AW3D30 DSM tiles of the release, plus room for the scenes you generate. The published Parquet files alone take about 1.27 TB |
+| CPU and memory | Generation runs one worker process per CPU by default. Large crops need much more memory per worker: `generate` caps its default at 16 workers for 2048 and 8 for 4096 |
 
 !!! note "OpenCV dependency"
     On headless Linux servers, you may need:
@@ -28,22 +27,37 @@ This page covers how to set up PASSAGE on your machine, install dependencies, an
 
 ## Install with `uv` (Recommended)
 
-[`uv`](https://docs.astral.sh/uv/) is a fast Python package manager that ensures reproducible environments:
+[`uv`](https://docs.astral.sh/uv/) is a fast Python package manager. With the
+repository's `uv.lock` file, it installs the exact locked versions:
 
 ```bash
 # Install uv (if not already installed)
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # Clone the repository
-git clone https://github.com/ThalesGroup/passage.git
+git clone --branch develop https://github.com/ThalesGroup/passage.git
 cd passage
 
-# Install runtime dependencies
-uv sync
+# Install the locked runtime environment (passage and passage-eval)
+uv sync --frozen
 
-# (Optional) Install dev dependencies for testing & linting
-uv sync --group dev
+# (Optional) Add the test and lint tools
+uv sync --frozen --group dev
 ```
+
+Each `uv sync` installs exactly what that command names, so combine options in
+one call, for example `uv sync --frozen --group dev --extra torch` for the
+development tools plus PyTorch.
+
+Run the tools with `uv run passage …`, or activate the environment
+(`source .venv/bin/activate`) and call `passage` directly. This guide uses the
+short form.
+
+Generation and publication workflows that produce provenance receipts require
+this cloned repository, installed with `uv sync --frozen` or `pip install -e .`.
+Keep `src/passage/`, `src/passage-eval/`, `pyproject.toml` and `uv.lock` in place
+so the receipts can identify the producer code and locked environment. Wheel
+installations support loading datasets and running `passage-eval`.
 
 ---
 
@@ -58,13 +72,11 @@ make docs-serve
 
 Then open <http://127.0.0.1:8000/passage/>.
 
-For a GitLab Pages-equivalent local build, run:
+To build the static site into `public/`, run:
 
 ```bash
 make pages-local
 ```
-
-The generated site is written to `public/`.
 
 ---
 
@@ -77,12 +89,19 @@ If you prefer the standard Python toolchain:
 python -m venv .venv
 source .venv/bin/activate
 
-# Install in editable mode
+# Install in editable mode (passage and passage-eval)
 pip install -e .
 
-# (Optional) With dev dependencies
-pip install -e ".[dev]"
+# (Optional) Add PyTorch, used by passage-eval for GPU timing
+pip install -e ".[torch]"
+
+# (Optional) Add the test and lint tools (pip 25.1 or later)
+pip install --group dev
 ```
+
+The development tools are a dependency group, not an extra, so
+`pip install -e ".[dev]"` does not install them. `pip` resolves versions on its
+own; use `uv sync --frozen` to reproduce the locked environment.
 
 ---
 
@@ -93,13 +112,32 @@ pip install -e ".[dev]"
 passage --help
 ```
 
-You should see output listing the four subcommands: `download`, `calibrate`, `generate`, `export`.
+You should see ten subcommands:
+
+| Subcommand | What it does |
+|------------|--------------|
+| `download` | Download AW3D30 archives and track their status ([Step 1](download.md)) |
+| `calibrate` | Find the global elevation range and record the tile inventory ([Step 2](calibrate.md)) |
+| `generate` | Generate scenes from the DSM tiles ([Step 3](generate.md)) |
+| `compress` | Write Parquet shards for the selected resolutions ([Steps 4-6](export.md)) |
+| `export` | Prepare the export directory: notebooks, assets, calibration and README |
+| `upload` | Upload the prepared export directory to Hugging Face |
+| `regenerate` | Generate, export and verify the dataset in bounded, resumable batches; never uploads |
+| `qualify` | Authenticate a pinned local snapshot, take a metadata census and audit stored routes |
+| `audit` | Audit a released dataset without modifying its files |
+| `analyze` | Prepare or execute the release notebooks in a separate staging folder |
+
+The evaluator has its own command, `passage-eval --help`.
 
 ---
 
 ## Configure Hugging Face Credentials :lock:
 
-The `upload` command can publish your prepared export tree directly to the [Hugging Face Hub](https://huggingface.co/). By default it targets `thalesgroup/passage` and reads `HF_TOKEN` from `.env.secret`.
+The `upload` command can publish your prepared export tree directly to the
+[Hugging Face Hub](https://huggingface.co/). It reads `HF_TOKEN` from
+`.env.secret` at the repository root; `.env.secret.template` shows the format.
+By default it targets `thalesgroup/passage`, so pass `--repo-id` to publish to
+your own repository.
 
 === "`.env.secret` — Private token"
 
@@ -110,11 +148,11 @@ The `upload` command can publish your prepared export tree directly to the [Hugg
 !!! warning "Never commit secrets"
     Both `.env` and `.env.secret` are listed in `.gitignore`. Never commit your Hugging Face token to version control.
 
-You can also point the CLI at custom env files or override the repo explicitly:
+You can also point the CLI at custom env files:
 
 ```bash
-passage upload --env-path .env --secret-path .env.secret
-passage upload --repo-id username/passage-dataset --env-path .env --secret-path .env.secret
+passage upload --repo-id <user>/<dataset>
+passage upload --repo-id <user>/<dataset> --env-path .env --secret-path .env.secret
 ```
 
 ---
@@ -123,62 +161,57 @@ passage upload --repo-id username/passage-dataset --env-path .env --secret-path 
 
 After cloning, the repository is organized as follows:
 
-```
+```text
 passage/
 ├── config/
-│   └── config.yaml          # Main configuration file
-├── src/passage/              # Source code
-│   ├── __init__.py           # CLI entry point
-│   ├── download.py           # Tile download module
-│   ├── calibrate.py          # Elevation calibration
-│   ├── generate.py           # Dataset generation
-│   ├── export.py             # Release pipeline (compress/export/upload)
-│   ├── obstacles.py          # Superellipse generation
-│   ├── pathfinding_utils.py  # Solver implementations
-│   ├── utils.py              # Tensor compression
-│   └── visualization.py      # Image rendering
-├── tests/                    # Test suites (23 files)
-├── notebooks/                # Analysis notebooks
-├── assets/                   # Banner, sample images, masks
-├── outputs/                  # Generated artifacts (gitignored)
-├── mkdocs.yml                # Documentation config
-└── pyproject.toml            # Project metadata & dependencies
+│   └── config.yaml           # Configuration that built PASSAGE v1.0
+├── src/
+│   ├── passage/              # Generator and release tools
+│   │   ├── __init__.py       # CLI entry point
+│   │   ├── download.py       # Archive download and receipts
+│   │   ├── calibrate.py      # Elevation range and tile inventory
+│   │   ├── generate.py       # The generate command and shared helpers
+│   │   ├── reference.py      # Exact float64 A* reference solver
+│   │   ├── export.py         # compress, export and upload
+│   │   ├── regenerate.py     # Bounded, resumable full-release run
+│   │   ├── dataset.py        # DatasetSource loader for released data
+│   │   ├── obstacles.py      # Superellipse obstacles
+│   │   └── ...               # Release generator, audit, qualification, plotting
+│   └── passage-eval/         # Evaluator, imported as passage_eval
+├── tests/                    # Test suite; evaluator tests in tests/passage_eval/
+├── notebooks/                # Notebook sources and per-resolution templates
+├── assets/                   # Banner, sample images, hold-out mask
+├── scripts/                  # Install and documentation helpers
+├── docs/                     # This documentation site (with mkdocs.yml)
+├── outputs/                  # Generated files (ignored by git)
+├── pyproject.toml            # Project metadata and dependencies
+└── uv.lock                   # Locked dependency versions
 ```
 
 ---
 
-## Optional: install `passage-eval`
+## Optional: use `passage-eval`
 
-The evaluation contract lives in a sibling sub-package
-[`src/passage-eval/`](https://github.com/ThalesGroup/passage/tree/main/src/passage-eval)
-that ships independently from the dataset-generation code. Install it
-when you want to compute the canonical PASSAGE primary metrics,
-statistical-discipline rules, trustworthiness diagnostics, or
-deployment-footprint utilities on a learned planner. **You do not need
-it to generate the dataset** — only to score a model on it.
-
-```bash
-# from the cloned repo (recommended; ships with the data we just generated)
-pip install -e ./src/passage-eval               # core only
-pip install -e ./src/passage-eval[notebook]     # + walk-through notebook deps
-pip install -e ./src/passage-eval[torch]        # + GPU throughput utilities
-pip install -e ./src/passage-eval[dev]          # + pytest, ruff
-```
+The evaluation contract, `passage-eval` (imported as `passage_eval`), ships in
+the same `passage` distribution; its source is in `src/passage-eval/`. The
+installs above already include it. It computes the PASSAGE primary metrics,
+the statistical-discipline rules, trustworthiness diagnostics and
+deployment-footprint utilities for a planner. **You do not need it to generate
+the dataset** — only to score a planner on it.
 
 Sanity check:
 
 ```bash
-python -c "import passage_eval; print(passage_eval.__version__)"
-# -> 0.2.0
-pytest src/passage-eval/tests -q
-# -> 49 passed
+uv run --frozen python -c "import passage_eval; print(passage_eval.__version__)"
+# -> 1.0.0
+
+# Evaluator tests (needs the dev group)
+uv run --frozen pytest tests/passage_eval -q
 ```
 
-The full usage walk-through with worked examples for every public
-symbol — including paired-bootstrap CI, three-seed aggregation, and the
-Pareto-dominant / Trade-off / Indistinguishable decision rule used in the
-PASSAGE paper — is at
-**[Benchmark / `passage-eval`](../benchmark/index.md)**.
+The walkthrough of the public API — scoring, paired bootstrap, three-seed
+aggregation and the pairwise decision rule — is at
+**[Benchmark / `passage-eval`](../benchmark/passage-eval.md)**.
 
 ---
 

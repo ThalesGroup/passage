@@ -34,12 +34,42 @@ from passage_eval._typing import PathLike, _as_xy_array
 def _is_connected_path(path: np.ndarray) -> bool:
     """A path connects start to goal if it is non-empty and consecutive
     cells are 8-connected (Chebyshev distance <= 1)."""
-    if path.shape[0] == 0:
+    if path.shape[0] < 2 or not np.isfinite(path).all() or not np.equal(path, np.floor(path)).all():
         return False
-    if path.shape[0] == 1:
-        return True
     diffs = np.diff(path, axis=0)
-    return bool(np.all(np.max(np.abs(diffs), axis=1) <= 1))
+    return bool(np.all(np.max(np.abs(diffs), axis=1) == 1))
+
+
+def path_status(
+    path: PathLike,
+    *,
+    start: tuple[int, int] | None = None,
+    goal: tuple[int, int] | None = None,
+    obstacles: np.ndarray | None = None,
+) -> tuple[bool, bool, int]:
+    """Return connection, obstacle violation and traversal count for one path.
+
+    Invalid coordinates are never rounded or clipped into a valid grid cell.
+    An obstacle crossing is reported separately from start-to-goal connection.
+    """
+    try:
+        points = _as_xy_array(path)
+    except (TypeError, ValueError):
+        return False, False, 0
+    connected = _is_connected_path(points)
+    if start is not None and goal is not None and len(points):
+        connected = connected and np.array_equal(points[0], start) and np.array_equal(points[-1], goal)
+    count = 0
+    if obstacles is not None and len(points):
+        obs = np.asarray(obstacles)
+        if obs.ndim != 2:
+            raise ValueError("obstacles must be a 2D grid")
+        finite_integer = np.isfinite(points).all(axis=1) & np.equal(points, np.floor(points)).all(axis=1)
+        in_bounds = finite_integer & (points >= 0).all(axis=1) & (points < obs.shape).all(axis=1)
+        connected = connected and bool(in_bounds.all())
+        cells = points[in_bounds].astype(np.int64)
+        count = int(np.count_nonzero(obs[cells[:, 0], cells[:, 1]]))
+    return bool(connected), count > 0, count
 
 
 def success_rate(
@@ -67,20 +97,17 @@ def success_rate(
         raise ValueError(f"len(starts)={len(starts)} != len(paths)={n}.")
     if goals is not None and len(goals) != n:
         raise ValueError(f"len(goals)={len(goals)} != len(paths)={n}.")
-    n_ok = 0
-    for i, p in enumerate(predicted_paths):
-        arr = _as_xy_array(p)
-        if not _is_connected_path(arr):
-            continue
-        if starts is not None and goals is not None:
-            si, sj = starts[i]
-            gi, gj = goals[i]
-            if int(arr[0, 0]) != int(si) or int(arr[0, 1]) != int(sj):
-                continue
-            if int(arr[-1, 0]) != int(gi) or int(arr[-1, 1]) != int(gj):
-                continue
-        n_ok += 1
-    return n_ok / n
+    return (
+        sum(
+            path_status(
+                path,
+                start=starts[i] if starts is not None else None,
+                goal=goals[i] if goals is not None else None,
+            )[0]
+            for i, path in enumerate(predicted_paths)
+        )
+        / n
+    )
 
 
 def obstacle_violation_rate(
@@ -97,19 +124,7 @@ def obstacle_violation_rate(
         return float("nan")
     if len(obstacles) != n:
         raise ValueError(f"len(obstacles)={len(obstacles)} != len(paths)={n}.")
-    n_violate = 0
-    for path, obs in zip(predicted_paths, obstacles):
-        arr = _as_xy_array(path)
-        if arr.size == 0:
-            continue
-        obs_arr = np.asarray(obs)
-        if obs_arr.size == 0:
-            continue
-        rr = np.clip(np.round(arr[:, 0]).astype(int), 0, obs_arr.shape[0] - 1)
-        cc = np.clip(np.round(arr[:, 1]).astype(int), 0, obs_arr.shape[1] - 1)
-        if bool(np.any(obs_arr[rr, cc])):
-            n_violate += 1
-    return n_violate / n
+    return sum(path_status(path, obstacles=obs)[1] for path, obs in zip(predicted_paths, obstacles)) / n
 
 
 def obstacle_cells_traversed_per_path(
@@ -126,19 +141,6 @@ def obstacle_cells_traversed_per_path(
         return float("nan")
     if len(obstacles) != n:
         raise ValueError(f"len(obstacles)={len(obstacles)} != len(paths)={n}.")
-    counts: list[int] = []
-    for path, obs in zip(predicted_paths, obstacles):
-        arr = _as_xy_array(path)
-        if arr.size == 0:
-            continue
-        obs_arr = np.asarray(obs)
-        if obs_arr.size == 0:
-            continue
-        rr = np.clip(np.round(arr[:, 0]).astype(int), 0, obs_arr.shape[0] - 1)
-        cc = np.clip(np.round(arr[:, 1]).astype(int), 0, obs_arr.shape[1] - 1)
-        c = int(np.sum(obs_arr[rr, cc] != 0))
-        if c > 0:
-            counts.append(c)
-    if not counts:
-        return float("nan")
-    return float(np.mean(counts))
+    counts = [path_status(path, obstacles=obs)[2] for path, obs in zip(predicted_paths, obstacles)]
+    positive = [count for count in counts if count > 0]
+    return float(np.mean(positive)) if positive else float("nan")

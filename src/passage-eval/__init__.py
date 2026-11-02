@@ -22,25 +22,25 @@
 
 """passage-eval: canonical evaluation contract for the PASSAGE benchmark.
 
-Public API surface mirrors the PASSAGE paper sections:
+The public API follows the evaluation protocol of the PASSAGE paper:
 
-    Primary metrics (§5.2 / App. J Primary Metrics):
+    Primary metrics:
         cost_regret, cost_regret_summary,
         path_assd, path_hausdorff_p95,
         success_rate, obstacle_violation_rate,
         compute_primary_metrics, paired_bootstrap_ci
 
-    Statistical discipline (§5.3 / App. J Statistical Discipline):
+    Statistical discipline:
         DEFAULT_SEEDS, PRIMARY_METRICS, MetricFamily,
         apply_censored_penalty,
         paired_bootstrap_delta, multiseed_paired_bootstrap,
         holm_bonferroni, decide_pairwise,
         BootstrapDelta, HolmBonferroniResult, PairwiseDecision
 
-    Approach-agnostic planner interface (§4 / App. A.2):
-        Planner, PlannerOutput, Scene, score_planner
+    Approach-agnostic planner interface:
+        Planner, PlannerOutput, Scene, score_planner, evaluate_planner
 
-    Trustworthiness axes (§5.4 / App. K):
+    Trustworthiness axes:
         TrustworthinessAxis,
         stability_cv, geographic_generalisation,
         odd_boundary_delta, oracle_relative_efficiency
@@ -50,18 +50,18 @@ Public API surface mirrors the PASSAGE paper sections:
         primary_metrics_from_arrays
 
     Reference classical planners (illustrative, NOT headline):
-        AStarPlanner, GreedyToGoalPlanner
+        AStarPlanner, GreedyToGoalPlanner, RandomPolicyPlanner
 
-    Decoder-readiness diagnostics (App. B / App. C):
+    Decoder-readiness diagnostics:
         mask_endpoints_in_same_component, boundary_f_score,
         descent_direction_agreement, bellman_residual_reachable,
         local_ordinal_concordance, field_ssi_mae
 
-    Inference / deployment footprint (§5.2 / App. J Deployment Footprint):
+    Inference / deployment footprint:
         benchmark_forward, benchmark_decoder, benchmark_end_to_end,
         astar_expansions_ratio, decoder_recovery_rate
 
-    Reproducibility sidecar (App. J Rule 8):
+    Reproducibility sidecar:
         ReproducibilitySidecar, compute_calibration_decisions_hash
 """
 
@@ -110,13 +110,16 @@ from passage_eval.protocol.discipline import (
     HolmBonferroniResult,
     MetricFamily,
     PairwiseDecision,
+    PrimaryMetricComparison,
     apply_censored_penalty,
+    compare_primary_metrics,
     decide_pairwise,
     holm_bonferroni,
     multiseed_paired_bootstrap,
     paired_bootstrap_delta,
 )
 from passage_eval.protocol.planner import (
+    evaluate_planner,
     Planner,
     PlannerOutput,
     Scene,
@@ -137,6 +140,7 @@ from passage_eval.trustworthiness import (
 from passage_eval.baselines import (
     AStarPlanner,
     GreedyToGoalPlanner,
+    RandomPolicyPlanner,
 )
 from passage_eval.results import (
     Submission,
@@ -159,7 +163,7 @@ from passage_eval.sidecar import (
     compute_calibration_decisions_hash,
 )
 
-__version__ = "0.3.0"
+__version__ = "1.0.0"
 
 __all__ = [
     "__version__",
@@ -181,6 +185,8 @@ __all__ = [
     "BootstrapDelta",
     "HolmBonferroniResult",
     "PairwiseDecision",
+    "PrimaryMetricComparison",
+    "compare_primary_metrics",
     "apply_censored_penalty",
     "paired_bootstrap_delta",
     "multiseed_paired_bootstrap",
@@ -191,6 +197,7 @@ __all__ = [
     "PlannerOutput",
     "Scene",
     "score_planner",
+    "evaluate_planner",
     # I/O for per-sample prediction arrays
     "PerSampleArrays",
     "load_per_sample_npz",
@@ -204,6 +211,7 @@ __all__ = [
     # reference baselines (illustrative, not headline)
     "AStarPlanner",
     "GreedyToGoalPlanner",
+    "RandomPolicyPlanner",
     # diagnostics — segmentation
     "mask_connected_components_total",
     "mask_endpoints_in_same_component",
@@ -220,7 +228,7 @@ __all__ = [
     "astar_expansions_ratio",
     "decoder_recovery_rate",
     # reproducibility sidecar
-    # leaderboard storage + visualisations (passage-eval >= 0.3)
+    # leaderboard storage + visualisations
     "Submission",
     "Leaderboard",
     "submit",

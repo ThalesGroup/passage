@@ -1,0 +1,60 @@
+{#
+MIT License
+
+Copyright (c) 2026 THALES
+
+Home page: a full-width hero above the Markdown content of docs/index.md.
+#}
+
+{% extends "main.html" %}
+
+{% block tabs %}
+  {{ super() }}
+  <section class="pg-hero" aria-labelledby="pg-hero-title">
+    <div class="pg-hero__bg">{% include "partials/hero-terrain.svg" %}</div>
+    <div class="pg-hero__veil" aria-hidden="true"></div>
+    <div class="md-grid pg-hero__inner">
+      <p class="pg-eyebrow">Real-terrain benchmark for constrained path planning</p>
+      <h1 class="pg-title" id="pg-hero-title">PASSAGE</h1>
+      <p class="pg-tagline">{{ page.meta.tagline }}</p>
+      <div class="pg-actions">
+        <a class="pg-btn pg-btn--primary" href="{{ 'guide/' | url }}">Get started</a>
+        <a class="pg-btn" href="{{ 'benchmark/' | url }}">Benchmark</a>
+        <a class="pg-btn" href="#cite-passage">Cite</a>
+      </div>
+
+      <aside class="pg-neurips" aria-label="NeurIPS 2026 acceptance">
+        <span class="pg-neurips__icon" aria-hidden="true">{% include ".icons/material/trophy-outline.svg" %}</span>
+        <div class="pg-neurips__text">
+          <strong>Accepted at NeurIPS 2026</strong>
+          <span>40th Conference on Neural Information Processing Systems, Track on Evaluations and Datasets · poster</span>
+        </div>
+        <a class="pg-neurips__cite" href="#cite-passage">How to cite</a>
+      </aside>
+
+      <ul class="pg-pins" aria-label="Release facts">
+        {% for pin in page.meta.pins %}
+        <li>{% if pin.link %}<a href="{{ pin.link }}">{% endif %}<span class="pg-pin__k">{{ pin.k }}</span><span class="pg-pin__v">{{ pin.v }}</span>{% if pin.link %}</a>{% endif %}</li>
+        {% endfor %}
+      </ul>
+
+      <figure class="pg-banner">
+        <picture>
+          <source type="image/webp" srcset="{{ 'assets/banner-768.webp' | url }} 768w, {{ 'assets/banner.webp' | url }} 1536w" sizes="(max-width: 60em) 100vw, 1100px">
+          <img src="{{ 'assets/banner.png' | url }}" width="1536" height="1024" alt="PASSAGE banner: a rescue helicopter over snow-covered mountains at sunset" loading="eager" decoding="async">
+        </picture>
+      </figure>
+
+      <dl class="pg-stats">
+        {% for s in page.meta.stats %}
+        <div><dt>{{ s.label }}</dt><dd data-count="{{ s.count }}" data-decimals="{{ s.decimals | default(0) }}" data-suffix="{{ s.suffix | default('') }}">{{ s.text }}</dd></div>
+        {% endfor %}
+      </dl>
+    </div>
+  </section>
+{% endblock %}
+
+{# The hero carries the page title: skip the automatic H1 of partials/content.html. #}
+{% block content %}
+  {{ page.content }}
+{% endblock %}

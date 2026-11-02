@@ -3,16 +3,24 @@
 site_name: "PASSAGE"
 site_description: "Path Solving Dataset & Generator — Real-world elevation-based pathfinding benchmarks for research"
 site_author: "Geoffrey Delhomme"
-site_url: "https://thalesgroup.github.io/passage/"
+# SITE_URL lets a preview host (for example a GitLab Pages copy) build with its own
+# address; the public site uses the GitHub Pages URL.
+site_url: !ENV [SITE_URL, "https://thalesgroup.github.io/passage/"]
 
-# Partial fragments included from other pages via include-markdown — not
-# meant to appear as standalone documents in the navigation.
-not_in_nav: |
-  /_partials/**
+# Not published as pages:
+# - developer guides read on GitHub, next to the code and receipts they link to
+#   (their relative links point outside docs/);
+# - fragments that include-markdown reads from disk into other pages;
+# - the theme overrides (Jinja templates, read through `theme.custom_dir`).
+exclude_docs: |
+  /DATA_QUALIFICATION.md
+  /TRAJECTORY_STYLE.md
+  /_partials/
+  /overrides/
 
 repo_url: "https://github.com/ThalesGroup/passage"
 repo_name: "ThalesGroup/passage"
-copyright: "Copyright &copy; 2024–2026 Thales Group — MIT License"
+copyright: "Copyright &copy; 2024–2026 Thales Group · Code: MIT License · Data: JAXA AW3D30 terms of use"
 
 # ---------------------------------------------------------------------------
 # Theme
@@ -21,8 +29,7 @@ theme:
   name: material
   custom_dir: docs/overrides
   language: en
-  logo: assets/favicon.svg
-  # helicopter emoji is used as favicon; file created in docs/assets/favicon.svg
+  logo: assets/logo.svg
   favicon: assets/favicon.svg
 
   icon:
@@ -42,23 +49,19 @@ theme:
       quote: fontawesome/solid/quote-left
 
   palette:
-    # Light mode — Alpine blue + warm amber accent
-    - media: "(prefers-color-scheme: light)"
-      scheme: default
-      primary: indigo
-      accent: amber
+    # Dark first: the neon theme is designed on a night background.
+    - scheme: slate
+      primary: custom
+      accent: custom
       toggle:
-        icon: material/brightness-7
-        name: Switch to dark mode
-
-    # Dark mode — Deep mountain blue + amber accent
-    - media: "(prefers-color-scheme: dark)"
-      scheme: slate
-      primary: indigo
-      accent: amber
-      toggle:
-        icon: material/brightness-4
+        icon: material/weather-sunny
         name: Switch to light mode
+    - scheme: default
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
 
   font:
     text: Inter
@@ -96,12 +99,12 @@ plugins:
       default_handler: python
       handlers:
         python:
-          # `src/` for the dataset-generation package (`passage`); the eval
-          # sub-package lives under `src/passage-eval/src/` and is added so
-          # `::: passage_eval` blocks in api/evaluation.md resolve.
-          paths: [src, src/passage-eval/src]
+          # `src/` holds the `passage` package. `passage_eval` (directory
+          # `src/passage-eval/`) is resolved from the installed distribution,
+          # which `uv sync` installs in editable mode.
+          paths: [src]
           options:
-            show_source: true
+            show_source: false
             show_root_heading: true
             show_root_full_path: false
             show_category_heading: true
@@ -182,11 +185,17 @@ extra_css:
   - assets/extra.css
 
 extra_javascript:
+  - javascripts/home.js
+  - javascripts/mermaid-zoom.js
   - javascripts/katex.js
   - https://unpkg.com/katex@0.16.11/dist/katex.min.js
   - https://unpkg.com/katex@0.16.11/dist/contrib/auto-render.min.js
 
 extra:
+  huggingface:
+    link: https://huggingface.co/datasets/thalesgroup/passage
+    name: "thalesgroup/passage"
+    title: "Dataset on the Hugging Face Hub"
   social:
     - icon: fontawesome/brands/github
       link: https://github.com/ThalesGroup/passage
@@ -198,15 +207,13 @@ extra:
     new: Recently added
     deprecated: Deprecated
   generator: false
-  analytics:
-    provider: google
-    property: ""
 
 # ---------------------------------------------------------------------------
 # Navigation
 # ---------------------------------------------------------------------------
 nav:
   - "Home": index.md
+  - "Dataset": dataset/index.md
   - "Dataset Generation":
       - "Overview": guide/index.md
       - "Installation": guide/installation.md
@@ -223,26 +230,26 @@ nav:
           - "Obstacle Generation": generation/obstacles.md
           - "Solvers & Heuristics": generation/solvers.md
           - "Interactive Notebooks":
-              - "Overview": generation/notebooks.md
-              - "Executed runs":
-                  - "Index": generation/notebooks/index.md
-                  - "Demo (load + visualise)": generation/notebooks/demo.md
-                  - "Obstacle generation": generation/notebooks/obstacles.md
-                  - "Cost model comparison": generation/notebooks/costmodel.md
-                  - "Solver comparison": generation/notebooks/solve.md
-                  - "A* inference timing": generation/notebooks/astar-inference-timing.md
+              - "Overview": generation/notebooks/index.md
+              - "Getting started": generation/notebooks/demo.md
+              - "Obstacles": generation/notebooks/obstacles.md
+              - "The three objectives": generation/notebooks/costmodel.md
+              - "Exact re-solve": generation/notebooks/solve.md
+              - "Timing a planner": generation/notebooks/astar-inference-timing.md
   - "Benchmark":
       - "Overview": benchmark/index.md
       - "Evaluation Protocol": benchmark/protocol.md
       - "passage-eval Package": benchmark/passage-eval.md
       - "Leaderboard": benchmark/leaderboard.md
-      - "Submit a candidate": benchmark/contributing-a-method.md
+      - "First entries": benchmark/candidates.md
+      - "Evaluate your planner": benchmark/contributing-a-method.md
       - "Reproducible Notebooks":
           - "Overview": benchmark/notebooks/index.md
-          - "A* walkthrough": benchmark/notebooks/01-astar-walkthrough.md
-          - "Score released baselines": benchmark/notebooks/02-score-released-baselines.md
-          - "Leaderboard visualisation": benchmark/notebooks/03-leaderboard.md
-      - "End-to-End Walkthrough": benchmark/walkthrough.md
+          - "Evaluator walkthrough": benchmark/notebooks/01-astar-walkthrough.md
+          - "Paper results": benchmark/notebooks/02-paper-results.md
+          - "Classical baselines": benchmark/notebooks/02-score-released-baselines.md
+          - "Results format": benchmark/notebooks/03-leaderboard.md
+      - "Paired statistics (paper)": benchmark/walkthrough.md
       - "API Reference": benchmark/api.md
   - "Code Architecture":
       - "Overview": architecture/index.md

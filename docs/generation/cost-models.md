@@ -4,7 +4,7 @@ title: Cost Models
 
 # Cost Models
 
-PASSAGE implements **five distinct cost models**, each defining a different edge-weight function for the pathfinding graph. These models capture different real-world navigation priorities — from minimizing distance to avoiding uphill climbs.
+A **cost model** (or objective) sets the cost of each step of a route on the routing graph. The generator implements **five cost models**. PASSAGE v1.0 uses three of them: `elevation`, `slope_uphill` and `energy`. The other two, `distance` and `absolute_elevation`, are options not used by the v1.0 release.
 
 ---
 
@@ -12,136 +12,140 @@ PASSAGE implements **five distinct cost models**, each defining a different edge
 
 | Symbol | Definition |
 |--------|-----------|
-| $d$ | Euclidean distance between adjacent pixels ($30\,\text{m}$ cardinal, $30\sqrt{2}\,\text{m}$ diagonal) |
-| $\alpha$ | Cost model weight (configurable per solver) |
-| $e(i,j)$ | Raw elevation at pixel $(i,j)$ |
-| $\bar{e}(i,j)$ | Normalized elevation $\in [0,1]$ |
-| $\|\bar{e}\|(i,j)$ | Absolute normalized elevation |
-| $\Delta e$ | Elevation difference $e_{\text{dst}} - e_{\text{src}}$ |
-| $\Delta e_{\text{range}}$ | Global elevation range $e_{\max} - e_{\min}$ |
+| $u, v$ | Source cell and destination cell of one step |
+| $d_{uv}$ | Step length: $30\,\text{m}$ for an orthogonal step, $30\sqrt{2}\,\text{m}$ for a diagonal step |
+| $w$ | Weight of the objective (set per solver in `config/config.yaml`) |
+| $h_u, h_v$ | Elevations of $u$ and $v$, in meters |
+| $h_{\min}, h_{\max}$ | Lowest and highest elevation of the **crop**, in meters, obstacle cells included |
+
+Costs are **crop-relative**: the normalized terms divide by the elevation range of the crop, $h_{\max} - h_{\min}$. This is not the elevation channel $\bar{e}$ of the tensor, which uses the global calibration range (see [Sampling Procedure](sampling.md#step-6-normalize-elevation)). The solver first turns $\bar{e}$ back into meters, then applies the formulas below in float64. When the crop is flat ($h_{\max} = h_{\min}$), every normalized term is taken as zero.
 
 ---
 
 ## 1. Elevation Cost
 
-Prefer low-elevation pixels. The cost increases proportionally with the **destination's normalized elevation**:
+Prefers low cells of the crop. The cost grows with the **destination's** elevation, relative to the crop:
 
 $$
-w_{\text{elevation}} = d \cdot \left(1 + \alpha \cdot \bar{e}_{\text{dst}}\right)
+c_{\mathrm{elevation}}(u,v) = d_{uv}\left(1 + w\,\frac{h_v - h_{\min}}{h_{\max} - h_{\min}}\right)
 $$
 
 !!! tip "When to use"
-    Useful when operating in mountainous terrain where **higher altitude = higher risk** (weather, oxygen, turbulence). A helicopter might prefer lower valleys.
+    Useful in mountainous terrain where **higher altitude means higher risk** (weather, oxygen, turbulence). A helicopter might prefer the valleys.
 
 ---
 
 ## 2. Distance Cost
 
-Pure shortest-path — ignores elevation entirely:
+Pure shortest path; elevation is ignored:
 
 $$
-w_{\text{distance}} = d
+c_{\mathrm{distance}}(u,v) = d_{uv}
 $$
 
-This is the baseline cost model. Combined with A\* and a consistent heuristic, it produces geometrically shortest paths.
+This is the baseline model. With A\* and a consistent heuristic, it gives the geometrically shortest 8-connected route. It is not used by the v1.0 release.
 
 ---
 
 ## 3. Slope-Uphill Cost
 
-Penalizes **uphill movement** while treating downhill as free (cost = 0 extra). Models energy expenditure for ground vehicles or the difficulty of gaining altitude:
+Penalizes **climbing**. A descending or flat step costs only its length:
 
 $$
-w_{\text{slope}} = d \cdot \left(1 + \alpha \cdot \frac{\max(0,\; \Delta e)}{\Delta e_{\text{range}}}\right)
+c_{\mathrm{slope}}(u,v) = d_{uv}\left(1 + w\,\frac{\max(0,\,h_v - h_u)}{h_{\max} - h_{\min}}\right)
 $$
 
-The $\max(0, \Delta e)$ term ensures only positive elevation changes (climbing) contribute to the cost. Descending is weighted at the base distance.
+The $\max(0, h_v - h_u)$ term keeps only elevation gains. The gain is divided by the crop's elevation range and multiplies the step length.
 
 !!! example "Helicopter analogy"
-    A HEMS helicopter climbing from a valley floor to a mountain ridge expends significantly more energy than descending. This model captures that asymmetry.
+    A HEMS helicopter climbing from a valley floor to a ridge spends more energy than when it descends. This model captures that asymmetry.
 
 ---
 
 ## 4. Energy Cost
 
-An additive energy penalty for climbing:
+Adds a penalty for each meter climbed:
 
 $$
-w_{\text{energy}} = d + \alpha \cdot \max(0,\; \Delta e)
+c_{\mathrm{energy}}(u,v) = d_{uv} + w\,\max(0,\,h_v - h_u)
 $$
 
-Unlike the slope model (which is multiplicative), the energy model adds a fixed penalty per meter of elevation gain, independent of horizontal distance.
+Unlike the slope model, which multiplies the step length, the energy model **adds** a penalty per meter of gain. The gain is in meters, not normalized, and the penalty does not depend on the step length.
 
 ---
 
-## 5. Absolute Cost
+## 5. Absolute-Elevation Cost
 
-Penalizes pixels with **high absolute elevation** regardless of direction of travel:
+Penalizes cells far from sea level, whatever the direction of travel:
 
 $$
-w_{\text{absolute}} = d \cdot \left(1 + \alpha \cdot |\bar{e}_{\text{dst}}|\right)
+c_{\mathrm{absolute\_elevation}}(u,v) = d_{uv}\left(1 + w\,\frac{\lvert h_v \rvert}{\max(\lvert h_{\min} \rvert,\, \lvert h_{\max} \rvert)}\right)
 $$
 
-This forces paths to stick to regions near sea level, avoiding both mountain peaks and deep depressions.
+Routes stay close to sea level and avoid both peaks and deep depressions. This model is not used by the v1.0 release.
 
 ---
 
 ## Comparison Table
 
-| Cost Model | Formula | Directional? | Penalizes |
-|-----------|---------|:------------:|-----------|
-| **Elevation** | $d \cdot (1 + \alpha \bar{e}_{\text{dst}})$ | No | High altitude |
-| **Distance** | $d$ | No | Long paths only |
-| **Slope-uphill** | $d \cdot (1 + \alpha \cdot \max(0,\Delta e)/\Delta e_{\text{range}})$ | Yes (uphill) | Climbing |
-| **Energy** | $d + \alpha \cdot \max(0, \Delta e)$ | Yes (uphill) | Elevation gain |
-| **Absolute** | $d \cdot (1 + \alpha \cdot |\bar{e}_{\text{dst}}|)$ | No | Extreme elevations |
+Every model except `distance` gives **directed** costs: reversing a step can change its cost, so the routing graph is directed.
+
+| Cost model | Step cost $c(u,v)$ | Depends on | Penalizes | Used by v1.0 |
+|-----------|---------|------------|-----------|:---:|
+| `elevation` | $d_{uv}\,(1 + w\,(h_v - h_{\min})/(h_{\max} - h_{\min}))$ | Destination elevation | High cells of the crop | Yes |
+| `distance` | $d_{uv}$ | Step length only | Long routes | No |
+| `slope_uphill` | $d_{uv}\,(1 + w\,\max(0, h_v - h_u)/(h_{\max} - h_{\min}))$ | Climb from $u$ to $v$ | Climbing | Yes |
+| `energy` | $d_{uv} + w\,\max(0, h_v - h_u)$ | Climb from $u$ to $v$ | Elevation gain | Yes |
+| `absolute_elevation` | $d_{uv}\,(1 + w\,\lvert h_v \rvert / \max(\lvert h_{\min} \rvert, \lvert h_{\max} \rvert))$ | Destination elevation | Distance from sea level | No |
 
 ---
 
-## Effect of the Weight $\alpha$
+## Effect of the Weight $w$
 
-The weight parameter $\alpha$ controls the **balance between distance and terrain awareness**:
+The weight $w$ sets the **balance between distance and terrain**:
 
-- $\alpha = 0$: all models reduce to pure distance (shortest path)
-- $\alpha \gg 1$: terrain features dominate, potentially producing longer but terrain-optimal paths
-- The default weights are **calibrated** to produce visually distinct paths across cost models
+- $w = 0$: every model reduces to pure distance (shortest route).
+- $w \gg 1$: terrain dominates, which can give longer routes that are cheaper under the objective.
 
-| Solver Config | Cost Model | Default $\alpha$ |
+The v1.0 weights are fixed in `config/config.yaml`. Each scene also records them, as float64, in its metadata (`metadata.solvers.<solver>.weight` and its graph specification).
+
+| Solver | Cost model | Weight $w$ |
 |--------------|-----------|:---------:|
-| `astar_elevation` | Elevation | 5,878 |
-| `astar_energy` | Energy | 3,888 |
-| `astar_slope` | Slope-uphill | 70,170 |
-
-!!! info "Why are weights so large?"
-    Since normalized elevation values are in $[0, 1]$ and pixel distances are $30\,\text{m}$, large weights are needed to make the terrain component comparable to the distance component. The values were empirically tuned to produce meaningfully different paths.
+| `astar_elevation` | `elevation` | 62.4 |
+| `astar_energy` | `energy` | 1125.3 |
+| `astar_slope` | `slope_uphill` | 8886.2 |
 
 ---
 
 ## Visual Comparison
 
-On the same terrain and markers, different cost models produce distinctly different paths:
+On the same terrain and markers, the objectives give different routes:
 
-```
-Elevation model → avoids mountain peaks, prefers valleys
-Slope model     → avoids steep climbs, may take longer routes
-Energy model    → minimizes total elevation gain
-Distance model  → straight-line shortest path (baseline)
-Absolute model  → stays near sea level
+```text
+elevation           → prefers the low cells of the crop (valleys)
+slope_uphill        → avoids climbs, even at the price of a longer route
+energy              → minimizes the total elevation gain in meters
+distance            → shortest 8-connected route (baseline)
+absolute_elevation  → stays close to sea level
 ```
 
-See the [**Cost Model notebook**](notebooks.md) for interactive visualizations.
+The [three objectives](notebooks/costmodel.md) notebook shows the three v1.0 objectives on released scenes; all notebooks are listed on the [Notebooks](notebooks/index.md) page.
 
 ---
 
 ## Implementation
 
-Cost models are implemented in `src/passage/pathfinding_utils.py`:
+The reference solver that labels v1.0 and the `passage-eval` scorer share one step-cost function: `directed_edge_cost()` in `src/passage-eval/metrics/cost.py`. It is compiled with Numba and evaluated in float64.
 
-- **NetworkX backend:** edge weights computed via `_compute_edge_weights()` using vectorized NumPy operations
-- **Grid/Numba backend:** step costs computed via `_numba_compute_step_cost()` — a JIT-compiled function dispatching on cost model ID
+The alternative solver backends, not used by the v1.0 release, compute the same formulas in `src/passage/pathfinding_utils.py`:
 
-Each cost model is identified by a string constant:
+- **NetworkX backend:** edge weights from `_compute_edge_weights()`, vectorized with NumPy.
+- **Grid backend:** step costs from `_numba_compute_step_cost()`, a Numba-compiled function that dispatches on a cost-model code.
+
+Each cost model is identified by a string:
 
 ```python
-COST_MODELS = ["elevation", "distance", "slope_uphill", "energy", "absolute"]
+COST_MODELS = {"elevation", "absolute_elevation", "distance", "slope_uphill", "energy"}
 ```
+
+The release graph specification (`GraphSpec`) rejects any other name. It also accepts `slope` as another spelling of `slope_uphill`.

@@ -4,94 +4,84 @@ title: Sampling Procedure
 
 # Sampling Procedure
 
-Each PASSAGE sample is generated through a carefully designed **6-step sampling process**. This process ensures geographic diversity, statistical balance across elevation ranges, and consistent normalization.
+This page describes how the generator that built **PASSAGE v1.0** draws each scene. It is the generator that `passage generate` runs with the shipped `config/config.yaml`. A scene goes through **six steps**: draw a center tile, pick the start cell, place the crop, draw the goal, add obstacles and normalize the elevation.
+
+Two terms are used throughout:
+
+- A **source tile** is one AW3D30 elevation file. It covers 1°×1° and is resampled to 3600×3600 cells of nominal 30 m by nearest angular-center sampling. JAXA ships tiles inside 5°×5° ZIP archives; the archive is only a download unit.
+- The **calibration range** $[e_{\min}, e_{\max}]$ is the lowest and highest elevation over all tiles, found by the [calibration step](../guide/calibrate.md). PASSAGE v1.0 uses $e_{\min} = -430.0$ m and $e_{\max} = 8767.0$ m.
+
+Each scene has its own seed, derived from `generation.seed`, the resolution, the scene index and the split (`blake2b(seed, resolution, index, split)`). Its split comes from a seeded shuffle of exact counts in the ratios of `splits.ratios` (90 / 2 / 4 / 4 % for train / calibration / validation / test). If a check below fails, the scene draws again, up to `generation.max_scene_attempts` times (100 in the shipped configuration).
 
 ---
 
-## Step 1 — Draw Target Elevation
+## Step 1 — Draw a Center Tile
 
-A target elevation is sampled uniformly from the global calibrated range:
+The center tile $t^*$ is drawn **uniformly at random** among the candidate tiles of the scene's split. A tile is a candidate when:
+
+- it is listed in the calibration file;
+- it belongs to the scene's split, and so do the eight tiles of its one-tile guard ring (see [Geographic splits](#geographic-splits)).
+
+No elevation filter is applied at this step.
+
+---
+
+## Step 2 — Pick the Start Cell
+
+A target elevation is drawn uniformly from the global calibration range:
 
 $$
 e_{\text{target}} \sim \mathcal{U}(e_{\min}, e_{\max})
 $$
 
-where $e_{\min}$ and $e_{\max}$ are the global minimum and maximum elevations discovered during the [calibration step](../guide/calibrate.md).
+The **start** is the cell of the center tile whose elevation is closest to $e_{\text{target}}$ (nodata cells are ignored):
 
-!!! example "Typical values"
-    With a full global download: $e_{\min} \approx -415$ m (Dead Sea region), $e_{\max} \approx 8{,}848$ m (Himalaya).
+$$
+(i^*, j^*) = \arg\min_{(i,j)} \left\lvert e^{(t^*)}(i, j) - e_{\text{target}} \right\rvert
+$$
 
-This uniform sampling ensures that low-altitude coastal regions and high-altitude mountain ranges are represented proportionally across the dataset.
+The target often falls outside the range of the tile. The start then lands on the lowest or highest cell of the tile. Starts therefore favor the elevation extremes of their tile, and coverage is **not proportional to ground area**.
 
 ---
 
-## Step 2 — Select a Matching Tile
+## Step 3 — Place the Crop
 
-Given $e_{\text{target}}$, the set of eligible tiles is filtered:
-
-$$
-\mathcal{T}_{\text{eligible}} = \left\{ t \in \mathcal{T} \mid e_{\min}^{(t)} \leq e_{\text{target}} \leq e_{\max}^{(t)} \right\}
-$$
-
-A tile $t^*$ is then selected **uniformly at random** from $\mathcal{T}_{\text{eligible}}$.
-
-!!! note "Hold-out filtering"
-    If hold-out is enabled, tiles in the hold-out region (e.g., South America) are excluded from training/calibration splits but included in validation/test splits. This ensures geographic generalization can be evaluated.
-
----
-
-## Step 3 — Identify Nearest Pixel
-
-Within the selected tile, the pixel whose elevation is closest to $e_{\text{target}}$ is identified:
-
-$$
-(i^*, j^*) = \arg\min_{(i,j)} \left| e^{(t^*)}(i, j) - e_{\text{target}} \right|
-$$
-
-This pixel becomes the **anchor point** around which the crop will be positioned.
-
----
-
-## Step 4 — Extract Random Crop
-
-A crop of size $R \times R$ (the target resolution) is extracted, with the anchor point positioned randomly within the crop area. The crop origin $(r_0, c_0)$ is computed as:
+A crop of $R \times R$ cells ($R$ is the resolution) is placed so that the start falls at a random position inside it. In tile coordinates, the crop origin $(r_0, c_0)$ is:
 
 $$
 r_0 = i^* - \delta_r, \quad c_0 = j^* - \delta_c
 $$
 
-where $\delta_r \sim \mathcal{U}(0, R-1)$ and $\delta_c \sim \mathcal{U}(0, R-1)$ are random offsets ensuring the anchor falls somewhere within the crop.
+where $\delta_r$ and $\delta_c$ are drawn uniformly from $\{0, \dots, R-1\}$.
 
-For **large resolutions** ($R > 3600$, the JAXA tile size), multiple adjacent tiles are assembled into a grid before cropping:
+The crop can extend past the edge of the center tile **at any resolution**. The generator then reads the matching window of each neighboring tile, one degree away, and joins the windows. Longitude wraps around at ±180°. A 4096×4096 crop is wider than one tile, so it always spans two or three tiles in each direction.
 
 ```mermaid
 flowchart LR
-    subgraph "2×2 Tile Grid (for 4096×4096)"
-        T1["Tile (lat, lon)"] --- T2["Tile (lat, lon+5)"]
-        T3["Tile (lat+5, lon)"] --- T4["Tile (lat+5, lon+5)"]
+    subgraph Tiles["Source tiles, 1° apart (3600×3600 cells each)"]
+        T1["Tile (lat, lon)<br>center tile"] --- T2["Tile (lat, lon+1)"]
+        T3["Tile (lat−1, lon)"] --- T4["Tile (lat−1, lon+1)"]
         T1 --- T3
         T2 --- T4
     end
-    TG[Assembled Grid<br>7200×7200 px] --> CROP[Random Crop<br>4096×4096 px]
+    Tiles --> W["Read the window of each tile<br>that the crop overlaps"]
+    W --> CROP["R×R crop"]
 ```
+
+The attempt is rejected, and the scene draws again, when:
+
+- a source tile of the crop, or a tile of its guard ring, belongs to another split;
+- a source tile is missing, or a window contains nodata cells or is incomplete (crops are never padded);
+- an elevation of the crop lies outside the calibration range (values are never clipped);
+- the obstacles of Step 5 disconnect the start from the goal on the routing graph (see [Blocked Cells and Connected Endpoints](obstacles.md#blocked-cells-and-connected-endpoints)).
 
 ---
 
-## Step 5 — Place Start & End Markers
+## Step 4 — Draw the Goal
 
-Two marker positions are placed randomly on the crop:
+The **goal** is drawn uniformly among the $R^2 - 1$ cells of the crop other than the start. The generator never redraws the goal alone: if the obstacles of Step 5 disconnect the start from the goal, the whole attempt is rejected and the scene draws its next candidate crop.
 
-$$
-\text{start} = (r_s, c_s), \quad \text{end} = (r_e, c_e)
-$$
-
-where each coordinate is drawn independently:
-
-$$
-r_s, r_e \sim \mathcal{U}(0, R-1), \quad c_s, c_e \sim \mathcal{U}(0, R-1)
-$$
-
-The **marker channel** of the output tensor encodes these positions:
+The **marker channel** of the output tensor encodes both endpoints:
 
 | Value | Meaning |
 |-------|---------|
@@ -101,36 +91,55 @@ The **marker channel** of the output tensor encodes these positions:
 
 ---
 
+## Step 5 — Add Obstacles
+
+Super-ellipse obstacles are drawn on the crop. They cover at most 30 % of it and never cover the start or the goal. Obstacle cells are blocked for routing; if they disconnect the start from the goal, the attempt is rejected. See [Obstacle Generation](obstacles.md).
+
+---
+
 ## Step 6 — Normalize Elevation
 
-The crop's raw elevation values are normalized to $[0, 1]$ using the **global** calibration bounds:
+The crop's elevations, in meters, are normalized to $[0, 1]$ with the **global** calibration range. The division is done in float64 and the result is stored as float32:
 
 $$
 \bar{e}(i, j) = \frac{e(i, j) - e_{\min}}{e_{\max} - e_{\min}}
 $$
 
-This ensures that elevation values are directly comparable across samples from different geographic regions.
+Values are therefore comparable across scenes from different regions.
 
-!!! info "Denormalization"
-    To recover real elevation in meters from a normalized value:
+!!! info "Back to meters"
+    To recover the elevation in meters from a normalized value:
 
     $$e(i,j) = \bar{e}(i,j) \cdot (e_{\max} - e_{\min}) + e_{\min}$$
 
-    The calibration values are stored in `calibrate.json` and in each sample's metadata.
+    The calibration range is stored in each scene's metadata (`metadata.calibration.min` and `metadata.calibration.max`) and in `calibrate.json` (`global_min` and `global_max`).
+
+The reference routes are then solved on this stored tensor, decoded back to meters: see [Solvers & Heuristics](solvers.md).
+
+---
+
+## Geographic Splits
+
+Every source tile belongs to exactly one split:
+
+- Tiles inside the hold-out mask (South America; `hold_out.mask_path`, a 181×361 PNG with one pixel per degree) go to `test`, and only to `test`.
+- The other tiles are grouped in 5°×5° blocks (`generation.geographic_policy.block_degrees`). A seeded hash assigns each block to `train`, `calibration` or `validation`, in proportion to their ratios.
+
+A crop is admitted only if all its source tiles, plus a one-tile guard ring around each (`generation.geographic_policy.buffer_tiles`), belong to the scene's split. The source cells of different splits are therefore disjoint.
 
 ---
 
 ## Output Tensor
 
-The final **tensor** is a 3-channel array of shape $(R, R, 3)$:
+The final **tensor** is a 3-channel float32 array of shape $(R, R, 3)$:
 
 | Channel | Content | Range |
 |---------|---------|-------|
 | 0 | Normalized elevation $\bar{e}$ | $[0, 1]$ |
 | 1 | Marker map | $\{-1, 0, 1\}$ |
-| 2 | Obstacle mask | $\{0, 1\}$ |
+| 2 | Obstacle mask (1 = blocked cell) | $\{0, 1\}$ |
 
-The tensor is compressed with **zstandard** (level 12) and stored as `.npy.zst`.
+The tensor is stored as raw float32 bytes compressed with **Zstandard** (level 12), in a file with the `.npy.zst` suffix. The file has no NumPy `.npy` header; see [Data Format](../architecture/data-format.md).
 
 ---
 
@@ -138,16 +147,20 @@ The tensor is compressed with **zstandard** (level 12) and stored as `.npy.zst`.
 
 ```mermaid
 flowchart TD
-    E["Sample target elevation uniformly in [e_min, e_max]"] --> F[Filter eligible tiles]
-    F --> G[Select tile uniformly]
-    G --> H[Find nearest pixel]
-    H --> I[Extract R×R crop]
-    I --> J[Place markers]
-    J --> K[Normalize elevation]
-    K --> L["Output: (R, R, 3) tensor"]
+    A["Draw a center tile among<br>the split's candidate tiles"] --> B["Draw a target elevation<br>uniformly in [e_min, e_max]"]
+    B --> C[Start = nearest cell of the tile]
+    C --> D["Place the R×R crop around the start<br>(may span several tiles)"]
+    D --> E{"Split, guard ring, nodata<br>and range checks pass?"}
+    E -->|No| A
+    E -->|Yes| F[Draw the goal among the other cells]
+    F --> G["Add obstacles (≤ 30 %)"]
+    G --> K{"Start and goal<br>connected?"}
+    K -->|No| A
+    K -->|Yes| H[Normalize elevation]
+    H --> L["Output: (R, R, 3) tensor"]
 
-    style E fill:#1565C0,color:#fff
-    style G fill:#42A5F5,color:#fff
-    style I fill:#2E7D32,color:#fff
+    style A fill:#1565C0,color:#fff
+    style C fill:#42A5F5,color:#fff
+    style D fill:#2E7D32,color:#fff
     style L fill:#D32F2F,color:#fff
 ```

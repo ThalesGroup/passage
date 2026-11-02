@@ -32,13 +32,28 @@ from loguru import logger
 run_calibrate = None
 run_download = None
 run_generate = None
+run_regenerate = None
 compress_release = None
 prepare_export = None
 upload_export = None
 export_and_upload = None
 
 
-def main() -> None:
+def _positive_int(value: str) -> int:
+    number = int(value)
+    if number <= 0:
+        raise argparse.ArgumentTypeError("must be a positive integer")
+    return number
+
+
+def _nonnegative_int(value: str) -> int:
+    number = int(value)
+    if number < 0:
+        raise argparse.ArgumentTypeError("must be a nonnegative integer")
+    return number
+
+
+def main(argv: list[str] | None = None) -> None:
     """Entry point for the PASSAGE CLI."""
     parser = argparse.ArgumentParser(
         prog="passage",
@@ -55,6 +70,14 @@ def main() -> None:
         "--outputs-dirpath",
         default="outputs/download",
         help="Directory for output files (default: outputs/download)",
+    )
+    download_parser.add_argument(
+        "--archive",
+        type=int,
+        nargs=2,
+        action="append",
+        metavar=("LAT", "LON"),
+        help="Download only these geographic archives (repeat for each latitude/longitude pair)",
     )
     download_parser.add_argument(
         "--no-resume",
@@ -264,15 +287,15 @@ def main() -> None:
         help="Hugging Face dataset repo id to embed in the export README (default: thalesgroup/passage)",
     )
     export_parser.add_argument(
-        "--anonymous",
+        "--keep-existing-configs",
         action="store_true",
-        help="Prepare anonymous metadata copies for reviewer-facing submission mirrors",
+        help="Retain compatible configs from the existing export README after verifying their earlier remote uploads",
     )
     export_parser.add_argument(
         "--max-notebook-retries",
-        type=int,
+        type=_positive_int,
         default=3,
-        help="Number of attempts to execute dataset.ipynb before giving up; set to 0 for unlimited retries (default: 3)",
+        help="Finite number of notebook execution attempts before giving up (default: 3)",
     )
     export_parser.add_argument(
         "--notebook-retry-delay",
@@ -439,18 +462,246 @@ def main() -> None:
         help="Set log level (default: info)",
     )
 
-    args = parser.parse_args()
+    audit_parser = subparsers.add_parser("audit", help="Audit a released dataset without modifying its files")
+    audit_parser.add_argument("--dataset-path", default="dataset", help="Local Hugging Face snapshot root")
+    audit_parser.add_argument("--dataset-repo", default="thalesgroup/passage")
+    audit_parser.add_argument("--dataset-revision", default=None)
+    audit_parser.add_argument("--remote", action="store_true", help="Use the explicit pinned Hugging Face repository")
+    audit_parser.add_argument("--resolution", type=int, nargs="+", default=[64, 128, 256, 512, 1024, 2048, 4096])
+    audit_parser.add_argument("--split", choices=["train", "calibration", "validation", "test"], default="validation")
+    audit_parser.add_argument(
+        "--max-samples", type=_positive_int, default=16, help="Bounded core-row audit per resolution"
+    )
+    audit_parser.add_argument("--max-expansions", type=_positive_int, default=10000)
+    audit_parser.add_argument("--output", default="outputs/audit/audit.json")
+
+    qualification_parser = subparsers.add_parser(
+        "qualify", help="Authenticate a pinned snapshot, census metadata and audit frozen routes"
+    )
+    qualification_parser.add_argument("--dataset-path", default="dataset", help="Read-only local snapshot")
+    qualification_parser.add_argument("--dataset-repo", default="thalesgroup/passage")
+    qualification_parser.add_argument("--dataset-revision", required=True, help="Immutable source commit SHA")
+    qualification_parser.add_argument("--output", default="outputs/qualification")
+    qualification_parser.add_argument(
+        "--phase",
+        choices=["all", "authenticate", "census", "routes"],
+        default="all",
+        help="Run the complete campaign or one resumable phase",
+    )
+    qualification_parser.add_argument(
+        "--workers", type=_positive_int, default=4, help="Bounded hashing/audit workers (1–8)"
+    )
+    qualification_parser.add_argument(
+        "--batch-size", type=_positive_int, default=2048, help="Projected metadata batch size"
+    )
+
+    analysis_parser = subparsers.add_parser(
+        "analyze", help="Prepare or execute complete release notebooks in separate staging"
+    )
+    analysis_parser.add_argument("--dataset-path", default="dataset", help="Read-only local snapshot input")
+    analysis_parser.add_argument(
+        "--staging-root", required=True, help="Separate destination; never use the source snapshot"
+    )
+    analysis_parser.add_argument("--dataset-repo", default="thalesgroup/passage")
+    analysis_parser.add_argument("--dataset-revision", default=None)
+    analysis_parser.add_argument(
+        "--remote", action="store_true", help="Use pinned remote data rather than the local dataset path"
+    )
+    analysis_parser.add_argument("--resolution", type=int, nargs="+", default=[64, 128, 256, 512, 1024, 2048, 4096])
+    analysis_parser.add_argument("--notebooks-dirpath", default="notebooks")
+    analysis_parser.add_argument("--result-root", default=None)
+    analysis_parser.add_argument(
+        "--qualification-root",
+        default=None,
+        help="Bound qualification receipts to reuse a complete census and publish its evidence",
+    )
+    analysis_parser.add_argument(
+        "--census-limit",
+        type=_positive_int,
+        default=None,
+        help="Optional smoke-test rows per split; omitted means a full metadata census",
+    )
+    analysis_parser.add_argument("--max-samples", type=_positive_int, default=1, help="Scene previews per resolution")
+    analysis_parser.add_argument(
+        "--classical-budget",
+        type=_nonnegative_int,
+        default=16,
+        help="Core validation rows per bounded classical diagnostic; 0 uses no extra solves",
+    )
+    analysis_parser.add_argument("--max-expansions", type=_positive_int, default=10000)
+    analysis_parser.add_argument(
+        "--execute", action="store_true", help="Execute sequentially; default prepares files and manifests"
+    )
+    analysis_parser.add_argument("--cell-timeout", type=_positive_int, default=300)
+    analysis_parser.add_argument("--job-timeout", type=_positive_int, default=1800)
+    analysis_parser.add_argument("--force", action="store_true", help="Replace stale executed notebook outputs")
+
+    regenerate_parser = subparsers.add_parser(
+        "regenerate", help="Generate, export and verify the dataset in bounded, resumable batches; never uploads"
+    )
+    regenerate_parser.add_argument("--config", default="config/config.yaml")
+    regenerate_parser.add_argument("--dataset-dirpath", default="outputs/release/dataset")
+    regenerate_parser.add_argument("--scratch-dirpath", default="outputs/release/scratch")
+    regenerate_parser.add_argument("--tiles-dirpath", default="outputs/download/tiles")
+    regenerate_parser.add_argument("--calibration-filepath", default="outputs/calibrate/calibrate.json")
+    regenerate_parser.add_argument("--notebooks-dirpath", default="notebooks")
+    regenerate_parser.add_argument("--resolution", type=_positive_int, nargs="+", default=None)
+    regenerate_parser.add_argument(
+        "--num-cpus",
+        type=_nonnegative_int,
+        default=None,
+        help="Worker ceiling; default floor(75%% of process CPU affinity), 0 serial",
+    )
+    regenerate_parser.add_argument(
+        "--pilot",
+        type=_positive_int,
+        default=None,
+        metavar="SCENES",
+        help="Separately identified pilot scenes per resolution; full count/split seeds preserved",
+    )
+    regenerate_parser.add_argument(
+        "--dry-run", action="store_true", help="Validate inputs, counts and storage without writing files"
+    )
+    regenerate_parser.add_argument("--max-raw-bytes", type=_positive_int, default=16 * 1024**3)
+    regenerate_parser.add_argument("--min-free-bytes", type=_nonnegative_int, default=64 * 1024**3)
+    regenerate_parser.add_argument(
+        "--batch-scenes",
+        type=_positive_int,
+        default=None,
+        help="Optional generation stage ceiling; export shard sizes remain configured separately",
+    )
+    regenerate_parser.add_argument(
+        "--export-memory-bytes",
+        type=_positive_int,
+        default=8 * 1024**3,
+        help="Total admitted parallel export workspace; default 8 GiB",
+    )
+
+    args = parser.parse_args(argv)
 
     level = getattr(args, "log_level", "info")
     logger.remove()
     logger.add(sys.stderr, level=level.upper())
 
-    if args.command == "download":
+    if args.command == "regenerate":
+        if run_regenerate is None:
+            from passage.regenerate import run_regenerate as _rr
+
+            globals()["run_regenerate"] = _rr
+        result = run_regenerate(
+            config_filepath=args.config,
+            dataset_dirpath=args.dataset_dirpath,
+            scratch_dirpath=args.scratch_dirpath,
+            tiles_dirpath=args.tiles_dirpath,
+            calibration_filepath=args.calibration_filepath,
+            notebooks_dirpath=args.notebooks_dirpath,
+            resolution=args.resolution,
+            num_cpus=args.num_cpus,
+            pilot=args.pilot,
+            dry_run=args.dry_run,
+            max_raw_bytes=args.max_raw_bytes,
+            min_free_bytes=args.min_free_bytes,
+            batch_scenes=args.batch_scenes,
+            export_memory_bytes=args.export_memory_bytes,
+        )
+        if args.dry_run:
+            import json
+
+            print(json.dumps(result, indent=2, sort_keys=True))
+    elif args.command == "audit":
+        import json
+        from pathlib import Path
+        from passage.audit import audit_source
+        from passage.dataset import DatasetSource
+
+        source = DatasetSource(
+            root=None if args.remote else args.dataset_path, repo=args.dataset_repo, revision=args.dataset_revision
+        )
+        audits = [
+            audit_source(
+                source,
+                resolution=resolution,
+                split=args.split,
+                limit=args.max_samples,
+                max_expansions=args.max_expansions,
+            )
+            for resolution in args.resolution
+        ]
+        output = Path(args.output)
+        output.parent.mkdir(parents=True, exist_ok=True)
+        temporary = output.with_suffix(output.suffix + ".tmp")
+        temporary.write_text(json.dumps({"audits": audits}, indent=2, allow_nan=False) + "\n", encoding="utf-8")
+        temporary.replace(output)
+        logger.info(f"Audit receipts written to {output}")
+    elif args.command == "qualify":
+        import json
+        from pathlib import Path
+        from passage.authentication import authenticate_snapshot
+        from passage.dataset import DatasetSource
+        from passage.qualification import run_metadata_census
+
+        source = DatasetSource(root=args.dataset_path, repo=args.dataset_repo, revision=args.dataset_revision)
+        output = Path(args.output).resolve()
+        root = source.root.resolve()
+        if output == root or output.is_relative_to(root) or root.is_relative_to(output):
+            raise ValueError("Qualification outputs must be separate from the source snapshot")
+        if not 1 <= args.workers <= 8:
+            raise ValueError("Qualification workers must be between 1 and 8")
+        source_auth = output / "source-authentication"
+        if args.phase in {"all", "authenticate"}:
+            authentication = authenticate_snapshot(
+                root, args.dataset_repo, args.dataset_revision, source_auth, workers=args.workers
+            )
+            if not authentication["content_verified"]:
+                raise RuntimeError("Source authentication remains incomplete; inspect its receipt")
+        if args.phase in {"all", "census"}:
+            result = run_metadata_census(
+                source,
+                output / "metadata",
+                batch_size=args.batch_size,
+                authentication_manifest=source_auth / "manifest.json",
+                progress=lambda event: print(json.dumps(event), flush=True),
+            )
+            if not result["population_scope_complete"]:
+                raise RuntimeError("Full census is incomplete; inspect its summary")
+        if args.phase in {"all", "routes"}:
+            from passage.qualification_runner import run_route_audit
+
+            run_route_audit(source, output / "metadata", output / "route-audit", workers=args.workers)
+        logger.info(f"Qualification phase {args.phase} completed; receipts: {output}")
+    elif args.command == "analyze":
+        from passage.notebook_export import prepare_snapshot_notebooks
+
+        manifest = prepare_snapshot_notebooks(
+            None if args.remote else args.dataset_path,
+            args.staging_root,
+            notebooks_dirpath=args.notebooks_dirpath,
+            resolutions=args.resolution,
+            repo_id=args.dataset_repo,
+            revision=args.dataset_revision,
+            execute=args.execute,
+            cell_timeout=args.cell_timeout,
+            job_timeout=args.job_timeout,
+            result_root=args.result_root,
+            qualification_root=args.qualification_root,
+            force=args.force,
+            parameters={
+                "census_limit": args.census_limit,
+                "max_samples": args.max_samples,
+                "classical_budget": args.classical_budget,
+                "max_expansions": args.max_expansions,
+            },
+        )
+        logger.info(f"Notebook preparation completed: {manifest.get('status', 'see staging manifest')}")
+    elif args.command == "download":
         if run_download is None:
             from passage.download import run_download as _rd
 
             globals()["run_download"] = _rd
-        run_download(args.outputs_dirpath, resume=not args.no_resume, num_cpus=args.num_cpus)
+        download_options = {"resume": not args.no_resume, "num_cpus": args.num_cpus}
+        if args.archive:
+            download_options["archive_pairs"] = [tuple(pair) for pair in args.archive]
+        run_download(args.outputs_dirpath, **download_options)
     elif args.command == "generate":
         if run_generate is None:
             from passage.generate import run_generate as _rg
@@ -527,11 +778,11 @@ def main() -> None:
             export_dirpath=args.export_dirpath,
             resolutions=args.resolution,
             repo_id=args.repo_id,
-            anonymous=args.anonymous,
-            max_notebook_retries=(None if args.max_notebook_retries == 0 else args.max_notebook_retries),
+            max_notebook_retries=args.max_notebook_retries,
             notebook_retry_delay=args.notebook_retry_delay,
             num_cpus=args.num_cpus,
             steps=steps,
+            keep_existing_configs=args.keep_existing_configs,
         )
     elif args.command == "upload":
         env_display = args.env_path if args.env_path else ".env"

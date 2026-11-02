@@ -14,9 +14,15 @@ hand-crafted heuristic — same code path.
 from passage_eval.baselines.classical import (
     AStarPlanner,
     GreedyToGoalPlanner,
+    RandomPolicyPlanner,
+    BoundedExactPlanner,
+    CanonicalAStarPlanner,
 )
 
 __all__ = [
     "AStarPlanner",
     "GreedyToGoalPlanner",
+    "RandomPolicyPlanner",
+    "BoundedExactPlanner",
+    "CanonicalAStarPlanner",
 ]

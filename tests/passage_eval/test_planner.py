@@ -3,6 +3,7 @@
 # Copyright (c) 2026 THALES
 
 """Tests for the Planner ABC + score_planner driver + reference baselines."""
+
 from __future__ import annotations
 
 import math
@@ -39,7 +40,7 @@ def _make_simple_scene(
     # On a flat grid with `distance` cost, the diagonal is the oracle.
     diag_len = max(H, W) - 1
     oracle_path = [(i, i) for i in range(diag_len + 1)]
-    oracle_cost = sum(math.hypot(1, 1) for _ in range(diag_len))
+    oracle_cost = sum(30 * math.hypot(1, 1) for _ in range(diag_len))
     return Scene(
         sample_id=sample_id,
         elevation=elevation,
@@ -77,9 +78,12 @@ def test_constant_planner_scores_via_score_planner():
     out = score_planner(planner, scenes)
     # Six primary metrics + bookkeeping.
     for key in (
-        "cost_regret_median", "cost_regret_p90",
-        "path_assd", "path_hausdorff_p95",
-        "success_rate", "obstacle_violation_rate",
+        "cost_regret_median",
+        "cost_regret_p90",
+        "path_assd",
+        "path_hausdorff_p95",
+        "success_rate",
+        "obstacle_violation_rate",
         "n_samples",
     ):
         assert key in out
@@ -152,7 +156,7 @@ def test_astar_with_calibrated_elevation_cost_improves_over_greedy():
         goal=goal,
         cost_model=cost_model,
         cost_weight=cost_weight,
-        oracle_path=[start],          # placeholder, not used by oracle planner
+        oracle_path=[start],  # placeholder, not used by oracle planner
         oracle_cost=0.0,
     )
     oracle_out = oracle_planner.predict_path(oracle_scene)

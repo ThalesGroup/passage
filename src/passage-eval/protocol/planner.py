@@ -28,9 +28,8 @@ reinforcement-learning, classical --- only has to map the input tensor
 to an ordered $s \\to g$ path. This module is the executable form of
 that statement.
 
-A concrete planner implements either :meth:`Planner.predict_path`
-(single sample) or :meth:`Planner.predict_paths` (batch). Default
-implementations forward to the other so most subclasses only need one.
+A concrete planner implements :meth:`Planner.predict_path` for one sample.
+It may override :meth:`Planner.predict_paths` for batched inference.
 
 The :func:`score_planner` driver runs a planner against an iterable of
 PASSAGE-shaped scenes and emits the same primary-metric bundle that
@@ -42,13 +41,14 @@ ready to drop into the headline table or feed
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Iterable, Sequence
 
 import numpy as np
 
 from passage_eval._typing import PathLike
-from passage_eval.metrics.summary import compute_primary_metrics
+from passage_eval.metrics.summary import aggregate_primary_metrics, per_sample_metrics
+from passage_eval.metrics.cost import path_cost
 
 
 __all__ = [
@@ -56,6 +56,7 @@ __all__ = [
     "PlannerOutput",
     "Planner",
     "score_planner",
+    "evaluate_planner",
 ]
 
 
@@ -70,15 +71,16 @@ class Scene:
     """
 
     sample_id: str
-    elevation: np.ndarray            #: (H, W) raw elevation, metres.
-    obstacles: np.ndarray            #: (H, W) binary obstacle mask, 1 = forbidden.
-    start: tuple[int, int]           #: (i, j) start grid cell.
-    goal: tuple[int, int]            #: (i, j) goal grid cell.
-    cost_model: str                  #: one of {"distance", "elevation", "absolute_elevation", "slope_uphill", "energy"}
-    cost_weight: float               #: per-cost-model weight $w$ from the calibration JSON.
-    oracle_path: PathLike            #: ordered list of (i, j) cells from A* on the analytic cost.
-    oracle_cost: float               #: scalar cost of ``oracle_path`` under the analytic cost model.
+    elevation: np.ndarray  #: (H, W) raw elevation, metres.
+    obstacles: np.ndarray  #: (H, W) binary obstacle mask, 1 = forbidden.
+    start: tuple[int, int]  #: (i, j) start grid cell.
+    goal: tuple[int, int]  #: (i, j) goal grid cell.
+    cost_model: str  #: one of {"distance", "elevation", "absolute_elevation", "slope_uphill", "energy"}
+    cost_weight: float  #: per-cost-model weight $w$ from the calibration JSON.
+    oracle_path: PathLike  #: ordered list of (i, j) cells from A* on the analytic cost.
+    oracle_cost: float  #: scalar cost of ``oracle_path`` under the analytic cost model.
     metadata: dict = field(default_factory=dict)
+    input_tensor: np.ndarray | None = None  #: Released (H,W,3) normalized input, without labels.
 
 
 @dataclass(frozen=True)
@@ -97,9 +99,8 @@ class PlannerOutput:
 class Planner(ABC):
     """Abstract base class for any PASSAGE-scoreable planner.
 
-    Subclasses MUST implement either :meth:`predict_path` or
-    :meth:`predict_paths`. The default implementations forward to the
-    other so subclasses only need one.
+    Subclasses implement :meth:`predict_path`. The default :meth:`predict_paths`
+    calls it for each scene; override that method for batched inference.
 
     The interface is intentionally minimal: a planner only needs to
     consume a :class:`Scene` and emit an ordered $s \\to g$ list of
@@ -120,12 +121,28 @@ class Planner(ABC):
         return [self.predict_path(scene) for scene in scenes]
 
 
-def score_planner(
+def candidate_scene(scene: Scene) -> Scene:
+    """Isolate candidate-owned inputs from the evaluator's labels and arrays."""
+    from passage_eval.protocol.contracts import PlanRequest
+
+    ordinary = PlanRequest.from_scene(scene)
+    return replace(
+        scene,
+        elevation=ordinary.elevation,
+        obstacles=ordinary.obstacles,
+        input_tensor=ordinary.input_tensor,
+        oracle_path=[],
+        oracle_cost=float("nan"),
+        metadata=ordinary.metadata,
+    )
+
+
+def evaluate_planner(
     planner: Planner,
     scenes: Iterable[Scene],
     *,
     batch_size: int | None = None,
-) -> dict[str, float]:
+) -> tuple[dict[str, float], dict[str, np.ndarray]]:
     """Score a :class:`Planner` against an iterable of :class:`Scene`s.
 
     Wraps :func:`compute_primary_metrics` so the same primary-metric
@@ -139,28 +156,38 @@ def score_planner(
     if not materialised:
         raise ValueError("score_planner: empty scene iterable.")
 
+    if batch_size is not None and batch_size <= 0:
+        raise ValueError("batch_size must be positive")
+    # Candidate inputs carry no oracle path or oracle costs, including metadata.
     outputs: list[PlannerOutput] = []
     if batch_size is None:
-        outputs = planner.predict_paths(materialised)
+        outputs = planner.predict_paths([candidate_scene(s) for s in materialised])
     else:
         for off in range(0, len(materialised), batch_size):
-            outputs.extend(planner.predict_paths(materialised[off : off + batch_size]))
+            outputs.extend(planner.predict_paths([candidate_scene(s) for s in materialised[off : off + batch_size]]))
 
     if len(outputs) != len(materialised):
         raise RuntimeError(
-            f"{type(planner).__name__}.predict_paths emitted "
-            f"{len(outputs)} outputs for {len(materialised)} scenes."
+            f"{type(planner).__name__}.predict_paths emitted {len(outputs)} outputs for {len(materialised)} scenes."
         )
 
-    predicted_paths = [out.predicted_path for out in outputs]
+    predicted_paths = [validated_raw_path(out.predicted_path) for out in outputs]
     oracle_paths = [scene.oracle_path for scene in materialised]
-    predicted_costs = np.asarray([out.predicted_cost for out in outputs], dtype=np.float64)
+    # Candidate-reported costs are informational only: every scored cost is
+    # recomputed under the scene's canonical analytic model and metre units.
+    predicted_costs = np.asarray(
+        [
+            path_cost(scene.elevation, path, weight=scene.cost_weight, cost_model=scene.cost_model)
+            for scene, path in zip(materialised, predicted_paths)
+        ],
+        dtype=np.float64,
+    )
     oracle_costs = np.asarray([scene.oracle_cost for scene in materialised], dtype=np.float64)
     obstacles = [scene.obstacles for scene in materialised]
     starts = [scene.start for scene in materialised]
     goals = [scene.goal for scene in materialised]
 
-    return compute_primary_metrics(
+    arrays = per_sample_metrics(
         predicted_paths=predicted_paths,
         oracle_paths=oracle_paths,
         predicted_costs=predicted_costs,
@@ -169,3 +196,40 @@ def score_planner(
         starts=starts,
         goals=goals,
     )
+
+    arrays.update(
+        sample_id=np.array([s.sample_id for s in materialised]),
+        obs_density=np.array([float(np.mean(s.obstacles)) for s in materialised]),
+        elev_std=np.array([float(np.std(s.elevation)) for s in materialised]),
+        oracle_len=np.array([len(s.oracle_path) for s in materialised], dtype=np.int64),
+        metric_contract=np.array("neurips-2026-submission-v1"),
+    )
+    return aggregate_primary_metrics(arrays), arrays
+
+
+def score_planner(planner: Planner, scenes: Iterable[Scene], *, batch_size: int | None = None) -> dict[str, float]:
+    """Compute headline metrics with costs derived from the emitted paths."""
+    metrics, _ = evaluate_planner(planner, scenes, batch_size=batch_size)
+    return metrics
+
+
+def validated_raw_path(path: PathLike) -> np.ndarray:
+    """Expose a numeric (N,2) route without reshaping, rounding or clipping.
+
+    Invalid shape/type yields an empty scoring path. The complete-request
+    runner separately persists numeric raw outputs even when malformed.
+    """
+    try:
+        points = np.asarray(path)
+        if points.size == 0:
+            return np.empty((0, 2), dtype=np.float64)
+        if points.ndim != 2 or points.shape[1] != 2 or points.dtype.kind not in "iuf":
+            return np.empty((0, 2), dtype=np.float64)
+        # Check coordinates in their original precision before downstream
+        # metric helpers cast to float64. A tiny fractional long-double cell
+        # must not become an integer through a lossy conversion.
+        if not np.isfinite(points).all() or not np.equal(points, np.floor(points)).all():
+            return np.empty((0, 2), dtype=np.float64)
+        return points.copy()
+    except (TypeError, ValueError):
+        return np.empty((0, 2), dtype=np.float64)

@@ -354,19 +354,6 @@ class TestMainCLI:
                 assert kwargs.get("repo_id") == "alice/repo"
 
     @pytest.mark.unit
-    def test_export_passes_anonymous_flag(self):
-        """If --anonymous is provided to export it should be passed through unchanged."""
-        from passage import main
-
-        with patch.object(sys, "argv", ["passage", "export", "--anonymous"]):
-            with patch("passage.prepare_export") as mock_export:
-                main()
-
-                mock_export.assert_called_once()
-                _, kwargs = mock_export.call_args
-                assert kwargs.get("anonymous") is True
-
-    @pytest.mark.unit
     def test_compress_passes_num_cpus_cli(self):
         """The compress subcommand should accept --num-cpus and pass it through."""
         from passage import main

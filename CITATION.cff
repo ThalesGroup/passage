@@ -1,6 +1,9 @@
 cff-version: 1.2.0
 title: PASSAGE
-message: If you use PASSAGE, please cite the software repository and accompanying dataset metadata in this file.
+message: >-
+  If you use PASSAGE, please cite the paper in preferred-citation. The code is
+  MIT-licensed; the dataset PASSAGE v1.0 is distributed on Hugging Face under
+  the JAXA AW3D30-derived terms in DATASET_LICENSE.md.
 type: software
 authors:
   - family-names: Delhomme
@@ -8,30 +11,37 @@ authors:
     email: geoffrey.delhomme@thalesgroup.com
     affiliation: Thales Group
   - family-names: Trap
-    given-names: Francois
+    given-names: François
+    email: francois.trap@fr.thalesgroup.com
     affiliation: Thales Group
   - family-names: Kaakai
     given-names: Fateh
-version: 0.1.0
-date-released: 2026-03-30
+    email: fateh.kaakai@thalesgroup.com
+    affiliation: Thales Group
+version: 1.0.0
 license: MIT
 repository-code: https://github.com/ThalesGroup/passage
+repository-artifact: https://huggingface.co/datasets/thalesgroup/passage
 url: https://github.com/ThalesGroup/passage
 keywords:
   - pathfinding
+  - path-planning
   - terrain-routing
   - benchmark
   - digital-elevation-model
   - dataset
 preferred-citation:
-  type: article
-  title: PASSAGE: A Multi-Resolution Pathfinding Dataset Mixing Complex Obstacles and Elevation-Based Tiles Towards Certified Machine Learning Systems
+  type: conference-paper
+  title: "PASSAGE: A Real-Terrain Benchmark for Trustworthy Constrained Path Planning"
   authors:
     - family-names: Delhomme
       given-names: Geoffrey
     - family-names: Trap
-      given-names: Francois
+      given-names: François
     - family-names: Kaakai
       given-names: Fateh
+  collection-title: "Advances in Neural Information Processing Systems (NeurIPS), Track on Evaluations and Datasets"
+  conference:
+    name: "NeurIPS 2026"
   year: 2026
   url: https://github.com/ThalesGroup/passage

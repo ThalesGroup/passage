@@ -114,7 +114,8 @@ class TestRunCalibrate:
         tiles_dir = tmp_path / "tiles"
         tiles_dir.mkdir()
 
-        cal.run_calibrate(str(outputs_dir), str(tiles_dir), resume=False, num_cpus=0)
+        with pytest.raises(ValueError, match="No DSM tiles"):
+            cal.run_calibrate(str(outputs_dir), str(tiles_dir), resume=False, num_cpus=0)
 
         # Should not create calibrate.json if no tiles found
         calibrate_json = outputs_dir / "calibrate.json"
@@ -127,7 +128,8 @@ class TestRunCalibrate:
         outputs_dir = tmp_path / "calibrate"
         tiles_dir = tmp_path / "nonexistent_tiles"
 
-        cal.run_calibrate(str(outputs_dir), str(tiles_dir), resume=False, num_cpus=0)
+        with pytest.raises(FileNotFoundError):
+            cal.run_calibrate(str(outputs_dir), str(tiles_dir), resume=False, num_cpus=0)
 
         # Should not create any output
         assert not outputs_dir.exists() or not (outputs_dir / "calibrate.json").exists()
@@ -185,8 +187,11 @@ class TestRunCalibrate:
         (tiles_dir / "N000E000_DSM.tif").touch()
         (tiles_dir / "N045E010_DSM.tif").touch()
 
-        # Mock returns for new tile only
-        mock_worker.return_value = ("N045E010_DSM.tif", 500.0, 2000.0, None)
+        # Legacy statistics lack source hashes and must be recomputed.
+        mock_worker.side_effect = [
+            ("N000E000_DSM.tif", 50.0, 1000.0, None),
+            ("N045E010_DSM.tif", 500.0, 2000.0, None),
+        ]
 
         cal.run_calibrate(str(outputs_dir), str(tiles_dir), resume=True, num_cpus=0)
 
@@ -194,7 +199,7 @@ class TestRunCalibrate:
             results = json.load(f)
 
         # Should have merged results
-        assert results["global_min"] == 0.0  # From existing
+        assert results["global_min"] == 50.0  # Recomputed from current source
         assert results["global_max"] == 2000.0  # From new tile
         assert len(results["tile_stats"]) == 2
 
@@ -217,7 +222,8 @@ class TestRunCalibrate:
         (tiles_dir / "N000E000_DSM.tif").touch()
         (tiles_dir / "N045E010_DSM.tif").touch()
 
-        cal.run_calibrate(str(outputs_dir), str(tiles_dir), resume=False, num_cpus=0)
+        with pytest.raises(RuntimeError, match="incomplete"):
+            cal.run_calibrate(str(outputs_dir), str(tiles_dir), resume=False, num_cpus=0)
 
         calibrate_json = outputs_dir / "calibrate.json"
         with open(calibrate_json) as f:

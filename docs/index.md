@@ -1,376 +1,389 @@
 ---
-title: PASSAGE — Path Solving Dataset & Generator
-description: Open-source elevation-based pathfinding benchmarks to advance research and save lives
+title: PASSAGE
+description: Real-terrain benchmark for constrained path planning — NeurIPS 2026, Track on Evaluations and Datasets.
+template: home.html
 icon: material/home
 hide:
   - navigation
   - toc
+tagline: "Real terrain, exact reference routes: 4.4 million scenes and 26.4 million route variants for constrained path planning and surrogate modelling."
+pins:
+  - k: "🤗 Dataset"
+    v: "thalesgroup/passage · v1.0"
+    link: "https://huggingface.co/datasets/thalesgroup/passage"
+  - k: "Data terms"
+    v: "JAXA AW3D30"
+    link: "https://earth.jaxa.jp/en/data/policy/"
+  - k: "Code"
+    v: "MIT"
+    link: "https://github.com/ThalesGroup/passage/blob/main/LICENSE"
+  - k: "Format"
+    v: "Parquet · 1.27 TB"
+  - k: "Metadata"
+    v: "Croissant 1.1 + RAI"
+    link: "https://github.com/ThalesGroup/passage/blob/main/croissant.json"
+  - k: "Python"
+    v: "≥ 3.11"
+stats:
+  - label: "Core scenes"
+    text: "4.4 M"
+    count: 4.4
+    decimals: 1
+    suffix: " M"
+  - label: "Exact routes"
+    text: "26.4 M"
+    count: 26.4
+    decimals: 1
+    suffix: " M"
+  - label: "Grid sizes"
+    text: "7"
+    count: 7
+  - label: "Cost objectives"
+    text: "3"
+    count: 3
+  - label: "Cell size"
+    text: "30 m"
+    count: 30
+    suffix: " m"
 ---
 
-<link rel="stylesheet" href="https://unpkg.com/katex@0.16.11/dist/katex.min.css">
+## :mountain_snow: Why PASSAGE
 
-<!-- Hero Section -->
-<div class="hero-section" markdown>
+<p class="pg-lede">Constrained path planning on real terrain underlies routing for
+search-and-rescue, robotics and airborne advisory systems, where rescue-helicopter
+crews fly through mountain passes, valleys and ridgelines. Existing public
+benchmarks cover this only in part: synthetic grids give algorithmic control
+without geographic realism, and geographic data give real terrain without
+controllable obstacles or shared baselines (the
+<a href="#cite-passage">NeurIPS 2026 paper</a>, introduction).</p>
 
-# PASSAGE
+PASSAGE is a dataset and benchmark for constrained path planning on real
+terrain: each scene is a square crop of the
+[JAXA ALOS World 3D–30 m (AW3D30)](https://www.eorc.jaxa.jp/ALOS/en/dataset/aw3d30/aw3d30_e.htm)
+digital surface model with a start cell, a goal cell and procedural obstacles.
+Each scene has six route variants: three cost objectives (`elevation`,
+`slope_uphill`, `energy`), each on free terrain and with the obstacles blocked.
+Each variant carries an exact minimum-cost reference route for the stated graph
+(eight-connected, 30 m cells); start and goal cells that the obstacles
+disconnect are rejected by the generator. The dataset,
+the generator and the `passage-eval` evaluator are publicly released (code under
+MIT, data under the JAXA terms), so that classical planners, learned surrogates,
+graph networks and reinforcement learning can be scored on the same tasks.
 
-<p class="hero-tagline">
-  <strong>PA</strong>th <strong>S</strong>olving Data<strong>S</strong>et <strong>A</strong>nd <strong>GE</strong>nerator<br>
-  Real-world elevation-based pathfinding benchmarks to advance research — and save lives.
-</p>
-
-<div class="hero-buttons" markdown>
-
-[:material-rocket-launch: **Get Started**](guide/index.md){ .btn-primary }
-[:fontawesome-brands-github: **View on GitHub**](https://github.com/ThalesGroup/passage){ .btn-secondary }
-[:simple-huggingface: **Dataset on HF**](https://huggingface.co/datasets/thalesgroup/passage){ .btn-secondary }
-
-</div>
-
-</div>
-
-<!-- Badges -->
-<div class="badges" markdown>
-
-![Python](https://img.shields.io/badge/python-≥3.11-3776AB?logo=python&logoColor=white)
-![License](https://img.shields.io/badge/license-MIT-green?logo=opensourceinitiative&logoColor=white)
-![Tests](https://img.shields.io/github/actions/workflow/status/ThalesGroup/passage/ci.yml?label=tests&logo=githubactions&logoColor=white)
-![Coverage](https://img.shields.io/badge/coverage-≥80%25-brightgreen?logo=pytest&logoColor=white)
-![HuggingFace](https://img.shields.io/badge/%F0%9F%A4%97-Dataset-yellow)
-![Code style: Ruff](https://img.shields.io/badge/code%20style-ruff-000000?logo=ruff&logoColor=white)
-![uv](https://img.shields.io/badge/package-uv-DE5FE9?logo=uv&logoColor=white)
-![Pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit&logoColor=white)
-
-</div>
-
-<!-- show banner image -->
-<p align="center">
-  <img src="assets/banner.png" alt="PASSAGE banner" width="100%" />
-</p>
-
-<!-- Stats Bar -->
-<div class="stats-bar" markdown>
-
-<div class="stat-item">
-  <span class="stat-value">4.4 M</span>
-  <span class="stat-label">Default Samples</span>
-</div>
-<div class="stat-item">
-  <span class="stat-value">7</span>
-  <span class="stat-label">Resolution Levels</span>
-</div>
-<div class="stat-item">
-  <span class="stat-value">5</span>
-  <span class="stat-label">Cost Models</span>
-</div>
-<div class="stat-item">
-  <span class="stat-value">3</span>
-  <span class="stat-label">Solver Backends</span>
-</div>
-<div class="stat-item">
-  <span class="stat-value">30 m/px</span>
-  <span class="stat-label">Spatial Resolution</span>
-</div>
-
-</div>
-
----
-
-<!-- Story Section -->
-<div class="story-section" markdown>
-
-## Context
-
-**Helicopter Emergency Medical Services (HEMS)** operate in some of the most challenging navigation environments on Earth. When a rescue crew takes off toward a patient in mountainous terrain, the flight path must account for elevation changes, ridgelines, valleys, and no-fly zones — all in real time. Selecting an efficient route across complex 3D landscapes is a genuine operational challenge, and the underlying pathfinding algorithms play an important role in mission planning.
-
-Despite this, most pathfinding research still relies on **synthetic flat grids** or small hand-crafted maps that do not reflect the complexity of real terrain. This gap motivated the creation of PASSAGE.
-
-**PASSAGE was built to bridge that gap.**
-
-Using real-world elevation data from the [JAXA ALOS AW3D30](https://www.eorc.jaxa.jp/ALOS/en/dataset/aw3d30/aw3d30_e.htm) Digital Surface Model (30 m/pixel), PASSAGE generates **large-scale, multi-resolution pathfinding benchmarks** grounded in actual geography — from coastal plains to high-altitude mountain ranges.
-
-We open-source this toolkit to give the research community access to realistic terrain data for developing and evaluating pathfinding algorithms. Whether you work on classical planners (A\*), reinforcement learning, graph neural networks, or certified surrogate models for safety-critical systems — PASSAGE provides the data to support meaningful progress.
-
-</div>
-
----
-
-
-## :compass: What is PASSAGE?
-
-**PASSAGE** is a complete, reproducible pipeline that transforms raw satellite elevation data into ready-to-use pathfinding datasets:
+## :compass: From terrain to benchmark
 
 <div class="pipeline-steps" markdown>
 
 <div class="pipeline-step" markdown>
-  <div class="step-number">1</div>
+<div class="step-number">1</div>
 
 #### Download
 
-Acquire JAXA ALOS AW3D30 DSM tiles covering the entire globe with geographic tracking and resume support.
+Fetch the AW3D30 tiles (1° × 1°, grouped in 5° × 5° archives), with resume support.
 </div>
 
 <div class="pipeline-step" markdown>
-  <div class="step-number">2</div>
+<div class="step-number">2</div>
 
 #### Calibrate
 
-Scan all tiles to compute global min / max elevation values, producing calibration maps.
+Scan every tile for the global elevation range used to normalise the tensors.
 </div>
 
 <div class="pipeline-step" markdown>
-  <div class="step-number">3</div>
+<div class="step-number">3</div>
 
 #### Generate
 
-Create multi-resolution samples with start/end markers, superellipse obstacles, and paths from multiple solvers.
+Draw scenes, place start, goal and super-ellipse obstacles, solve the exact routes.
 </div>
 
 <div class="pipeline-step" markdown>
-  <div class="step-number">4</div>
+<div class="step-number">4</div>
 
 #### Compress
 
-Rewrite the selected resolutions as Parquet shards in the release tree.
+Write the full and preview configurations as Parquet shards.
 </div>
 
 <div class="pipeline-step" markdown>
-  <div class="step-number">5</div>
+<div class="step-number">5</div>
 
 #### Export
 
-Refresh the upload-ready export tree: README, notebooks, calibration assets, and per-resolution analyses.
+Prepare the release tree: card, notebooks, calibration assets and analyses.
 </div>
 
 <div class="pipeline-step" markdown>
-  <div class="step-number">6</div>
+<div class="step-number">6</div>
 
 #### Upload
 
-Publish the prepared export tree to Hugging Face Hub and verify it with the release manifest.
+Publish the prepared tree to a Hugging Face dataset repository that you name.
 </div>
 
 </div>
 
----
+## :package: PASSAGE v1.0 at a glance
 
-## :star2: Key Features
+| Item | Value |
+| --- | --- |
+| Version | 1.0, Hub tag `v1.0` at commit `c09cc5a21a55a93e7c09d47368d5f5bf75cb8fae` |
+| Core scenes | 4,400,000 at seven resolutions, from 64×64 to 4096×4096 cells |
+| Route variants | 26,400,000, all exact routes (six per scene) |
+| Splits | train / calibration / validation / test = 90 / 2 / 4 / 4 % |
+| Test geography | South America hold-out; other tiles split by 5°×5° blocks |
+| Preview rows | 1,792 (64 per split and resolution), with rendered images |
+| Size | about 1.27 TB of Parquet (5,997 shards); 1.31 TB with receipts and notebooks |
+| Intended tasks | Classical planning, path-mask segmentation, cost-to-go regression, graph and reinforcement-learning planners |
+| Licence | Code: MIT. Data: JAXA AW3D30 terms, see [`DATASET_LICENSE.md`](https://github.com/ThalesGroup/passage/blob/main/DATASET_LICENSE.md) |
+| Paper | *PASSAGE: A Real-Terrain Benchmark for Trustworthy Constrained Path Planning*, NeurIPS 2026, Track on Evaluations and Datasets |
 
-<div class="feature-grid" markdown>
+<figure class="pg-figure" markdown>
+<img src="assets/sample.png" alt="Six terrain panels: solid green routes without obstacles and short-dashed blue routes with hatched obstacles; white circle and star mark start and goal" width="760" />
+<figcaption>PASSAGE v1.0 validation preview sample 0000000024 (256 × 256), the first
+row of the first validation preview shard, without selection. Columns are the
+elevation, uphill-slope and energy objectives; solid green routes ignore obstacles
+and short-dashed blue routes respect them. All panels share one elevation scale in
+metres. Stored optimality was not revalidated for this figure.</figcaption>
+</figure>
+
+## :sparkles: What you get
+
+<div class="feature-grid pg-cols-4" markdown>
 
 <div class="feature-card" markdown>
-  <span class="feature-icon">🌐</span>
+<span class="feature-icon">🌐</span>
 
-### Multi-Resolution
+### Seven grid sizes
 
-Seven resolution levels from **64×64** to **4096×4096** pixels, covering terrain patches from 1.9 km to 123 km across.
-</div>
-
-<div class="feature-card" markdown>
-  <span class="feature-icon">🏔️</span>
-
-### Real Elevation Data
-
-Every sample sourced from **JAXA ALOS AW3D30** — 30 m/pixel Digital Surface Model tiles covering the entire globe.
-</div>
-
-<div class="feature-card" markdown>
-  <span class="feature-icon">🔷</span>
-
-### Rich Obstacles
-
-Procedurally generated **superellipse** obstacles with configurable shape, size, rotation, and coverage — from circles to near-rectangles.
-</div>
-
-<div class="feature-card" markdown>
-  <span class="feature-icon">⚡</span>
-
-### 5 Cost Models
-
-Elevation, distance, slope-uphill, energy, and absolute cost functions — each capturing different navigation priorities.
+From 64 × 64 to 4096 × 4096 cells: about 1.9 km to 123 km across at the nominal 30 m.
 </div>
 
 <div class="feature-card" markdown>
-  <span class="feature-icon">🧮</span>
+<span class="feature-icon">🏔️</span>
 
-### 3 Solver Backends
+### Real elevation
 
-NetworkX graphs, `python-pathfinding` grids, and a custom **Numba-JIT** grid engine for high-performance A\* and Dijkstra.
+Every scene is a crop of AW3D30, JAXA's global digital surface model at a nominal 1-arcsecond (about 30 m) sampling ([Takaku et al., 2020](https://doi.org/10.5194/isprs-archives-XLIII-B4-2020-183-2020)).
 </div>
 
 <div class="feature-card" markdown>
-  <span class="feature-icon">🤗</span>
+<span class="feature-icon">🔷</span>
 
-### HuggingFace-Ready
+### Procedural obstacles
 
-Split release flow with `compress`, `export`, and `upload`, plus `manifest.sha256` for release verification.
+Super-ellipses of varied shape, size and rotation, up to 30 % of a crop, never on the start or the goal.
 </div>
 
 <div class="feature-card" markdown>
-  <span class="feature-icon">🔁</span>
+<span class="feature-icon">⚡</span>
 
-### Fully Resumable
+### Three cost objectives
 
-The generation and release-preparation stages can be rerun independently — no need to rebuild the whole dataset after an interruption.
+`elevation`, `slope_uphill` and `energy`, each solved without and with obstacles.
 </div>
 
 <div class="feature-card" markdown>
-  <span class="feature-icon">✅</span>
+<span class="feature-icon">🧮</span>
 
-### Tested & Reproducible
+### Exact references
 
-23 test suites, 80 %+ coverage, deterministic seeding, pre-commit hooks, and full CI/CD pipeline.
+A Numba-compiled float64 grid A\* labels every variant with an exact optimum; the generator rejects start and goal cells that the obstacles disconnect. A published notebook solves a sample again.
 </div>
 
 <div class="feature-card" markdown>
-  <span class="feature-icon">🛡️</span>
+<span class="feature-icon">🧭</span>
 
-### Certification-Aware
+### Bounded domain
 
-Designed with aerospace certification standards (ARP 6983 / ED-324) in mind — bounded operational design domain, traceable samples.
+The scene parameters form an operational design domain, a term the paper borrows from the [EASA AI Concept Paper, Issue 02](https://www.easa.europa.eu/en/document-library/general-publications/easa-artificial-intelligence-concept-paper-issue-2); the paper claims no compliance with EASA or FAA guidance.
+</div>
+
+<div class="feature-card" markdown>
+<span class="feature-icon">✅</span>
+
+### Tested
+
+865 tests with an 80 % coverage gate, deterministic seeding, pre-commit hooks and continuous integration.
+</div>
+
+<div class="feature-card" markdown>
+<span class="feature-icon">🔁</span>
+
+### Resumable
+
+Each stage can run again on its own; input identities are checked before any reuse.
 </div>
 
 </div>
 
----
-
-
-<!-- Leaderboard preview ----------------------------------------------------->
-
-## :material-trophy-outline: Leaderboard preview
+## :material-trophy-outline: Leaderboard
 
 {% include-markdown "_partials/leaderboard_main_index.md" %}
 
----
+## :zap: Quick start
 
-## :zap: Quick Start
+Most users only need the released data. Install `datasets`, `zstandard` and
+`numpy`, pin the dataset revision and decode one scene:
 
-```bash
-# Install uv (if needed)
-curl -LsSf https://astral.sh/uv/install.sh | sh
+```python
+import numpy as np
+import zstandard
+from datasets import load_dataset
 
-# Clone and install
-git clone https://github.com/ThalesGroup/passage.git
-cd passage
-uv sync
+REVISION = "c09cc5a21a55a93e7c09d47368d5f5bf75cb8fae"  # verified PASSAGE v1.0 upload
 
-# Run the full pipeline
-passage download                        # Step 1 — fetch JAXA tiles
-passage calibrate                       # Step 2 — compute elevation stats
-passage generate --resolution 256       # Step 3 — generate samples
-passage compress --resolution 256       # Step 4 — write parquet shards
-passage export --resolution 256         # Step 5 — refresh export tree
-passage upload                          # Step 6 — publish to Hugging Face
+rows = load_dataset("thalesgroup/passage", "256x256_samples",
+                    split="validation", revision=REVISION)
+row = rows[0]
+n = row["metadata"]["resolution"]
+x = np.frombuffer(zstandard.ZstdDecompressor().decompress(row["tensor"]),
+                  dtype="<f4").reshape(n, n, 3)  # elevation, markers, obstacles
+route = np.asarray(row["path_astar_energy_obstacles"])  # ordered [row, col] cells
 ```
 
-!!! tip "Explore a sample in 3 lines"
+The **Dataset** tab of this site shows how to recover metres, read the route
+status and stream the large configurations.
 
-    ```python
-    from datasets import load_dataset
-    from passage.utils import decode_tensor_blob
+??? example "Rebuild the dataset from the JAXA tiles"
 
-    ds = load_dataset("thalesgroup/passage", name="256x256")
-    sample = ds["train"][0]
-    tensor = decode_tensor_blob(sample["tensor"], (256, 256, 3))
+    The generator rebuilds the dataset from the source terrain. This is a large
+    job: the AW3D30 inventory holds 23,993 tiles, and the shipped
+    `config/config.yaml` asks for 1,000,000 scenes at 256 × 256. Read the
+    [user guide](guide/index.md) first. `passage regenerate`, the path whose
+    receipts ship with v1.0, accepts `--dry-run` and `--pilot 1` for a trial
+    run; the steps below run the same generator one stage at a time.
+
+    ```bash
+    # Install uv (if needed), then the locked environment
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+    git clone --branch develop https://github.com/ThalesGroup/passage.git
+    cd passage
+    uv sync --frozen
+
+    uv run --frozen passage download                  # Step 1 — fetch JAXA tiles
+    uv run --frozen passage calibrate                 # Step 2 — compute elevation range
+    uv run --frozen passage generate --resolution 256 # Step 3 — generate scenes and routes
+    uv run --frozen passage compress --resolution 256 # Step 4 — write Parquet shards
+    uv run --frozen passage export --resolution 256   # Step 5 — prepare the release tree
+    uv run --frozen passage upload --repo-id <your-user>/<your-dataset>  # Step 6
     ```
 
----
+## :microscope: Research uses
 
-## :microscope: Research Applications
+| Domain | Use | What PASSAGE provides |
+|--------|-----|-----------------------|
+| Classical search | A\*, Dijkstra and anytime planners against exact references | Three cost objectives, obstacles, seven grid sizes |
+| Reinforcement learning | Terrain navigation agents | Grid observations; exact optimal costs for rewards and regret |
+| Graph neural networks | Learned heuristics | Eight-connected graphs from elevation grids, route labels |
+| Surrogate models | Fast approximations of optimal routes | 4.4 M scenes and 26.4 M route variants |
+| Computer vision | Route prediction from elevation images | (N, N, 3) tensors and route masks |
 
-PASSAGE is designed to support a wide spectrum of pathfinding research:
+## :memo: Cite PASSAGE { #cite-passage }
 
-| Domain | Use Case | Relevant Features |
-|--------|----------|-------------------|
-| **Classical AI** | A\*, Dijkstra benchmarking | 5 cost models, timing data, multi-resolution |
-| **Reinforcement Learning** | Terrain navigation agents | Grid observations, reward shaping with cost models |
-| **Graph Neural Networks** | Learned heuristics | Graph structure from elevation grids, path labels |
-| **Surrogate Models** | Fast approximation of optimal paths | Input/output pairs at scale (141K+ samples) |
-| **Computer Vision** | Path prediction from elevation images | Tensor format, multi-channel images |
-| **Certified ML** | ARP 6983 / ED-324 compliance | Bounded ODD, deterministic generation, traceability |
+<div class="pg-cite" markdown>
 
----
+PASSAGE is accepted as a poster at the **40th Conference on Neural Information
+Processing Systems (NeurIPS 2026), Track on Evaluations and Datasets**. Please
+cite the paper, and name the dataset version you used (PASSAGE v1.0):
 
-## :book: Learn More
+```bibtex
+@inproceedings{delhomme2026passage,
+  title     = {{PASSAGE}: A Real-Terrain Benchmark for Trustworthy Constrained Path Planning},
+  author    = {Delhomme, Geoffrey and Trap, Fran{\c{c}}ois and Kaakai, Fateh},
+  booktitle = {Advances in Neural Information Processing Systems (NeurIPS), Track on Evaluations and Datasets},
+  year      = {2026},
+  url       = {https://github.com/ThalesGroup/passage}
+}
+```
 
-<div class="feature-grid" markdown>
+</div>
+
+!!! note "Future reference"
+
+    The NeurIPS 2026 proceedings are not published yet. This entry will be
+    completed with the proceedings details (volume, pages and paper URL) once
+    they are available; the title, authors, venue and year will not change.
+    Machine-readable metadata is in
+    [`CITATION.cff`](https://github.com/ThalesGroup/passage/blob/main/CITATION.cff).
+
+## :book: Learn more
+
+<div class="feature-grid pg-cols-5" markdown>
 
 <div class="feature-card" markdown>
-  <span class="feature-icon">📖</span>
+<span class="feature-icon">📖</span>
 
-### [User Guide](guide/index.md)
+### [User guide](guide/index.md)
 
-Step-by-step walkthrough of the complete pipeline, from installation to Hugging Face export.
+The pipeline step by step, from installation to the release tree.
 </div>
 
 <div class="feature-card" markdown>
-  <span class="feature-icon">🔬</span>
+<span class="feature-icon">🔬</span>
 
-### [Generation Process](generation/index.md)
+### [Generation process](generation/index.md)
 
-Deep dive into sampling, cost models, obstacle generation, and solver algorithms — with full math.
+Sampling, cost models, obstacles and the reference solver, with the mathematics.
 </div>
 
 <div class="feature-card" markdown>
-  <span class="feature-icon">🏗️</span>
+<span class="feature-icon">🏁</span>
 
-### [Code Architecture](architecture/index.md)
+### [Benchmark](benchmark/index.md)
 
-Module-by-module tour of the codebase, data formats, and test strategy.
+The evaluation protocol, the `passage-eval` package and how to evaluate a planner.
 </div>
 
 <div class="feature-card" markdown>
-  <span class="feature-icon">📚</span>
+<span class="feature-icon">🏗️</span>
 
-### [API Reference](api/index.md)
+### [Code architecture](architecture/index.md)
 
-Auto-generated documentation from source code docstrings.
+Modules, data formats and test strategy.
+</div>
+
+<div class="feature-card" markdown>
+<span class="feature-icon">📚</span>
+
+### [API reference](api/index.md)
+
+Documentation generated from the docstrings.
 </div>
 
 </div>
-
----
 
 ## :handshake: Acknowledgments
 
-PASSAGE is built on the shoulders of outstanding open data and open-source communities:
-
-- **[JAXA](https://www.eorc.jaxa.jp/ALOS/en/dataset/aw3d30/aw3d30_e.htm)** for the ALOS AW3D30 Digital Surface Model
-- **[Hugging Face](https://huggingface.co/)** for the Datasets library and Hub infrastructure
-- **[Thales Group](https://www.thalesgroup.com/)** for supporting open-source research in safety-critical AI
-
----
+- **[JAXA](https://www.eorc.jaxa.jp/ALOS/en/dataset/aw3d30/aw3d30_e.htm)** for the ALOS World 3D–30m (AW3D30) digital surface model.
+- **[Hugging Face](https://huggingface.co/)** for the Datasets library and Hub infrastructure.
+- **[Thales Group](https://www.thalesgroup.com/)** for supporting this open research.
 
 ## JAXA license and attribution
 
-PASSAGE is itself released under the [MIT License](https://github.com/ThalesGroup/passage/blob/main/LICENSE),
-**but the elevation tiles every PASSAGE sample is built on are provided by
-JAXA under the [JAXA ALOS World 3D 30 m DSM (AW3D30) terms of
-use](https://www.eorc.jaxa.jp/ALOS/en/dataset/aw3d30/aw3d30_e.htm)**. Any
-user of PASSAGE — or of any artefact derived from it (a trained model, a
-generated planning result, a downstream benchmark) — **must respect those
-JAXA terms**. In practical terms this means:
+The PASSAGE code is released under the [MIT License](https://github.com/ThalesGroup/passage/blob/main/LICENSE).
+**The elevation data every PASSAGE scene is built on are provided by JAXA under
+the [JAXA Terms of Use of Research Data](https://earth.jaxa.jp/en/data/policy/)**;
+the dataset is neither MIT-licensed nor public domain. Anyone who uses or
+redistributes PASSAGE data, or publishes derivatives of them, must follow those
+terms:
 
-!!! warning "JAXA AW3D30 — User obligations"
-    1. **Cite the JAXA AW3D30 source** when you publish results using
-       PASSAGE — the recommended citation is
-       Takaku *et al.*, *"Updates of 'AW3D30' ALOS Global DSM with Other
-       Open Access Datasets,"* ISPRS Archives, 2020.
-    2. **Reproduce the AW3D30 attribution** in any redistribution of the
-       elevation channel or of any artefact directly derived from it.
-    3. **Read and abide by the JAXA terms-of-use page** linked above for
-       the authoritative wording.
+!!! warning "JAXA AW3D30 — user obligations"
+    1. **Credit JAXA and AW3D30**, including in any redistribution or published
+       derivative, with the line: *"The original data used for this product have
+       been supplied by JAXA's ALOS World 3D–30m (AW3D30)."*
+    2. **Notify JAXA before any commercial use.** JAXA also asks to be notified,
+       where possible, of publications that use the data.
+    3. **Read the JAXA terms of use** linked above for the authoritative wording.
 
-The full text of the JAXA terms, mirrored at release time, is in
-[`DATASET_LICENSE.md`](https://github.com/ThalesGroup/passage/blob/main/DATASET_LICENSE.md)
-in the repository root. A short license-attribution note also appears as a
-footnote in the Conclusion of the **PASSAGE** paper, and an
-acknowledgement of JAXA's open sharing of AW3D30 is recorded in every
-release manifest.
+When you publish results on PASSAGE, we recommend citing the AW3D30 source with the
+PASSAGE paper: J. Takaku, T. Tadono, M. Doutsu, F. Ohgushi and H. Kai, "Updates of
+'AW3D30' ALOS Global Digital Surface Model with Other Open Access Datasets",
+*ISPRS Archives* XLIII-B4-2020, 183–189, 2020,
+[doi:10.5194/isprs-archives-XLIII-B4-2020-183-2020](https://doi.org/10.5194/isprs-archives-XLIII-B4-2020-183-2020).
 
----
-
-<p align="center" style="color: var(--md-default-fg-color--light); font-size: 0.9rem;">
-  Made with :heart: for the pathfinding research community<br>
-  <strong>MIT License</strong> — Free to use, modify, and distribute
-</p>
+A summary of these terms is in
+[`DATASET_LICENSE.md`](https://github.com/ThalesGroup/passage/blob/main/DATASET_LICENSE.md);
+the JAXA terms of use remain the authoritative text. The **Dataset** tab lists the
+third-party elevation sources that AW3D30 uses to fill voids.

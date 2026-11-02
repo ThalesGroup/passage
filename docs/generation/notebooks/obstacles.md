@@ -1,24 +1,16 @@
 ---
-title: "Obstacle generation"
+title: "Obstacles: how much they cover and what they cost"
 hide:
   - toc
 ---
 
-# Obstacle generation
+# Obstacles: how much they cover and what they cost
 
-Walks through the PASSAGE obstacle generation pipeline: super-ellipse shape gallery, coverage histograms across configurations, and the pseudo-random seeding contract that guarantees per-sample reproducibility.
+Obstacle masks from least to most covered, drawn coverage against its target, and the detour that obstacles force on the optimal route over a whole validation split.
 
 !!! info "Source notebook"
 
-    `notebooks/obstacles.ipynb` — re-execute with `make docs-prepare` after editing.
-
-!!! warning "This notebook was rendered without executing"
-
-    `make docs-prepare` could not execute the source notebook on this
-    checkout (execution skipped (opt-in (run with --all or `make docs-prepare-all`))). The HTML below shows the most recent stored
-    outputs, which may be stale or empty. Re-run the notebook locally
-    after fetching the data it needs (e.g.\ `make download && make
-    calibrate`) to refresh.
+    `notebooks/obstacles.ipynb` — re-execute with `make docs-prepare-all` after editing.
 
 <iframe
     src="../../../gen/notebooks/obstacles.html"
