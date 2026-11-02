@@ -9,7 +9,7 @@
 This datasheet follows the questions of *Datasheets for Datasets*. It describes
 PASSAGE v1.0 (Hub tag `v1.0`), published at
 [huggingface.co/datasets/thalesgroup/passage](https://huggingface.co/datasets/thalesgroup/passage),
-and accompanies its [Croissant metadata](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/croissant.json)
+and accompanies its [Croissant metadata](https://huggingface.co/datasets/thalesgroup/passage/blob/main/croissant.json)
 (Croissant 1.1 with Responsible AI fields). The same file is kept in the
 [code repository](https://github.com/ThalesGroup/passage).
 
@@ -103,6 +103,8 @@ specification below, computed in float64 from the decoded float32 tensor. Start
 and goal cells that the obstacles disconnect are rejected by the generator, so
 every variant has a route. Tied optima can have different geometry. Every
 variant is also listed in separate supervision rosters.
+
+`crosses_obstacles` is false for `free` and `obstacles` in the published metadata. The producer writes this flag as a constant; it does not measure intersection with the stored obstacle channel. Free routes may cross that channel. Obstacle-aware routes obey the blocked-cell graph contract; this flag is not an independent collision check.
 
 ### Is any information missing from individual instances?
 
@@ -244,7 +246,9 @@ among the other cells. No crowdsourcing, human annotators or subjects.
   `elevation` costs d · (1 + w · (h_v − h_min) / (h_max − h_min));
   `slope_uphill` costs d · (1 + w · max(0, h_v − h_u) / (h_max − h_min));
   `energy` costs d + w · max(0, h_v − h_u). h_min and h_max are the crop's
-  extrema.
+  extrema. If h_max = h_min, the normalised `elevation` and
+  `slope_uphill` costs are defined as d to avoid division by zero;
+  `energy` also equals d for this flat crop.
 
 ### Was the "raw" data saved in addition to the preprocessed data?
 
@@ -256,10 +260,10 @@ source byte used.
 
 Yes. The generator, reference solver and evaluator are in
 [github.com/ThalesGroup/passage](https://github.com/ThalesGroup/passage)
-(`src/passage/`, `src/passage-eval/`). The producer source used for this
-dataset is archived in `release-receipts/producer-source.zip`. One host label in
-that archive was redacted (see `release-receipts/privacy-redactions.json`);
-`release-receipts/generation-provenance.json` keeps the original file hashes.
+(`src/passage/`, `src/passage-eval/`). The producer is identified by the [archived source](https://huggingface.co/datasets/thalesgroup/passage/resolve/c09cc5a21a55a93e7c09d47368d5f5bf75cb8fae/release-receipts/producer-source.zip), its [execution overlay](https://huggingface.co/datasets/thalesgroup/passage/resolve/c09cc5a21a55a93e7c09d47368d5f5bf75cb8fae/release-receipts/execution-overlay-v1-source.zip), and the [connectivity qualification source](https://huggingface.co/datasets/thalesgroup/passage/resolve/c09cc5a21a55a93e7c09d47368d5f5bf75cb8fae/release-receipts/connectivity-repair-v1-source.zip). These components, their activation scope and their content hashes are recorded in [generation provenance](https://huggingface.co/datasets/thalesgroup/passage/blob/c09cc5a21a55a93e7c09d47368d5f5bf75cb8fae/release-receipts/generation-provenance.json), [execution provenance](https://huggingface.co/datasets/thalesgroup/passage/blob/c09cc5a21a55a93e7c09d47368d5f5bf75cb8fae/release-receipts/execution-overlay-v1.json), and [connectivity qualification](https://huggingface.co/datasets/thalesgroup/passage/blob/c09cc5a21a55a93e7c09d47368d5f5bf75cb8fae/release-receipts/connectivity-repair-v1.json). Together they identify the production of PASSAGE v1.0; the current code branch is not a substitute for this provenance.
+One host label in the initial source archive was redacted;
+`release-receipts/privacy-redactions.json` connects its original and published
+hashes. `release-receipts/generation-provenance.json` preserves the original hashes.
 
 ## Uses
 
@@ -303,7 +307,8 @@ regression as examples of learned terrain-aware routing.
 
 Yes, publicly, at
 [huggingface.co/datasets/thalesgroup/passage](https://huggingface.co/datasets/thalesgroup/passage).
-Use the release tag `v1.0`.
+Use the release tag `v1.0` for data. The current documentation is on `main`;
+its updates do not move the data tag.
 
 ### How will it be distributed?
 
