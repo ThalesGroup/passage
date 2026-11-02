@@ -7,7 +7,7 @@
 # both `passage` (data-generation pipeline) and `passage_eval` (canonical
 # evaluation contract) as a single distribution. Source trees are
 # isolated under src/passage/ and src/passage-eval/.
-requires = ["setuptools>=83.0.0"]
+requires = ["setuptools>=84.1.0"]
 build-backend = "setuptools.build_meta"
 
 [dependency-groups]
@@ -60,6 +60,10 @@ dependencies = [
   "networkx>=3.0",
   "pathfinding>=1.0.0",
   "requests>=2.33.0",
+  # Runtime transitive security floors must also apply to pip installations,
+  # which do not consume [tool.uv].constraint-dependencies.
+  "filelock>=4.2.1",
+  "tornado>=6.6",
   "tqdm>=4.60.0",
   "rasterio>=1.3.0",
   "pyyaml>=6.0",
@@ -84,7 +88,8 @@ dependencies = [
 # their planner (the `passage-eval bench` CLI calls into the candidate
 # planner's predict() method, optionally on a CUDA device).
 torch = [
-  "torch>=2.1.0",
+  "torch>=2.13.0",
+  "setuptools>=84.1.0",
 ]
 notebook = [
   "ipykernel>=7.0.0",
@@ -172,13 +177,15 @@ constraint-dependencies = [
   "anyio>=4.14.2",      # GHSA-82r6-8w77-94w6
   "bleach>=6.4.0",      # Patched URI sanitization; email-linkify issue remains upstream
   "certifi>=2026.10.19", # GHSA-6q48-6c7w-9gw2
+  "filelock>=4.2.1",    # GHSA-v4x8-3wr5-3wq8 and related advisories
   "fsspec>=2026.6.0",   # GHSA-27vj-qcqg-25rc; requires datasets>=5
   "idna>=3.15",         # GHSA-65pc-fj4g-8rjx
-  "mistune>=3.3.0",     # GHSA-c8j7-8cv4-2xmq and related advisories
+  "mistune>=3.3.3",     # PYSEC-2026-3863 and related advisories
   "multidict>=6.9.1",   # GHSA-54p9-h82j-f925
   "pillow>=13.0.0",     # GHSA-v9pv-5gc8-w2m6 and related advisories
   "soupsieve>=2.9.0",   # Includes fixes for high and moderate parser issues
-  "tornado>=6.5.9",     # GHSA-c2m8-h5v5-343r and related advisories
+  "setuptools>=84.1.0", # GHSA-xmj3-9gf7-h52w
+  "tornado>=6.6",       # GHSA-r4j5-9xpp-3985 and related advisories
   "urllib3>=2.8.0",     # GHSA-vxq7-64xx-v4gw and related advisories
-  "virtualenv>=21.14.9", # GHSA-c978-59m8-c77v and related advisories
+  "virtualenv>=21.14.10", # CVE-2026-113713 and related advisories
 ]
