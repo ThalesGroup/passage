@@ -28,28 +28,30 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: "3.12"
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v4
+        uses: astral-sh/setup-uv@38f3f104447c67c051c4a08e39b64a148898af3a # v4.2.0
         with:
-          version: "latest"
+          version: "0.12.6"
+          # SHA-256 of the Linux x86_64 GNU archive used by ubuntu-latest.
+          checksum: "8681d8921e7d520fb368991dcf5f9c1905b80f5bf2a265a0ed085c8d8e342477"
           enable-cache: true
           cache-dependency-glob: "uv.lock"
 
       - name: Install dependencies
-        run: uv sync --group dev
+        run: uv sync --locked --group dev
 
       - name: Ruff check
-        run: uv run ruff check src/ tests/
+        run: uv run --locked ruff check src/ tests/
 
       - name: Ruff format check
-        run: uv run ruff format --check src/ tests/
+        run: uv run --locked ruff format --check src/ tests/
 
   # -----------------------------------------------------------------------
   # Test — pytest with coverage. Independent of docs deployment so a test
@@ -66,10 +68,10 @@ jobs:
         python-version: ["3.11", "3.12"]
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: ${{ matrix.python-version }}
 
@@ -79,19 +81,21 @@ jobs:
           sudo apt-get install -y libgl1
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v4
+        uses: astral-sh/setup-uv@38f3f104447c67c051c4a08e39b64a148898af3a # v4.2.0
         with:
-          version: "latest"
+          version: "0.12.6"
+          # SHA-256 of the Linux x86_64 GNU archive used by ubuntu-latest.
+          checksum: "8681d8921e7d520fb368991dcf5f9c1905b80f5bf2a265a0ed085c8d8e342477"
           enable-cache: true
           cache-dependency-glob: "uv.lock"
 
       - name: Install dependencies
-        run: uv sync --group dev
+        run: uv sync --locked --group dev
 
       - name: Run tests with coverage
         run: |
-          uv run python --version
-          uv run pytest \
+          uv run --locked python --version
+          uv run --locked pytest \
             --cov \
             --cov-report=xml:coverage.xml \
             --cov-report=html:htmlcov \
@@ -100,7 +104,7 @@ jobs:
 
       - name: Upload coverage report
         if: matrix.python-version == '3.12' && github.event_name == 'push'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: coverage-report
           path: |
