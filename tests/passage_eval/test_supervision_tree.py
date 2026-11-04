@@ -7,6 +7,7 @@ import os
 import stat
 import subprocess
 import sys
+import time
 import venv
 from pathlib import Path
 
@@ -236,10 +237,15 @@ def test_cache_reuses_the_digest_only_while_the_stat_signature_is_unchanged(tmp_
     second = hash_tree(root, cache=cache)
     assert (first.hash_source, second.hash_source) == ("computed", "stat_signature_cache")
     assert first.sha256 == second.sha256 and second.signature == first.signature
-    # same size, same modification time, different content: ctime still moves, so the cache must miss
+    # Same size and restored mtime, but different content after a ctime tick: the cache must miss.
     before = (root / "lib" / "a.py").stat()
+    # Cross an observable clock tick before changing the file: same-tick ctime
+    # cannot distinguish a write whose mtime is restored.
+    deadline_ns = before.st_ctime_ns + 1_000_000_000
+    time.sleep(max(0, deadline_ns - time.time_ns()) / 1_000_000_000)
     (root / "lib" / "a.py").write_text("XXXX\n")
     os.utime(root / "lib" / "a.py", ns=(before.st_atime_ns, before.st_mtime_ns))
+    assert (root / "lib" / "a.py").stat().st_ctime_ns != before.st_ctime_ns
     third = hash_tree(root, cache=cache)
     assert third.hash_source == "computed" and third.sha256 != first.sha256
 
