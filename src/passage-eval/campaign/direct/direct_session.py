@@ -106,6 +106,7 @@ def run_direct_session(
     *,
     clock_ns=time.perf_counter_ns,
     checkpoint_size=32,
+    _journal_opened=None,
 ):
     """One already initialized native runtime; exactly 16 untimed warmups then a streamed pass.
 
@@ -137,6 +138,8 @@ def run_direct_session(
     session_start = time.perf_counter_ns()
     warmup_start = time.perf_counter_ns()
     with path.open("x", encoding="utf-8") as stream:
+        if _journal_opened is not None:
+            _journal_opened(stream)
         _append(
             stream,
             {
@@ -309,6 +312,12 @@ def execute_direct_candidate(
     runtime = runtime_factory()
     load_ns = time.perf_counter_ns() - started
     result = None
+    release_journal = None
+
+    def retain_journal(stream):
+        nonlocal release_journal
+        release_journal = os.fdopen(os.dup(stream.fileno()), "a", encoding="utf-8")
+
     try:
         result = run_direct_session(
             runtime,
@@ -320,6 +329,7 @@ def execute_direct_candidate(
             journal_path,
             clock_ns=clock_ns,
             checkpoint_size=checkpoint_size,
+            _journal_opened=retain_journal,
         )
     finally:
         release_started = time.perf_counter_ns()
@@ -336,11 +346,13 @@ def execute_direct_candidate(
                 "gpu_idle_independently_verified": False,
             }
         except BaseException:
-            with Path(journal_path).open("a", encoding="utf-8") as stream:
-                _append(stream, {"kind": "runtime_release_failed"}, durable=True)
+            if release_journal is not None:
+                with release_journal:
+                    _append(release_journal, {"kind": "runtime_release_failed"}, durable=True)
             raise
-        with Path(journal_path).open("a", encoding="utf-8") as stream:
-            _append(stream, release, durable=True)
+        if release_journal is not None:
+            with release_journal:
+                _append(release_journal, release, durable=True)
     return {
         **result,
         "released": True,
