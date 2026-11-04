@@ -515,7 +515,8 @@ def reconstruction_non_evidence_markers(value: Mapping[str, Any]) -> list[str]:
     if isinstance(command, list):
         checked["build_command"] = [
             re.sub("unqualified", "", arg, flags=re.IGNORECASE)
-            if i > 0 and command[i - 1] in ("-t", "--tag") and isinstance(arg, str) else arg
+            if i > 0 and command[i - 1] in ("-t", "--tag") and isinstance(arg, str)
+            else arg
             for i, arg in enumerate(command)
         ]
     return non_evidence_markers(checked)
@@ -712,7 +713,10 @@ def committed_decoder_tree_sha256(commit: str, *, root: Path | None = None) -> s
         with tarfile.open(fileobj=io.BytesIO(archive), mode="r:") as tar:
             tar.extractall(directory, filter="data")
         return treehash.hash_tree(
-            Path(directory) / "src/passage-eval", role="decoder_entry", symlinks="refuse", strict=True,
+            Path(directory) / "src/passage-eval",
+            role="decoder_entry",
+            symlinks="refuse",
+            strict=True,
             exclude_dirs=treehash.CANDIDATE_EXCLUDES,
         ).sha256
 
@@ -804,18 +808,21 @@ def validate_record_structure(record: Any) -> dict[str, Any]:
             target_keys = _TARGET_KEYS | ({"native_environment"} if descriptive else set())
             if profile == RULE8_NATIVE_PROFILE:
                 target_keys |= {"container_reconstruction"}
-                if isinstance(entry,Mapping) and "native_environment" in entry:
+                if isinstance(entry, Mapping) and "native_environment" in entry:
                     target_keys |= {"native_environment"}
             _require(isinstance(entry, Mapping) and set(entry) == target_keys, f"candidate {name} target {target}")
             _check_ref(entry["bundle"], f"candidate {name} target {target} bundle")
             if "native_environment" in target_keys:
                 _check_ref(entry["native_environment"], f"candidate {name} target {target} native environment")
             if profile == RULE8_NATIVE_PROFILE:
-                _check_ref(entry["container_reconstruction"], f"candidate {name} target {target} container reconstruction")
+                _check_ref(
+                    entry["container_reconstruction"], f"candidate {name} target {target} container reconstruction"
+                )
     evidence = record["evidence"]
     evidence_keys = _EVIDENCE_KEYS | ({"replica_catalog"} if profile in REPLICA_PROFILES else set())
     _require(
-        isinstance(evidence, Mapping) and _EVIDENCE_KEYS <= set(evidence) <= evidence_keys, f"evidence keys: {sorted(evidence_keys)}"
+        isinstance(evidence, Mapping) and _EVIDENCE_KEYS <= set(evidence) <= evidence_keys,
+        f"evidence keys: {sorted(evidence_keys)}",
     )
     if "replica_catalog" in evidence:
         _check_ref(evidence["replica_catalog"], "evidence.replica_catalog")
@@ -838,9 +845,9 @@ def validate_record_structure(record: Any) -> dict[str, Any]:
         _check_ref(ref, f"evidence.warmup.{name}")
     approval = record["approval"]
     _require(
-        approval is None or (isinstance(approval, Mapping) and set(approval) in (
-            _APPROVAL_KEYS, {"authorization", "operator_receipt"}
-        )), "approval keys"
+        approval is None
+        or (isinstance(approval, Mapping) and set(approval) in (_APPROVAL_KEYS, {"authorization", "operator_receipt"})),
+        "approval keys",
     )
     return record
 
@@ -974,13 +981,21 @@ def approval_problems(record: Mapping[str, Any], *, now: _dt.datetime | None = N
     elif "authorization" in approval:
         authorization, receipt = approval["authorization"], approval["operator_receipt"]
         if not isinstance(authorization, Mapping) or set(authorization) != {
-            "statement", "source", "approver", "approved_at", "scope_sha256"
+            "statement",
+            "source",
+            "approver",
+            "approved_at",
+            "scope_sha256",
         }:
             gate.red("authorization_invalid", "existing authorization provenance differs")
         else:
-            if any(not isinstance(authorization[k], str) or not authorization[k].strip() for k in ("statement", "source")):
+            if any(
+                not isinstance(authorization[k], str) or not authorization[k].strip() for k in ("statement", "source")
+            ):
                 gate.red("authorization_invalid", "authorization statement and source are required")
-            if authorization["approver"] is not None and (not isinstance(authorization["approver"], str) or not authorization["approver"].strip()):
+            if authorization["approver"] is not None and (
+                not isinstance(authorization["approver"], str) or not authorization["approver"].strip()
+            ):
                 gate.red("authorization_invalid", "approver must be text or unknown")
             if authorization["approved_at"] is not None:
                 try:
@@ -990,7 +1005,12 @@ def approval_problems(record: Mapping[str, Any], *, now: _dt.datetime | None = N
                     gate.red("authorization_invalid", "authorization time is invalid")
             if authorization["scope_sha256"] != authorization_scope_sha256(record):
                 gate.red("authorization_scope_mismatch", "material scope differs from the recorded authorization")
-        if not isinstance(receipt, Mapping) or set(receipt) != {"operator", "created_at", "record_core_sha256", "authorization_sha256"}:
+        if not isinstance(receipt, Mapping) or set(receipt) != {
+            "operator",
+            "created_at",
+            "record_core_sha256",
+            "authorization_sha256",
+        }:
             gate.red("operator_receipt_invalid", "operator receipt fields differ")
         else:
             if not isinstance(receipt["operator"], str) or not receipt["operator"].strip():
@@ -1002,7 +1022,9 @@ def approval_problems(record: Mapping[str, Any], *, now: _dt.datetime | None = N
                 gate.red("operator_receipt_invalid", "operator receipt time is invalid")
             if receipt["record_core_sha256"] != record_core_sha256(record):
                 gate.red("operator_receipt_mismatch", "operator receipt does not bind current record")
-            if not isinstance(authorization, Mapping) or receipt["authorization_sha256"] != pinned.canonical_sha256(authorization):
+            if not isinstance(authorization, Mapping) or receipt["authorization_sha256"] != pinned.canonical_sha256(
+                authorization
+            ):
                 gate.red("operator_receipt_mismatch", "operator receipt does not bind authorization")
     else:
         approver = approval["approver"]
@@ -1059,20 +1081,33 @@ def native_causal_lease(observation, start, finish, drain, *, target: str, proce
     if not isinstance(job, str) or parse_job_id(job) != job:
         raise ValueError("invalid CAVIAR job")
     activity = observation.get("activity")
-    if (observation.get("schema") != "passage-cavops-job-observation/v1"
-        or observation.get("target") != target or observation.get("procedure") != procedure
-        or not isinstance(activity, Mapping) or activity.get("id") != job
-        or activity.get("host") != f"edge-{target}" or activity.get("state") != "done" or activity.get("rc") != 0
-        or start.get("job_id") != job or start.get("target") != target or start.get("procedure") != procedure):
+    if (
+        observation.get("schema") != "passage-cavops-job-observation/v1"
+        or observation.get("target") != target
+        or observation.get("procedure") != procedure
+        or not isinstance(activity, Mapping)
+        or activity.get("id") != job
+        or activity.get("host") != f"edge-{target}"
+        or activity.get("state") != "done"
+        or activity.get("rc") != 0
+        or start.get("job_id") != job
+        or start.get("target") != target
+        or start.get("procedure") != procedure
+    ):
         raise ValueError("CAVIAR activity or observed start differs")
     scope = start.get("scope")
     if not isinstance(scope, str) or not scope or type(start.get("pid")) is not int or start["pid"] <= 0:
         raise ValueError("process identity differs")
-    if (finish.get("scope") != scope or finish.get("runner_pid") != start["pid"]
-        or finish.get("exit_code") != 0 or finish.get("n_processes") != 1
-        or finish.get("n_restarts") != 0 or finish.get("journal_markers") != "matched"
+    if (
+        finish.get("scope") != scope
+        or finish.get("runner_pid") != start["pid"]
+        or finish.get("exit_code") != 0
+        or finish.get("n_processes") != 1
+        or finish.get("n_restarts") != 0
+        or finish.get("journal_markers") != "matched"
         or not isinstance(start.get("container_digest"), str)
-        or finish.get("container_digest") != start.get("container_digest")):
+        or finish.get("container_digest") != start.get("container_digest")
+    ):
         raise ValueError("finished process differs")
     verify_drain(drain, target=target, procedure=procedure, job_id=job, scope=scope)
     events = observation.get("events")
@@ -1083,19 +1118,28 @@ def native_causal_lease(observation, start, finish, drain, *, target: str, proce
     if len(started) != 1 or len(ended) != 1:
         raise ValueError("CAVIAR start or terminal event missing")
     first, last = started[0], ended[0]
-    if (type(first.get("seq")) is not int or type(last.get("seq")) is not int or first["seq"] >= last["seq"]
-        or first.get("activity_id") != job or last.get("activity_id") != job
-        or not isinstance(first.get("data"), Mapping) or first["data"].get("host") != f"edge-{target}"
+    if (
+        type(first.get("seq")) is not int
+        or type(last.get("seq")) is not int
+        or first["seq"] >= last["seq"]
+        or first.get("activity_id") != job
+        or last.get("activity_id") != job
+        or not isinstance(first.get("data"), Mapping)
+        or first["data"].get("host") != f"edge-{target}"
         or not isinstance(first["data"].get("resources"), list)
         or f"device:edge-{target}" not in first["data"].get("resources", [])
-        or not isinstance(last.get("data"), Mapping) or last["data"].get("rc") != 0
-        or last["data"].get("state") != "done" or last["data"].get("detected_by") != "supervisor"):
+        or not isinstance(last.get("data"), Mapping)
+        or last["data"].get("rc") != 0
+        or last["data"].get("state") != "done"
+        or last["data"].get("detected_by") != "supervisor"
+    ):
         raise ValueError("CAVIAR lease activity sequence differs")
     return first["seq"], last["seq"]
 
 
-def native_causal_g2_binding(start, receipt, manifest, execution, candidate, journal, *,
-                             configuration_raw: bytes, target: str, procedure: str) -> None:
+def native_causal_g2_binding(
+    start, receipt, manifest, execution, candidate, journal, *, configuration_raw: bytes, target: str, procedure: str
+) -> None:
     """Bind G3's observed execution to G2's candidate, configuration and ordered raw inputs."""
     from passage_eval.campaign.direct.raw_identity import task_from_full
 
@@ -1110,33 +1154,53 @@ def native_causal_g2_binding(start, receipt, manifest, execution, candidate, jou
             "engine": target_candidate["engine_sha256"],
             "decoder": candidate["final_decoders_sha256"],
         }
-        artifacts = {"checkpoint_sha256": pins["checkpoint"], "engine_sha256": pins["engine"],
-                     "final_decoders_sha256": pins["decoder"]}
-        if (not all(pinned.is_hex64(digest) for digest in pins.values())
+        artifacts = {
+            "checkpoint_sha256": pins["checkpoint"],
+            "engine_sha256": pins["engine"],
+            "final_decoders_sha256": pins["decoder"],
+        }
+        if (
+            not all(pinned.is_hex64(digest) for digest in pins.values())
             or not isinstance(target_candidate.get("container_digest"), str)
             or not _CONTAINER_DIGEST.fullmatch(target_candidate["container_digest"])
-            or execution != manifest.get("native_execution") or execution.get("artifacts") != artifacts
+            or execution != manifest.get("native_execution")
+            or execution.get("artifacts") != artifacts
             or execution.get("container_digest") != target_candidate["container_digest"]
             or start.get("container_digest") != target_candidate["container_digest"]
             or receipt.get("native_artifact_hashes") != pins
             or receipt.get("journal_sha256") != pinned.sha256_bytes(journal)
             or not pinned.is_hex64(start.get("configuration_sha256"))
             or start.get("configuration_sha256") != pinned.sha256_bytes(configuration_raw)
-            or start.get("configuration_sha256") != receipt.get("configuration_sha256")):
+            or start.get("configuration_sha256") != receipt.get("configuration_sha256")
+        ):
             raise ValueError("G3 image, candidate, journal or configuration differs from G2")
         ids, specs = manifest["roster"], manifest["request_specs"]
-        if (not isinstance(ids, list) or not ids or len(ids) != len(set(ids))
-            or not isinstance(specs, Mapping) or set(ids) != set(specs)):
+        if (
+            not isinstance(ids, list)
+            or not ids
+            or len(ids) != len(set(ids))
+            or not isinstance(specs, Mapping)
+            or set(ids) != set(specs)
+        ):
             raise ValueError("G2 request manifest differs")
-        if (not isinstance(config, Mapping) or config.get("target") != target
-            or config.get("procedure") != procedure or config.get("seed") != manifest.get("seed")
-            or config.get("dataset_split") != "validation" or config.get("artifact_pins") != pins
-            or any(specs[sample_id].get("budget") != config.get("budget") for sample_id in ids)):
+        if (
+            not isinstance(config, Mapping)
+            or config.get("target") != target
+            or config.get("procedure") != procedure
+            or config.get("seed") != manifest.get("seed")
+            or config.get("dataset_split") != "validation"
+            or config.get("artifact_pins") != pins
+            or any(specs[sample_id].get("budget") != config.get("budget") for sample_id in ids)
+        ):
             raise ValueError("G2 configuration differs from manifest, candidate or target")
-        index = b"".join(pinned.canonical_json(task_from_full(sample_id, specs[sample_id])) + b"\n" for sample_id in ids)
-        if (start.get("input_index_sha256") != receipt.get("input_index_sha256")
+        index = b"".join(
+            pinned.canonical_json(task_from_full(sample_id, specs[sample_id])) + b"\n" for sample_id in ids
+        )
+        if (
+            start.get("input_index_sha256") != receipt.get("input_index_sha256")
             or receipt.get("input_index_sha256") != config.get("index_sha256")
-            or receipt.get("input_index_sha256") != pinned.sha256_bytes(index)):
+            or receipt.get("input_index_sha256") != pinned.sha256_bytes(index)
+        ):
             raise ValueError("G3 input index differs from G2")
     except (KeyError, TypeError, AttributeError) as exc:
         raise ValueError("G2 identity records are incomplete") from exc
@@ -1213,12 +1277,17 @@ class _Checker:
             if (
                 not isinstance(analysis, Mapping)
                 or analysis.get("seeds") != list(PLANNED_SEEDS)
-                or not isinstance(targets,list)
+                or not isinstance(targets, list)
                 or analysis.get("target") not in targets
             ):
-                gate.red("rule8_seed_analysis_missing", "all three planned seeds and the target analysis must be sealed before the first pass")
+                gate.red(
+                    "rule8_seed_analysis_missing",
+                    "all three planned seeds and the target analysis must be sealed before the first pass",
+                )
             if self.decision("strict_comparison") is not True:
-                gate.red("rule8_strict_comparison_required", "the compared candidates must use identical recorded limits")
+                gate.red(
+                    "rule8_strict_comparison_required", "the compared candidates must use identical recorded limits"
+                )
         if record["status"] != SEALED:
             gate.red("record_not_sealed", f"record status is {record['status']!r}")
         document = self.load(record["protocol"]["document"], gate, "protocol_document", as_json=False)
@@ -1466,7 +1535,10 @@ class _Checker:
                         or not _CONTAINER_DIGEST.fullmatch(digest)
                         or execution.get("container_digest") != digest
                     ):
-                        gate.red("native_container_execution_differs", f"{target}/{name}: emitted execution must name the sealed image digest")
+                        gate.red(
+                            "native_container_execution_differs",
+                            f"{target}/{name}: emitted execution must name the sealed image digest",
+                        )
                 warmup = timing.manifest_warmup(
                     {
                         "series": "warm",
@@ -1635,7 +1707,10 @@ class _Checker:
                 entry = entry if isinstance(entry, Mapping) else {}
                 mode = "causal" if "cavops_observation" in entry else "timestamps"
                 if previous_mode is not None and mode != previous_mode:
-                    gate.red("native_lifecycle_mode_mixed", f"{target}: candidate lifecycle evidence uses different orderings")
+                    gate.red(
+                        "native_lifecycle_mode_mixed",
+                        f"{target}: candidate lifecycle evidence uses different orderings",
+                    )
                     continue
                 previous_mode = mode
                 if mode == "causal":
@@ -1648,37 +1723,71 @@ class _Checker:
                     journal = self.load(entry.get("journal"), gate, f"journal_{target}_{name}", as_json=False)
                     target_receipt = self.load(entry.get("target_receipt"), gate, f"target_receipt_{target}_{name}")
                     manifest = self.load(entry.get("run_manifest"), gate, f"run_manifest_{target}_{name}")
-                    configuration = self.load(entry.get("configuration"), gate, f"configuration_{target}_{name}", as_json=False)
-                    if any(value is None for value in (observation, start, finish, drain, journal, target_receipt, manifest, configuration)):
+                    configuration = self.load(
+                        entry.get("configuration"), gate, f"configuration_{target}_{name}", as_json=False
+                    )
+                    if any(
+                        value is None
+                        for value in (
+                            observation,
+                            start,
+                            finish,
+                            drain,
+                            journal,
+                            target_receipt,
+                            manifest,
+                            configuration,
+                        )
+                    ):
                         continue
                     try:
-                        first, last = native_causal_lease(observation, start, finish, drain, target=target, procedure=name)
-                        native_causal_g2_binding(start, target_receipt, manifest, entry.get("native_execution"),
-                                                 self.record["candidates"][name], journal, configuration_raw=configuration,
-                                                 target=target, procedure=name)
+                        first, last = native_causal_lease(
+                            observation, start, finish, drain, target=target, procedure=name
+                        )
+                        native_causal_g2_binding(
+                            start,
+                            target_receipt,
+                            manifest,
+                            entry.get("native_execution"),
+                            self.record["candidates"][name],
+                            journal,
+                            configuration_raw=configuration,
+                            target=target,
+                            procedure=name,
+                        )
                         ledger = observation.get("ledger_id")
                         if not isinstance(ledger, str) or not ledger:
                             raise ValueError("CAVIAR event ledger identity is missing")
                         if causal_ledger is not None and ledger != causal_ledger:
                             raise ValueError("candidate event ledgers differ")
                         markers = _journal_binding(journal, start.get("namespace_pid"))
-                        if (markers.get("journal_markers") != "matched"
-                            or markers.get("runner_session_uuid") != finish.get("runner_session_uuid")):
+                        if markers.get("journal_markers") != "matched" or markers.get(
+                            "runner_session_uuid"
+                        ) != finish.get("runner_session_uuid"):
                             raise ValueError("journal and observed process differ")
-                        rows = [pinned.strict_json_loads(line, name="journal event") for line in journal.splitlines() if line.strip()]
+                        rows = [
+                            pinned.strict_json_loads(line, name="journal event")
+                            for line in journal.splitlines()
+                            if line.strip()
+                        ]
                         if not rows or rows[-1].get("kind") != "runtime_released":
                             raise ValueError("completed runtime release is missing")
                     except (ValueError, TypeError, KeyError) as exc:
                         gate.red("native_causal_evidence_invalid", f"{target}/{name}: {exc}")
                         continue
                     if previous_causal_end is not None and first <= previous_causal_end:
-                        gate.red("native_candidates_overlap", f"{target}/{name}: prior job must end before the next starts")
+                        gate.red(
+                            "native_candidates_overlap", f"{target}/{name}: prior job must end before the next starts"
+                        )
                     previous_causal_end = last
                     causal_ledger = ledger
                     execution = entry.get("native_execution")
                     session_id = execution.get("session_id") if isinstance(execution, Mapping) else None
-                    if (not isinstance(session_id, str) or session_id != pinned.sha256_bytes(journal)
-                        or session_id in session_ids):
+                    if (
+                        not isinstance(session_id, str)
+                        or session_id != pinned.sha256_bytes(journal)
+                        or session_id in session_ids
+                    ):
                         gate.red("native_process_session_reused", f"{target}/{name}")
                     if isinstance(session_id, str):
                         session_ids.add(session_id)
@@ -2207,10 +2316,16 @@ class _Checker:
         admissible = self.admitted.get("admissible_roster_sha256")
         if self.native_persistent():
             measured = self.admitted.get("admissible_roster")
-            if (measured is None or self._source_roster is None
+            if (
+                measured is None
+                or self._source_roster is None
                 or not native_warmup_disjoint(roster, measured)
-                or not native_warmup_disjoint(roster, self._source_roster)):
-                gate.red("warmup_not_disjoint_from_admissible_roster", "warm-up ID or input content overlaps S or the admissible roster, or a roster is unavailable")
+                or not native_warmup_disjoint(roster, self._source_roster)
+            ):
+                gate.red(
+                    "warmup_not_disjoint_from_admissible_roster",
+                    "warm-up ID or input content overlaps S or the admissible roster, or a roster is unavailable",
+                )
         elif admissible is None or derivation.get("evaluated_roster_sha256") != admissible:
             gate.red("warmup_not_disjoint_from_admissible_roster", "built against another evaluated roster")
         if derivation.get("disjointness_checked_by") != warmup_io.CONTENT_CHECK:
@@ -2237,22 +2352,22 @@ class _Checker:
             "container_digest": entry["container_digest"],
             "harness": self.record["harness"],
         }
-        problems = [f"{key} differs" for key,value in expected.items() if reconstruction.get(key) != value]
+        problems = [f"{key} differs" for key, value in expected.items() if reconstruction.get(key) != value]
         if reconstruction_non_evidence_markers(reconstruction) or _flags_unqualified(reconstruction):
             problems.append("the reconstruction description is marked as non-evidence")
         repository = reconstruction.get("source_repository")
-        if not isinstance(repository,str) or not repository.startswith(("https://","ssh://","git@")):
+        if not isinstance(repository, str) or not repository.startswith(("https://", "ssh://", "git@")):
             problems.append("the published source repository must be named")
         command = reconstruction.get("build_command")
-        if not isinstance(command,list) or not command or not all(isinstance(item,str) and item for item in command):
+        if not isinstance(command, list) or not command or not all(isinstance(item, str) and item for item in command):
             problems.append("the exact build command is required")
-        self.load(reconstruction.get("recipe"),gate,f"container_recipe_{name}_{target}",as_json=False)
+        self.load(reconstruction.get("recipe"), gate, f"container_recipe_{name}_{target}", as_json=False)
         dependencies = reconstruction.get("dependencies")
-        if not isinstance(dependencies,list) or not dependencies:
+        if not isinstance(dependencies, list) or not dependencies:
             problems.append("pinned runtime dependency or base-image lock files are required")
         else:
-            for index,ref in enumerate(dependencies):
-                self.load(ref,gate,f"container_dependency_{name}_{target}_{index}",as_json=False)
+            for index, ref in enumerate(dependencies):
+                self.load(ref, gate, f"container_dependency_{name}_{target}_{index}", as_json=False)
         problems.extend(f"{reason['code']}: {reason['detail']}" for reason in gate.reasons)
         return problems
 
@@ -2297,9 +2412,16 @@ class _Checker:
             value = self.load(self.record["evidence"].get("replica_catalog"), gate, "replica_catalog")
             if value is not None and isinstance(frozen, Mapping):
                 try:
-                    catalog = validate_replica_catalog(value, final_candidates=frozen, final_candidates_sha256=pinned.sha256_bytes(raw))
-                    if profile == RULE8_NATIVE_PROFILE and any(entry["status"] != SEALED for entry in catalog["replicas"].values()):
-                        gate.red("replica_catalog_incomplete", "this approved S campaign pins all three seeds before the first pass")
+                    catalog = validate_replica_catalog(
+                        value, final_candidates=frozen, final_candidates_sha256=pinned.sha256_bytes(raw)
+                    )
+                    if profile == RULE8_NATIVE_PROFILE and any(
+                        entry["status"] != SEALED for entry in catalog["replicas"].values()
+                    ):
+                        gate.red(
+                            "replica_catalog_incomplete",
+                            "this approved S campaign pins all three seeds before the first pass",
+                        )
                 except (ReplicaCatalogError, KeyError, TypeError) as exc:
                     gate.red("replica_catalog_invalid", exc)
         for name in CANDIDATES:
@@ -2312,9 +2434,12 @@ class _Checker:
                     seed = seeds[0] if isinstance(seeds, list) and len(seeds) == 1 else None
                     if seed != checkpoint.get("seed"):
                         from passage_eval.protocol.replicas import ReplicaCatalogError, replica_identity
+
                         try:
                             identity = replica_identity(catalog, name, seed) if catalog is not None else None
-                            checkpoint = {"seed":seed,"sha256":identity["checkpoint_sha256"]} if identity is not None else {}
+                            checkpoint = (
+                                {"seed": seed, "sha256": identity["checkpoint_sha256"]} if identity is not None else {}
+                            )
                         except (ReplicaCatalogError, KeyError, TypeError):
                             checkpoint = {}
                     if checkpoint.get("seed") != seed or not pinned.is_hex64(checkpoint.get("sha256")):
@@ -2373,7 +2498,9 @@ class _Checker:
                                 "native_container_identity_not_applicable",
                                 f"{name} on {target}: native execution declares no container",
                             )
-                    if descriptive or (self.record["protocol"].get("profile") == RULE8_NATIVE_PROFILE and "native_environment" in entry):
+                    if descriptive or (
+                        self.record["protocol"].get("profile") == RULE8_NATIVE_PROFILE and "native_environment" in entry
+                    ):
                         environment = self.load(
                             entry["native_environment"], gate, f"native_environment_{name}_{target}"
                         )
@@ -2383,7 +2510,9 @@ class _Checker:
                             ):
                                 gate.red("native_environment_invalid", f"{name} on {target}: {problem}")
                     if self.record["protocol"].get("profile") == RULE8_NATIVE_PROFILE:
-                        reconstruction = self.load(entry["container_reconstruction"],gate,f"container_reconstruction_{name}_{target}")
+                        reconstruction = self.load(
+                            entry["container_reconstruction"], gate, f"container_reconstruction_{name}_{target}"
+                        )
                         if reconstruction is not None:
                             for problem in self._container_reconstruction_problems(reconstruction, name, target):
                                 gate.red("container_reconstruction_invalid", f"{name} on {target}: {problem}")
@@ -2411,8 +2540,7 @@ def _decision_problem(
     from passage_eval.protocol.reference_admission import REFERENCE_POLICIES
 
     native = (
-        profile in NATIVE_PROFILES
-        and (decisions.get("timing_profile") or {}).get("value") == timing.NATIVE_PERSISTENT
+        profile in NATIVE_PROFILES and (decisions.get("timing_profile") or {}).get("value") == timing.NATIVE_PERSISTENT
     )
 
     if (
@@ -3057,16 +3185,33 @@ def _preparation_approval_problems(
         from passage_eval.protocol.guards import PREPARATION_READERS
 
         problems = []
-        expected = {"schema", "scope", "readers", "admission_record_sha256", "authorization_sha256", "operator", "created_at", "expires_at"}
+        expected = {
+            "schema",
+            "scope",
+            "readers",
+            "admission_record_sha256",
+            "authorization_sha256",
+            "operator",
+            "created_at",
+            "expires_at",
+        }
         if set(approval) != expected or approval.get("scope") != PREPARATION_SCOPE:
             problems.append("operator receipt fields or scope differ")
         readers = approval.get("readers")
-        if not isinstance(readers, list) or not readers or not all(isinstance(item, str) for item in readers) or len(set(readers)) != len(readers) or not set(readers) <= set(PREPARATION_READERS):
+        if (
+            not isinstance(readers, list)
+            or not readers
+            or not all(isinstance(item, str) for item in readers)
+            or len(set(readers)) != len(readers)
+            or not set(readers) <= set(PREPARATION_READERS)
+        ):
             problems.append("operator receipt readers differ")
             readers = []
         existing = (record or {}).get("approval")
         authorization = existing.get("authorization") if isinstance(existing, Mapping) else None
-        if not isinstance(authorization, Mapping) or approval.get("authorization_sha256") != pinned.canonical_sha256(authorization):
+        if not isinstance(authorization, Mapping) or approval.get("authorization_sha256") != pinned.canonical_sha256(
+            authorization
+        ):
             problems.append("operator receipt authorization differs")
         if record_sha256 is None or approval.get("admission_record_sha256") != record_sha256:
             problems.append("operator receipt names another record")

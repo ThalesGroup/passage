@@ -115,45 +115,56 @@ def test_committed_decoder_tree_uses_runtime_tree(tmp_path):
     from passage_eval.supervision import treehash
 
     def git(*args):
-        return subprocess.check_output(['git', '-C', str(tmp_path), *args], stderr=subprocess.DEVNULL).decode().strip()
+        return subprocess.check_output(["git", "-C", str(tmp_path), *args], stderr=subprocess.DEVNULL).decode().strip()
 
-    git('init', '-q')
-    git('config', 'user.name', 'Synthetic')
-    git('config', 'user.email', 'fixture@example.invalid')
-    package = tmp_path / 'src/passage-eval'
-    (package / 'protocol').mkdir(parents=True)
-    (package / '__init__.py').write_text('runtime\n')
-    (package / 'protocol/admission.py').write_text('original verifier\n')
-    git('add', '.')
-    git('commit', '-qm', 'runtime')
-    base = git('rev-parse', 'HEAD')
-    expected = treehash.hash_tree(package, role='decoder_entry', symlinks='refuse', strict=True,
-                                  exclude_dirs=treehash.CANDIDATE_EXCLUDES).sha256
-    (package / 'protocol/admission.py').write_text('updated verifier\n')
-    git('add', '.')
-    git('commit', '-qm', 'verifier')
+    git("init", "-q")
+    git("config", "user.name", "Synthetic")
+    git("config", "user.email", "fixture@example.invalid")
+    package = tmp_path / "src/passage-eval"
+    (package / "protocol").mkdir(parents=True)
+    (package / "__init__.py").write_text("runtime\n")
+    (package / "protocol/admission.py").write_text("original verifier\n")
+    git("add", ".")
+    git("commit", "-qm", "runtime")
+    base = git("rev-parse", "HEAD")
+    expected = treehash.hash_tree(
+        package, role="decoder_entry", symlinks="refuse", strict=True, exclude_dirs=treehash.CANDIDATE_EXCLUDES
+    ).sha256
+    (package / "protocol/admission.py").write_text("updated verifier\n")
+    git("add", ".")
+    git("commit", "-qm", "verifier")
     assert A.committed_decoder_tree_sha256(base, root=tmp_path) == expected
-    (package / '__init__.py').write_text('different runtime\n')
-    git('add', '.')
-    git('commit', '-qm', 'changed runtime')
-    assert A.committed_decoder_tree_sha256(git('rev-parse', 'HEAD'), root=tmp_path) != expected
+    (package / "__init__.py").write_text("different runtime\n")
+    git("add", ".")
+    git("commit", "-qm", "changed runtime")
+    assert A.committed_decoder_tree_sha256(git("rev-parse", "HEAD"), root=tmp_path) != expected
 
 
 def test_reconstruction_tag_does_not_hide_non_evidence_markers():
-    good = {'build_command': ['docker', 'build', '-t', 'local/image:ef68-unqualified', '.']}
+    good = {"build_command": ["docker", "build", "-t", "local/image:ef68-unqualified", "."]}
     assert A.reconstruction_non_evidence_markers(good) == []
-    assert A.reconstruction_non_evidence_markers({'build_command': ['docker', 'build', '--tag', 'local/fake-unqualified', '.']}) == ['fake']
-    assert 'unqualified' in A.reconstruction_non_evidence_markers({'build_command': ['docker', 'build', '--build-arg', 'unqualified']})
-    assert 'synthetic' in A.reconstruction_non_evidence_markers({**good, 'description': 'synthetic'})
-    assert 'unqualified' in A.reconstruction_non_evidence_markers({**good, 'description': 'unqualified'})
-    assert A._flags_unqualified({**good, 'qualified': False})
+    assert A.reconstruction_non_evidence_markers(
+        {"build_command": ["docker", "build", "--tag", "local/fake-unqualified", "."]}
+    ) == ["fake"]
+    assert "unqualified" in A.reconstruction_non_evidence_markers(
+        {"build_command": ["docker", "build", "--build-arg", "unqualified"]}
+    )
+    assert "synthetic" in A.reconstruction_non_evidence_markers({**good, "description": "synthetic"})
+    assert "unqualified" in A.reconstruction_non_evidence_markers({**good, "description": "unqualified"})
+    assert A._flags_unqualified({**good, "qualified": False})
 
 
 def test_supervisor_only_decisions_explicitly_nonapplicable_only_for_native(tmp_path):
     c = checker(tmp_path)
-    value = {'not_applicable': 'native_direct_persistent'}
-    for name in ('deadline_grace_ms', 'hard_timeout_ms', 'startup_timeout_s', 'worker_rlimits', 'batching'):
-        assert A.decision_problem(name, value, c.decisions, profile='rule8_native_persistent') is None
-        assert A.decision_problem(name, value, c.decisions, profile='strict') is not None
-        assert A.decision_problem(name, {'not_applicable': 'other'}, c.decisions, profile='rule8_native_persistent') is not None
-    assert A.decision_problem('reference_exclusion_caps', value, c.decisions, profile='rule8_native_persistent') is not None
+    value = {"not_applicable": "native_direct_persistent"}
+    for name in ("deadline_grace_ms", "hard_timeout_ms", "startup_timeout_s", "worker_rlimits", "batching"):
+        assert A.decision_problem(name, value, c.decisions, profile="rule8_native_persistent") is None
+        assert A.decision_problem(name, value, c.decisions, profile="strict") is not None
+        assert (
+            A.decision_problem(name, {"not_applicable": "other"}, c.decisions, profile="rule8_native_persistent")
+            is not None
+        )
+    assert (
+        A.decision_problem("reference_exclusion_caps", value, c.decisions, profile="rule8_native_persistent")
+        is not None
+    )

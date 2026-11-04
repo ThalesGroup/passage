@@ -158,7 +158,9 @@ def _effect_fingerprint(target: str, package_argv: Sequence[str]) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
-def _job_run_argv(target: str, package_argv: Sequence[str], *, effect_key: str, effect_fingerprint: str, lease_command: str = "cavops") -> list[str]:
+def _job_run_argv(
+    target: str, package_argv: Sequence[str], *, effect_key: str, effect_fingerprint: str, lease_command: str = "cavops"
+) -> list[str]:
     if not isinstance(effect_key, str) or not effect_key.startswith(f"passage-edge-{target}-"):
         raise ValueError("effect key does not belong to this target")
     if not pinned.is_hex64(effect_fingerprint):
@@ -192,8 +194,13 @@ def _job_run_argv(target: str, package_argv: Sequence[str], *, effect_key: str, 
 class EdgeJobDriver:
     """Synchronously dispatch exactly one sealed package invocation under a CAVIAR lease."""
 
-    def __init__(self, *, run: RunSubprocess = subprocess.run, caviar_root: str | Path = CAVIAR_ROOT,
-                 lease_command: str | None = None):
+    def __init__(
+        self,
+        *,
+        run: RunSubprocess = subprocess.run,
+        caviar_root: str | Path = CAVIAR_ROOT,
+        lease_command: str | None = None,
+    ):
         self._run = run
         self._lease_command = lease_command or os.environ.get("PASSAGE_EDGE_LEASE_COMMAND", "cavops")
         self._caviar_root = Path(caviar_root)
@@ -235,8 +242,13 @@ class EdgeJobDriver:
         effect_fingerprint = _effect_fingerprint(target, package_argv)
         try:
             completed = self._run(
-                _job_run_argv(target, package_argv, effect_key=effect_key, effect_fingerprint=effect_fingerprint,
-                              lease_command=self._lease_command),
+                _job_run_argv(
+                    target,
+                    package_argv,
+                    effect_key=effect_key,
+                    effect_fingerprint=effect_fingerprint,
+                    lease_command=self._lease_command,
+                ),
                 cwd=self._caviar_root,
                 timeout=_OUTER_TIMEOUT_SECONDS,
                 capture_output=True,

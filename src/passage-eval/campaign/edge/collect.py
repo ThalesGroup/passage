@@ -35,7 +35,9 @@ def verify_collected_run(root: str | Path, *, package: InputPackage | PackageVie
     required = {"schema", "package_sha256", "plan_sha256", "procedure", "receipt", "adapter", "outputs"}
     if not isinstance(result, Mapping) or set(result) != required or result["schema"] != TARGET_RESULT_SCHEMA:
         raise EdgeRelayError("target result schema differs")
-    receipt = validate_native_adapter(result["receipt"],expected_seed=(view.manifest.get("candidate") or {}).get("seed",2026))
+    receipt = validate_native_adapter(
+        result["receipt"], expected_seed=(view.manifest.get("candidate") or {}).get("seed", 2026)
+    )
     adapter = result["adapter"]
     if not isinstance(adapter, Mapping) or set(adapter) != {
         "command",

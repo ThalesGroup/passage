@@ -869,8 +869,16 @@ def test_profiles_bind_schema_boundary_latency_field_and_rewarm_together():
     from passage_eval.execution.artifacts import SCHEMA
     from passage_eval.supervision import READABLE_TIMING_BOUNDARY_IDS, TIMING_BOUNDARY_ID
 
-    assert timing.PROFILES == ("supervised_total_v3", "supervised_service_v1", "supervised_service_rewarm_v1")
-    legacy, service, rewarm = (timing.get_profile(name) for name in timing.PROFILES)
+    assert timing.PROFILES == (
+        "supervised_total_v3",
+        "supervised_service_v1",
+        "supervised_service_rewarm_v1",
+        "native_raw_path_persistent_v1",
+    )
+    legacy = timing.get_profile("supervised_total_v3")
+    service = timing.get_profile("supervised_service_v1")
+    rewarm = timing.get_profile("supervised_service_rewarm_v1")
+    native = timing.get_profile("native_raw_path_persistent_v1")
     assert (legacy.schema, legacy.boundary, legacy.latency_field) == (SCHEMA, None, "total_wall_ms")
     assert legacy.validation_in_boundary and not service.validation_in_boundary
     assert (service.schema, service.latency_field, service.rewarm_after_restart) == (
@@ -883,7 +891,14 @@ def test_profiles_bind_schema_boundary_latency_field_and_rewarm_together():
         "service_wall_ms",
         True,
     )
-    assert len({legacy.schema, service.schema, rewarm.schema}) == 3
+    assert (native.schema, native.boundary, native.latency_field, native.rewarm_after_restart) == (
+        "passage-complete-request-native-v1",
+        "passage-timing-boundary/v6-native-raw-arrays-to-path",
+        "native_wall_ms",
+        False,
+    )
+    assert not native.validation_in_boundary
+    assert len({legacy.schema, service.schema, rewarm.schema, native.schema}) == 4
     assert {service.boundary, rewarm.boundary, TIMING_BOUNDARY_ID} <= set(READABLE_TIMING_BOUNDARY_IDS)
 
 

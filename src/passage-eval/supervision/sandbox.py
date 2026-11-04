@@ -246,11 +246,12 @@ def check_binds(binds: Iterable[str | Path], protected: Iterable[str | Path]) ->
 
 @dataclass(frozen=True)
 class Bind:
-    """One read-only bind: the bytes at ``source`` appear at ``target`` inside the sandbox."""
+    """A read-only tree mount, or a pinned interpreter symlink to a mounted tree."""
 
     source: str
     target: str
     role: str = "runtime"  # runtime | candidate_staged
+    kind: str = "mount"  # mount | symlink
 
 
 def as_bind(item: "Bind | str | Path") -> Bind:
@@ -273,6 +274,7 @@ class RuntimeLayout:
     needs_declaration: tuple[
         tuple[str, str], ...
     ] = ()  # (path, reason): named by the environment, not bound on its say-so
+    executable_aliases: tuple[tuple[str, str], ...] = ()  # (lexical link, resolved target) outside mounted trees
 
 
 _EDITABLE_IMPORT = re.compile(r"^import\s+(__editable__\w*finder)\s*;")
@@ -333,6 +335,29 @@ def evaluator_roots() -> list[Path]:
 
 def _under(path: Path, root: Path) -> bool:
     return path == root or root in path.parents
+
+
+def _executable_links(python: Path) -> list[tuple[Path, Path]]:
+    """Read each link in the executable path once, including links in parent directories."""
+    current = Path(os.path.abspath(python))
+    seen: set[Path] = set()
+    links: list[tuple[Path, Path]] = []
+    for _ in range(40):
+        link = next((part for part in (*reversed(current.parents), current) if part.is_symlink()), None)
+        if link is None:
+            return links
+        if link in seen:
+            raise SandboxError("worker interpreter symlink chain contains a loop")
+        seen.add(link)
+        try:
+            target = Path(os.readlink(link))
+            resolved = link.resolve(strict=True)
+        except (OSError, RuntimeError) as error:
+            raise SandboxError(f"cannot resolve worker interpreter symlink {link}: {error}") from None
+        links.append((link, resolved))
+        destination = target if target.is_absolute() else link.parent / target
+        current = Path(os.path.normpath(destination / current.relative_to(link)))
+    raise SandboxError("worker interpreter symlink chain is too long")
 
 
 def static_runtime_layout(
@@ -409,17 +434,26 @@ def static_runtime_layout(
             roots.append(root)
         else:
             needs.append((str(root), "named by a .pth file or editable finder of the environment"))
+    minimal_roots = tuple(_minimal_cover(roots))
+    aliases = tuple(
+        dict.fromkeys(
+            (str(link), str(target))
+            for link, target in _executable_links(executable)
+            if not any(_under(link, root) for root in minimal_roots)
+        )
+    )
     return RuntimeLayout(
         python=str(executable),
         real_executable=str(real),
         venv_root=None if venv_root is None else str(venv_root),
         base_prefix=str(base_prefix),
         site_dirs=tuple(str(s) for s in site_dirs),
-        roots=tuple(str(r) for r in _minimal_cover(roots)),
+        roots=tuple(str(r) for r in minimal_roots),
         pth_import_lines=imports,
         editable_roots=dict(sorted(editable.items())),
         pth_roots=tuple(str(r) for r in resolved_pth),
         needs_declaration=tuple(sorted(set(needs))),
+        executable_aliases=aliases,
     )
 
 
@@ -712,18 +746,20 @@ def isolation_record(
         base["not_applied"] += ["filesystem_isolation", "network_isolation", "pid_isolation"]
     else:
         converted = [as_bind(b) for b in binds]
+        mounts = [b for b in converted if b.kind == "mount"]
+        aliases = [b for b in converted if b.kind == "symlink"]
         base.update(
             filesystem="tmpfs_root_with_read_only_binds",
             network="unshared_loopback_only",
             namespaces=["user", "ipc", "pid", "net", "uts", "cgroup-try"],
-            read_only_binds=[b.target for b in converted],
+            read_only_binds=[b.target for b in mounts],
             read_only_bind_sources=[
                 {
                     "target": b.target,
                     "role": b.role,
                     "source": "private_staged_copy" if b.role == "candidate_staged" else "host_in_place",
                 }
-                for b in converted
+                for b in mounts
             ],
             device_binds=list(config.dev_binds),
             device_bind_policy="existing_character_device_nodes_only_no_links_no_directories",
@@ -739,6 +775,8 @@ def isolation_record(
                 "or GPU memory limits)"
             ),
         )
+        if aliases:
+            base["interpreter_aliases"] = [{"target": b.target, "source": b.source} for b in aliases]
     return base
 
 
@@ -755,6 +793,8 @@ def bwrap_version(bwrap_path: str) -> str:
 
 def bwrap_command(config: IsolationConfig, binds: Sequence["Bind | Path | str"], inner: Sequence[str]) -> list[str]:
     """Build the bubblewrap argv. The root is a tmpfs; nothing is bound unless listed here."""
+    converted = [as_bind(bind) for bind in binds]
+    explicit_alias_targets = {bind.target for bind in converted if bind.kind == "symlink"}
     argv = [
         shutil.which(config.bwrap_path) or config.bwrap_path,
         "--unshare-all",
@@ -765,17 +805,22 @@ def bwrap_command(config: IsolationConfig, binds: Sequence["Bind | Path | str"],
     ]
     for system_path in _SYSTEM_SYMLINKS:
         link = Path(system_path)
-        if link.is_symlink():
+        if link.is_symlink() and system_path not in explicit_alias_targets:
             argv += ["--symlink", os.readlink(link), system_path]
     if Path("/etc/ld.so.cache").exists():
         argv += ["--ro-bind", "/etc/ld.so.cache", "/etc/ld.so.cache"]
     argv += ["--proc", "/proc", "--dev", "/dev", "--tmpfs", "/tmp", "--tmpfs", SANDBOX_HOME]
     # runtime trees first, staged candidate copies last: a staged copy shadows what lies under a runtime tree
-    ordered = sorted((as_bind(b) for b in binds), key=lambda b: (b.role == "candidate_staged", b.target))
+    ordered = sorted(converted, key=lambda b: (b.kind == "symlink", b.role == "candidate_staged", b.target))
     for bind in ordered:
-        if bind.target == "/usr" and bind.source == "/usr":
+        if bind.kind == "symlink":
+            argv += ["--symlink", bind.source, bind.target]
+        elif bind.kind != "mount":
+            raise SandboxError(f"unknown bind kind {bind.kind!r}")
+        elif bind.target == "/usr" and bind.source == "/usr":
             continue
-        argv += ["--ro-bind", bind.source, bind.target]
+        else:
+            argv += ["--ro-bind", bind.source, bind.target]
     for device in config.dev_binds:
         argv += ["--dev-bind", check_device_node(device), device]  # checked again: the node may have been replaced
     argv += ["--chdir", SANDBOX_HOME, "--", *inner]

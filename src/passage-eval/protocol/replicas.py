@@ -17,24 +17,42 @@ class ReplicaCatalogError(ValueError):
     """The catalogue is unsealed, mismatched or does not freeze the requested replica."""
 
 
-def validate_replica_catalog(catalog: Any, *, final_candidates: Mapping[str, Any], final_candidates_sha256: str) -> dict:
+def validate_replica_catalog(
+    catalog: Any, *, final_candidates: Mapping[str, Any], final_candidates_sha256: str
+) -> dict:
     """Check identities only; these hashes cannot establish how weights were trained or executed."""
+
     def require(condition, message):
         if not condition:
             raise ReplicaCatalogError(message)
 
     require(isinstance(catalog, Mapping), "replica catalogue must be an object")
-    require(set(catalog) == {"schema", "status", "final_candidates_sha256", "final_decoders_sha256", "replicas"}, "replica catalogue keys differ")
+    require(
+        set(catalog) == {"schema", "status", "final_candidates_sha256", "final_decoders_sha256", "replicas"},
+        "replica catalogue keys differ",
+    )
     require(catalog["schema"] == SCHEMA and catalog["status"] == "sealed", "replica catalogue is not sealed")
-    require(catalog["final_candidates_sha256"] == final_candidates_sha256, "replica catalogue names another frozen 2026 manifest")
-    require(catalog["final_decoders_sha256"] == final_candidates["reference_decoders"]["module_sha256"], "replica catalogue names another decoder")
+    require(
+        catalog["final_candidates_sha256"] == final_candidates_sha256,
+        "replica catalogue names another frozen 2026 manifest",
+    )
+    require(
+        catalog["final_decoders_sha256"] == final_candidates["reference_decoders"]["module_sha256"],
+        "replica catalogue names another decoder",
+    )
     replicas = catalog["replicas"]
-    require(isinstance(replicas, Mapping) and set(replicas) == {str(seed) for seed in REPLICA_SEEDS}, "replica catalogue must declare 1234 and 3407")
+    require(
+        isinstance(replicas, Mapping) and set(replicas) == {str(seed) for seed in REPLICA_SEEDS},
+        "replica catalogue must declare 1234 and 3407",
+    )
     legacy = {final_candidates["candidates"][name]["checkpoint_256"]["sha256"] for name in ("seg", "reg")}
     seen = set()
     for seed in REPLICA_SEEDS:
         entry = replicas[str(seed)]
-        require(isinstance(entry, Mapping) and set(entry) == {"status", "seg_checkpoint_sha256", "reg_checkpoint_sha256"}, f"replica seed {seed} keys differ")
+        require(
+            isinstance(entry, Mapping) and set(entry) == {"status", "seg_checkpoint_sha256", "reg_checkpoint_sha256"},
+            f"replica seed {seed} keys differ",
+        )
         require(entry["status"] in ("pending", "sealed"), f"replica seed {seed} status differs")
         for name in ("seg", "reg"):
             digest = entry[f"{name}_checkpoint_sha256"]
@@ -42,7 +60,10 @@ def validate_replica_catalog(catalog: Any, *, final_candidates: Mapping[str, Any
                 require(digest is None, f"pending seed {seed} must not claim a checkpoint")
             else:
                 require(pinned.is_hex64(digest), f"seed {seed}/{name} requires an actual frozen checkpoint hash")
-                require(digest not in legacy and digest not in seen, "a replica cannot relabel 2026 weights or another replica")
+                require(
+                    digest not in legacy and digest not in seen,
+                    "a replica cannot relabel 2026 weights or another replica",
+                )
                 seen.add(digest)
     return copy.deepcopy(dict(catalog))
 

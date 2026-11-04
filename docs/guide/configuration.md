@@ -141,7 +141,7 @@ printf '%s  %s\n' \
   assets/hold_out_mask.png | sha256sum --check
 ```
 
-Do not proceed if the download or hash check fails. The mask is a geographic control, not a test scene; obtaining it does not read the test split. Review the [dataset terms](../../DATASET_LICENSE.md) and [datasheet](../../DATASHEET.md) for the applicable use conditions. Generation does not download the mask automatically.
+Do not proceed if the download or hash check fails. The mask is a geographic control, not a test scene; obtaining it does not read the test split. Review the [dataset terms](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/DATASET_LICENSE.md) and [datasheet](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/DATASHEET.md) for the applicable use conditions. Generation does not download the mask automatically.
 
 ---
 

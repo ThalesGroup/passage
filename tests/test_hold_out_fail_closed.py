@@ -1,4 +1,5 @@
 """Geographic exclusion must never silently disappear when enabled."""
+
 import json
 
 import numpy as np
@@ -48,7 +49,9 @@ def test_enabled_holdout_fails_before_generation_when_mask_missing(tmp_path, mon
     config = tmp_path / "config.yaml"
     config.write_text(yaml.safe_dump({"hold_out": {"enabled": True, "mask_path": str(tmp_path / "missing.png")}}))
     calibration = tmp_path / "calibration.json"
-    calibration.write_text(json.dumps({"global_min": 0, "global_max": 1, "tile_stats": [{"lat": 0, "lon": 0, "min": 0, "max": 1}]}))
+    calibration.write_text(
+        json.dumps({"global_min": 0, "global_max": 1, "tile_stats": [{"lat": 0, "lon": 0, "min": 0, "max": 1}]})
+    )
     monkeypatch.setattr(generate, "generate_sample", lambda *_: pytest.fail("generation began"))
     with pytest.raises(ValueError, match="hold-out mask"):
         generate.run_generate(str(tmp_path / "out"), str(config), str(tmp_path / "tiles"), str(calibration), num_cpus=0)
