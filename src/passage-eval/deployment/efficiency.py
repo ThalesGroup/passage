@@ -65,9 +65,10 @@ def decoder_recovery_rate(
     """Fraction of samples whose canonical decoder produced a path
     *without* triggering the A*-recovery fallback.
 
-    A regression model whose `decoder_recovery_rate` is high is
-    "field-ready" — its descent decoder works on its own. A low value
-    means the network needed help from A*.
+    This legacy measure excludes only the explicitly reported ``fallback``
+    stage. It does not receive a bounded-repair flag and therefore cannot
+    establish that a successful decoder ran without repair. Use the scored
+    ``direct_success_rate`` and ``repair_rate`` to distinguish that case.
     """
     succ = np.asarray(decoder_succeeded, dtype=bool)
     fb = np.asarray(fallback_triggered, dtype=bool)

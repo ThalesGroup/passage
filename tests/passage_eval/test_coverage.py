@@ -31,6 +31,11 @@ def test_descriptive_cells_include_legal_denominator_and_failure_regret():
     assert population["legal_count"] == 1
     assert population["mean_cost_regret"] == (999999 + 0.2) / 2
     assert population["median_latency_ms"] == 6
+    assert population["latency_censored_count"] is None  # the rows do not say which latencies are censored
+    rows[1]["latency_censored"] = True
+    rows[0]["latency_censored"] = False
+    flagged = joint_odd_coverage({"a": rows}, axes=["resolution"])["cells"][0]["populations"]["a"]
+    assert flagged["latency_censored_count"] == 1 and flagged["median_latency_ms"] == 6
 
 
 def test_numeric_strata_use_predeclared_edges_and_keep_unknown_outside_values():

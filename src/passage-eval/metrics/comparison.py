@@ -17,6 +17,13 @@ from typing import Any
 import numpy as np
 
 from passage_eval.diagnostics.coverage import joint_odd_coverage, stratify_numeric
+from passage_eval.execution.timing import REWARM_RECORD_FIELDS, manifest_profile, manifest_warmup
+from passage_eval.metrics.latency import (
+    censored_latency_quantiles,
+    latency_censoring,
+    validation_recost_summary,
+    validation_recost_values,
+)
 from passage_eval.protocol.attribution import component_control
 
 SUPPORTED_QUALIFIED_METRIC_CONTRACT = "passage-qualified-complete-v1"
@@ -96,6 +103,31 @@ def _summary(values: np.ndarray) -> dict[str, Any]:
     }
 
 
+#: How the legacy latency summaries and paired contrasts treat censored requests.
+LATENCY_CENSORING_NOTE = (
+    "recorded_values_of_censored_requests_enter_as_finite_lower_bounds; see all_repeat_latency_censored"
+)
+
+
+def _latency_summary(values: np.ndarray, censored: np.ndarray | None) -> dict[str, Any]:
+    """The legacy interpolated latency summary, with the number of censored requests it treats as finite.
+
+    Without censoring flags the count is unknown (``None``), never zero.
+    """
+    if censored is None:
+        return dict(_summary(values), n_censored=None, includes_censored=None, censoring="unknown")
+    censored = np.asarray(censored, dtype=bool)
+    if censored.shape != np.shape(values):
+        raise ValueError("latency censoring flags must align with the latencies")
+    n_censored = int(censored.sum())
+    return dict(
+        _summary(values),
+        n_censored=n_censored,
+        includes_censored=bool(n_censored),
+        censoring=LATENCY_CENSORING_NOTE if n_censored else None,
+    )
+
+
 def _component_attribution(runs, primary, labels, roster):
     controls = [component_control(run["manifest"].get("component_control", {})) for run in runs]
     rows = []
@@ -110,6 +142,7 @@ def _component_attribution(runs, primary, labels, roster):
                 denominator=len(selected),
                 completeness="complete" if len(observed) == len(selected) else "partial",
             )
+        repairs = arrays.get("repair_used", np.zeros_like(arrays["fallback"], dtype=bool))
         rows.append(
             {
                 "label": label,
@@ -122,7 +155,9 @@ def _component_attribution(runs, primary, labels, roster):
                 "legal_route_rate": float(np.mean(arrays["valid_path"])),
                 "all_task_cost_regret": _summary(arrays["regret"]),
                 "fallback_rate": float(np.mean(arrays["fallback"])),
-                "latency_ms": _summary(arrays["latency_ms"]),
+                "repair_rate": float(np.mean(repairs)),
+                "direct_success_rate": float(np.mean(arrays["valid_path"] & ~repairs & ~arrays["fallback"])),
+                "latency_ms": _latency_summary(arrays["latency_ms"], arrays.get("latency_censored")),
                 "work": work,
             }
         )
@@ -210,8 +245,20 @@ def _component_attribution(runs, primary, labels, roster):
     }
 
 
-def _load_scored(path: str | Path) -> dict[str, Any]:
-    from passage_eval.execution.artifacts import read_run_artifact, sha256_file
+def load_scored(path: str | Path) -> dict[str, Any]:
+    """Load one qualified scored artifact directory and check it against its authenticated timed records.
+
+    The receipt, ``run_manifest.json``, ``per_sample.npz`` and ``metrics.json`` must match their recorded hashes;
+    every score row must bind the timed status, route, latency (the timing profile's field), censoring flag,
+    validation and recost time, legality, fallback and physical recost of its record; failures keep the canonical
+    million-times-reference penalty; references are qualified exact. Returns a dictionary with ``path``,
+    ``artifact``, ``manifest``, ``receipt``, ``arrays`` (``per_sample.npz`` plus the derived flags of older
+    scores), ``source``, ``indices`` (``(sample_id, repeat_index, series)`` to row), ``timing_profile``,
+    ``warmup_complete`` (re-warm profile only) and ``block_record`` (the stored roster block record, if any).
+    Raises ``ValueError`` on any inconsistency. This is the public loader of ``compare`` and of the campaign
+    aggregator (``passage_eval.campaign.aggregate``).
+    """
+    from passage_eval.execution.artifacts import read_run_artifact, record_repair_used, sha256_file
 
     path = Path(path).resolve()
     directory = path if path.is_dir() else path.parent
@@ -292,11 +339,49 @@ def _load_scored(path: str | Path) -> dict[str, Any]:
     if len(set(keys)) != n or set(keys) != expected:
         raise ValueError("score rows must match the complete unique task roster and repeat series")
     indices = {key: index for index, key in enumerate(keys)}
+    repairs = np.zeros(n, dtype=bool)
+    for row in artifact.records:
+        repairs[indices[(row["sample_id"], row["repeat_index"], row["series"])]] = record_repair_used(row)
+    if "repair_used" in arrays:
+        if (
+            arrays["repair_used"].shape != (n,)
+            or arrays["repair_used"].dtype.kind != "b"
+            or not np.array_equal(arrays["repair_used"], repairs)
+        ):
+            raise ValueError("scores must retain timed repair attribution")
+    else:
+        # Legacy v1 scores did not store the derived flag; derive it from the
+        # hash-authenticated terminal records rather than assuming no repair.
+        arrays["repair_used"] = repairs
+    profile = manifest_profile(manifest)
+    elapsed_field = profile.latency_field
+    ordered = sorted(artifact.records, key=lambda row: indices[(row["sample_id"], row["repeat_index"], row["series"])])
+    censored = latency_censoring(
+        [row["status"] for row in ordered], [row.get("latency_charged_not_measured", False) is True for row in ordered]
+    )
+    if "latency_censored" in arrays:
+        if (
+            arrays["latency_censored"].shape != (n,)
+            or arrays["latency_censored"].dtype.kind != "b"
+            or not np.array_equal(arrays["latency_censored"], censored)
+        ):
+            raise ValueError("scores must retain the timed latency censoring flags")
+    else:
+        # Scores written before the censoring flag existed: derive it from the authenticated records.
+        arrays["latency_censored"] = censored
+    recost_times = validation_recost_values(ordered)
+    if "validation_recost_ms" in arrays:
+        stored = arrays["validation_recost_ms"]
+        if stored.shape != (n,) or stored.dtype.kind != "f" or not np.array_equal(stored, recost_times, equal_nan=True):
+            raise ValueError("scores must retain the timed validation and recost times")
+    else:
+        # Scores written before the separate report existed: derive it from the authenticated records.
+        arrays["validation_recost_ms"] = recost_times
     for row in artifact.records:
         index = indices[(row["sample_id"], row["repeat_index"], row["series"])]
         if arrays["status"][index] != row["status"] or arrays["route_hash"][index] != row["route_hash"]:
             raise ValueError("score rows must bind exactly the timed terminal status and route")
-        if not np.isclose(arrays["latency_ms"][index], row["total_wall_ms"], rtol=0, atol=0):
+        if not np.isclose(arrays["latency_ms"][index], row[elapsed_field], rtol=0, atol=0):
             raise ValueError("latency must retain complete request time, including terminal failures")
         if (
             bool(arrays["connected_path"][index]) != row["connected_path"]
@@ -356,6 +441,7 @@ def _load_scored(path: str | Path) -> dict[str, Any]:
         selected = arrays["sample_id"] == sample_id
         if len(set(arrays["reference_id"][selected].tolist())) != 1:
             raise ValueError("reference identity must remain identical across all repeats of a task")
+    block_record = json.loads((directory / "metrics.json").read_text()).get("geographic_blocks")
     return {
         "path": directory,
         "artifact": artifact,
@@ -364,7 +450,173 @@ def _load_scored(path: str | Path) -> dict[str, Any]:
         "arrays": arrays,
         "source": source,
         "indices": indices,
+        "timing_profile": profile,
+        "warmup_complete": (
+            [row[REWARM_RECORD_FIELDS[1]] for row in ordered] if profile.rewarm_after_restart else None
+        ),
+        "block_record": block_record,
     }
+
+
+# Historical private name, kept for external callers written before ``load_scored`` was public.
+_load_scored = load_scored
+
+#: Procedure limits that a strict comparison requires to be recorded and identical (besides every task's budget).
+LIMIT_FIELDS = (
+    "timing_profile",
+    "timing_boundary",
+    "deadline_grace_ms",
+    "hard_timeout_ms",
+    "startup_timeout_s",
+    "max_restarts",
+    "worker_rlimits",
+    "ipc_frame_limits",
+)
+#: Where each limit is recorded: the manifest itself, ``procedure.supervision`` or ``procedure.supervision.limits``.
+_LIMIT_SOURCES = {
+    "timing_boundary": "manifest",
+    "deadline_grace_ms": "supervision",
+    "hard_timeout_ms": "supervision",
+    "startup_timeout_s": "limits",
+    "max_restarts": "limits",
+    "worker_rlimits": "limits",
+    "ipc_frame_limits": "limits",
+}
+
+
+def _procedure_limits(run: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
+    """What bounds a run's requests, as recorded, and the limits that the run does not record at all.
+
+    A limit whose key is absent is *not recorded* (reported as ``None``); a recorded ``None`` inside a value,
+    such as an unset rlimit, means unlimited. Strict comparison refuses unrecorded limits instead of treating two
+    absent values as identical.
+    """
+    manifest = run["manifest"]
+    procedure = manifest.get("procedure") if isinstance(manifest.get("procedure"), dict) else {}
+    supervision = procedure.get("supervision") if isinstance(procedure.get("supervision"), dict) else {}
+    limits = supervision.get("limits") if isinstance(supervision.get("limits"), dict) else {}
+    containers = {"manifest": manifest, "supervision": supervision, "limits": limits}
+    values: dict[str, Any] = {"timing_profile": run["timing_profile"].name}
+    unrecorded = []
+    for name, source in _LIMIT_SOURCES.items():
+        container = containers[source]
+        if name not in container:
+            unrecorded.append(name)
+        values[name] = container.get(name)
+    return values, unrecorded
+
+
+def _limits_report(runs: list[dict[str, Any]], roster: list[str]) -> dict[str, Any]:
+    rows = [_procedure_limits(run) for run in runs]
+    recorded = [values for values, _ in rows]
+    unrecorded = [missing for _, missing in rows]
+    missing_anywhere = sorted({name for missing in unrecorded for name in missing}, key=LIMIT_FIELDS.index)
+    differences = sorted(
+        name
+        for name in LIMIT_FIELDS
+        if name not in missing_anywhere and len({json.dumps(row[name], sort_keys=True) for row in recorded}) > 1
+    )
+    budgets = [
+        [json.dumps(run["manifest"]["request_specs"][sample_id].get("budget"), sort_keys=True) for sample_id in roster]
+        for run in runs
+    ]
+    if any(budget != budgets[0] for budget in budgets[1:]):
+        differences.insert(0, "budget")
+    return {
+        "identical": not differences and not missing_anywhere,
+        "differences": differences,
+        "unrecorded": missing_anywhere,
+        "unrecorded_per_run": unrecorded,
+        "recorded": recorded,
+    }
+
+
+def _stored_roster_blocks(run: dict[str, Any], roster: list[str]) -> tuple[list[str] | None, dict | None]:
+    """Per-task blocks that the roster scorer stored in one score, with their record (``None`` without one).
+
+    The record must name the roster the run records. A record without usable blocks (an unplaced task) gives
+    ``None`` blocks with the record.
+    """
+    from passage_eval.execution.scoring import ROSTER_BLOCK_PROVENANCES
+    from passage_eval.io.roster import run_roster_sha256
+
+    record = run["block_record"]
+    if record is None:
+        return None, None
+    if not isinstance(record, dict):
+        raise ValueError("the stored geographic block record must be an object")
+    if record.get("roster_sha256") != run_roster_sha256(run["manifest"]):
+        raise ValueError("stored roster blocks do not belong to the roster the run records")
+    provenance = record.get("provenance")
+    if provenance not in ROSTER_BLOCK_PROVENANCES:
+        return None, record
+    arrays = run["arrays"]
+    if "cluster_id" not in arrays or "cluster_provenance" not in arrays:
+        raise ValueError("scores that declare roster blocks must store cluster_id and cluster_provenance")
+    if not np.all(arrays["cluster_provenance"] == provenance):
+        raise ValueError("scored cluster provenance disagrees with the declared roster blocks")
+    seen: dict[str, set[str]] = {}
+    for sample_id, block in zip(arrays["sample_id"].tolist(), arrays["cluster_id"].tolist()):
+        seen.setdefault(sample_id, set()).add(block)
+    per_task = []
+    for sample_id in roster:
+        values = seen.get(sample_id, set())
+        if len(values) != 1 or not next(iter(values)):
+            raise ValueError(f"{sample_id}: scored roster block is missing or varies across repeats")
+        per_task.append(next(iter(values)))
+    return per_task, record
+
+
+def _scored_roster_blocks(runs: list[dict[str, Any]], roster: list[str]) -> tuple[list[str] | None, dict | None]:
+    """Blocks that the roster scorer stored from one roster block table, identical in every run (or none)."""
+    stored = [_stored_roster_blocks(run, roster) for run in runs]
+    records = [record for _, record in stored]
+    if all(record is None for record in records):
+        return None, None
+    if any(record is None for record in records):
+        raise ValueError(
+            "some scores carry roster blocks and others do not; supply the roster the runs were made with (--roster)"
+        )
+    if len({record.get("block_table_sha256") for record in records}) != 1:
+        raise ValueError("scores carry geographic blocks from different roster block tables")
+    blocks = stored[0][0]
+    if any(other != blocks for other, _ in stored[1:]):
+        raise ValueError("matched tasks carry different roster blocks")
+    return blocks, records[0]
+
+
+def _explicit_roster_blocks(
+    table: dict[str, Any], runs: list[dict[str, Any]], roster: list[str]
+) -> tuple[list[str] | None, dict[str, Any]]:
+    """Blocks from the block table of the roster every compared run records; stored blocks must agree with it."""
+    from passage_eval.io.roster import block_table_sealed, check_block_table_binds_run, validate_block_table
+
+    table = validate_block_table(table)
+    for index, run in enumerate(runs):
+        try:
+            check_block_table_binds_run(table, run["manifest"])
+        except ValueError as exc:
+            raise ValueError(f"compared run {index}: {exc}") from None
+    sealed = block_table_sealed(table)
+    missing = [sample_id for sample_id in roster if sample_id not in table["blocks"]]
+    if missing:
+        raise ValueError(f"the roster block table does not list {len(missing)} compared task(s)")
+    record = {
+        "roster_sha256": table["roster_sha256"],
+        "roster_schema": table["roster_schema"],
+        "sealed": sealed,
+        "block_table_sha256": table["block_table_sha256"],
+        "assignment": table["assignment"],
+        "assignment_roster_sha256": table["assignment_roster_sha256"],
+    }
+    if any(table["blocks"][sample_id] is None for sample_id in roster):
+        return None, dict(record, status="unknown_tasks_without_footprint")
+    blocks = [table["blocks"][sample_id] for sample_id in roster]
+    for run in runs:  # a score without stored blocks (an earlier score of the same roster) is accepted
+        stored, _ = _stored_roster_blocks(run, roster)
+        if stored is not None and stored != blocks:
+            raise ValueError("scored roster blocks differ from the supplied roster block table")
+    return blocks, dict(record, status="sealed_roster_blocks" if sealed else "unsealed_roster_blocks")
 
 
 def _geographic_blocks(manifest: dict[str, Any], roster: list[str]) -> tuple[list[str] | None, str]:
@@ -410,6 +662,8 @@ def compare_artifacts(
     bootstrap_seed: int = 0,
     confidence: float = 0.95,
     odd_spec: dict[str, Any] | None = None,
+    require_identical_limits: bool = False,
+    geographic_blocks: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Compare qualified scored runs with exactly identical frozen task identities.
 
@@ -417,15 +671,33 @@ def compare_artifacts(
     checkpoint and procedure identities may differ; dataset, reference, ordinary
     input, endpoints, objective, graph and task variant must match by task ID.
     Quality uses one explicit repeat; latency retains all repeats and failures.
+    Runs with different timing profiles (latency fields) are never compared.
+
+    ``require_identical_limits`` (opt-in, off by default) also requires every
+    task's budget, the timing boundary and the recorded supervision limits
+    (grace, hard timeout, start-up timeout, restart cap) to be identical, as a
+    comparison on matched budgets needs. The result always reports which of
+    them differ under ``procedure_limits``.
+
+    Blocks come, in this order, from ``geographic_blocks`` (the ``roster_block_table``
+    of the roster that every compared run records; a table of another roster, or a
+    run without a recorded roster, is refused), from the roster blocks that the
+    roster scorer stored in every score, or from the declared request metadata.
+    Blocks are labelled sealed only for a ``passage-roster-v2`` table that binds the
+    installed block rule.
     """
+    if not isinstance(require_identical_limits, bool):
+        raise ValueError("require_identical_limits must be a boolean")
     if len(paths) < 2:
         raise ValueError("at least two scored artifacts are required for comparison")
-    runs = [_load_scored(path) for path in paths]
+    runs = [load_scored(path) for path in paths]
     if len({run["path"] for run in runs}) != len(runs):
         raise ValueError("duplicate comparison artifact paths")
     base = runs[0]
     roster = sorted(base["manifest"]["roster"])
     for run in runs[1:]:
+        if run["timing_profile"] != base["timing_profile"]:
+            raise ValueError("matched latency comparison requires identical timing profiles")
         if run["manifest"]["series"] != base["manifest"]["series"]:
             raise ValueError("matched latency comparison requires the same declared request series")
         if set(run["manifest"]["roster"]) != set(roster):
@@ -443,6 +715,13 @@ def compare_artifacts(
                 raise ValueError(f"{sample_id}: input/task/objective/graph identity mismatch")
         if _geographic_blocks(run["manifest"], roster) != _geographic_blocks(base["manifest"], roster):
             raise ValueError("matched tasks have inconsistent geographic block metadata")
+    limits = _limits_report(runs, roster)
+    if require_identical_limits and not limits["identical"]:
+        raise ValueError(
+            "strict comparison requires recorded, identical budgets, timing profile, timing boundary and "
+            f"supervision limits; not recorded: {', '.join(limits['unrecorded']) or 'none'}; "
+            f"these differ: {', '.join(limits['differences']) or 'none'}"
+        )
     declared = [run["manifest"]["quality_repeat_index"] for run in runs]
     if primary_repeat_index is None:
         if len(set(declared)) != 1:
@@ -460,7 +739,18 @@ def compare_artifacts(
             raise ValueError("matched task rows have inconsistent qualified reference identities")
         if not np.array_equal(arrays["oracle_costs"], primary[0]["oracle_costs"]):
             raise ValueError("matched task rows have inconsistent qualified reference costs")
-    blocks, block_provenance = _geographic_blocks(base["manifest"], roster)
+    if geographic_blocks is not None:
+        blocks, roster_block_record = _explicit_roster_blocks(geographic_blocks, runs, roster)
+        kind = "sealed" if roster_block_record["sealed"] else "unsealed"
+        block_provenance = f"{kind}_roster_block_table" if blocks is not None else "unknown"
+    else:
+        from passage_eval.execution.scoring import ROSTER_BLOCK_PROVENANCE
+
+        blocks, roster_block_record = _scored_roster_blocks(runs, roster)
+        kind = "sealed" if (roster_block_record or {}).get("provenance") == ROSTER_BLOCK_PROVENANCE else "unsealed"
+        block_provenance = f"scored_{kind}_roster_blocks" if blocks is not None else "unknown"
+    if roster_block_record is None:
+        blocks, block_provenance = _geographic_blocks(base["manifest"], roster)
     labels = [f"{index}:{run['manifest'].get('method_name', run['path'].name)}" for index, run in enumerate(runs)]
     methods, occupancy = [], {}
     for label, run, arrays in zip(labels, runs, primary):
@@ -477,7 +767,7 @@ def compare_artifacts(
             "all_task": {
                 "denominator": len(roster),
                 "cost_regret": _summary(arrays["regret"]),
-                "latency_ms": _summary(arrays["latency_ms"]),
+                "latency_ms": _latency_summary(arrays["latency_ms"], arrays["latency_censored"]),
                 "failure_fraction": float(np.mean(~valid)),
                 "penalty_determined_quantiles": {
                     name: bool(np.isclose(function(arrays["regret"]), FAILURE_REGRET))
@@ -496,10 +786,28 @@ def compare_artifacts(
                 "denominator": len(roster),
                 "legal_route_rate": float(np.mean(valid)),
                 "fallback_rate": float(np.mean(arrays["fallback"])),
+                "repair_rate": float(np.mean(arrays["repair_used"])),
+                "direct_success_rate": float(np.mean(valid & ~arrays["repair_used"] & ~arrays["fallback"])),
                 "raw_legal_path_rate": float(np.mean(arrays["legal_path"])),
                 "historical_connected_path_rate": float(np.mean(arrays["connected_path"])),
             },
-            "all_repeat_latency_ms": _summary(all_arrays["latency_ms"]),
+            "all_repeat_latency_ms": _latency_summary(all_arrays["latency_ms"], all_arrays["latency_censored"]),
+            "all_repeat_latency_censored": dict(
+                censored_latency_quantiles(
+                    all_arrays["latency_ms"],
+                    status=all_arrays["status"],
+                    sample_id=all_arrays["sample_id"],
+                    censored=all_arrays["latency_censored"],
+                    series=run["manifest"].get("series", "warm"),
+                    warmup_complete=run["warmup_complete"],
+                    warmup=manifest_warmup(run["manifest"]),
+                ),
+                latency_field=run["timing_profile"].latency_field,
+                timing_profile=run["timing_profile"].name,
+            ),
+            "all_repeat_validation_recost_ms": validation_recost_summary(
+                all_arrays["validation_recost_ms"], inside_latency=run["timing_profile"].validation_in_boundary
+            ),
             "repeat_series": run["manifest"].get("series", "warm"),
             "declared_primary_repeat_index": run["manifest"]["quality_repeat_index"],
             "counts": {
@@ -549,6 +857,7 @@ def compare_artifacts(
                 legal=bool(valid[index]),
                 cost_regret=float(arrays["regret"][index]),
                 latency_ms=float(arrays["latency_ms"][index]),
+                latency_censored=bool(arrays["latency_censored"][index]),
             )
             if "elev_std" in arrays:
                 row["elev_std"] = float(arrays["elev_std"][index])
@@ -613,6 +922,22 @@ def compare_artifacts(
             name: paired_cluster_bootstrap(left, right, local_blocks, statistic=name, **options) for name in STATISTICS
         }
 
+    def latency_contrast(left, right):
+        """Paired latency contrasts, flagged when either side treats a censored request as a finite value."""
+        n_left, n_right = int(left["latency_censored"].sum()), int(right["latency_censored"].sum())
+        either = int(np.sum(left["latency_censored"] | right["latency_censored"]))
+        flags = {
+            "n_censored_a": n_left,
+            "n_censored_b": n_right,
+            "n_tasks_censored_in_either": either,
+            "includes_censored": bool(either),
+            "censoring": LATENCY_CENSORING_NOTE if either else None,
+        }
+        return {
+            name: dict(estimate, **flags)
+            for name, estimate in contrast(left["latency_ms"], right["latency_ms"]).items()
+        }
+
     for a, b in itertools.combinations(range(len(runs)), 2):
         left, right = primary[a], primary[b]
         both = left["valid_path"] & right["valid_path"]
@@ -624,7 +949,7 @@ def compare_artifacts(
                 "all_task": {
                     "denominator": len(roster),
                     "cost_regret": contrast(left["regret"], right["regret"]),
-                    "latency_ms": contrast(left["latency_ms"], right["latency_ms"]),
+                    "latency_ms": latency_contrast(left, right),
                     "legal_route_rate": paired_cluster_bootstrap(
                         left["valid_path"], right["valid_path"], blocks, statistic="mean", **options
                     ),
@@ -652,6 +977,8 @@ def compare_artifacts(
         "primary_repeat_index": primary_repeat_index,
         "declared_primary_repeat_indices": declared,
         "primary_repeat_override": any(primary_repeat_index != repeat for repeat in declared),
+        "timing_profile": base["timing_profile"].name,
+        "procedure_limits": dict(limits, strict=require_identical_limits),
         "failure_policy": {
             "cost_multiplier_of_qualified_optimum": FAILURE_COST_MULTIPLIER,
             "failure_regret": FAILURE_REGRET,
@@ -660,6 +987,7 @@ def compare_artifacts(
         "uncertainty": {
             "resampling_unit": "geographic_or_source_footprint_block",
             "block_provenance": block_provenance,
+            "sealed_roster_blocks": roster_block_record,
             "status": "unknown_geographic_blocks" if blocks is None else "declared_blocks",
             "seed": bootstrap_seed,
             "resamples": bootstrap_resamples,
@@ -747,8 +1075,8 @@ def report_artifact(path: str | Path, *, format: str = "markdown") -> str | dict
             "",
             "*Table 2. All-task cost regret (dimensionless) and reliability rates (fractions).*",
             "",
-            "| Method | Own-valid tasks | Own-valid mean regret | Mean ASSD | Mean h95 (pixels) | Primary median latency (ms) | All-repeat latency rows | All-repeat p90 latency (ms) |",
-            "|---|---:|---:|---:|---:|---:|---:|---:|",
+            "| Method | Own-valid tasks | Own-valid mean regret | Mean ASSD | Mean h95 (pixels) | Primary median latency (ms) | All-repeat latency rows | Censored latency rows | All-repeat p90 latency (ms) |",
+            "|---|---:|---:|---:|---:|---:|---:|---:|---:|",
         ]
     )
     for method in result["methods"]:
@@ -757,14 +1085,16 @@ def report_artifact(path: str | Path, *, format: str = "markdown") -> str | dict
         lines.append(
             f"| {cell_text(method['label'])} | {geometry['denominator']} | {number(conditional)} | {number(geometry['assd']['mean'])} | "
             f"{number(geometry['h95']['mean'])} | {number(method['all_task']['latency_ms']['median'])} | "
-            f"{latency['n']} | {number(latency['p90'])} |"
+            f"{latency['n']} | {latency.get('n_censored', 'unknown')} | {number(latency['p90'])} |"
         )
     lines.extend(
         [
             "",
             "*Table 3. Geometry among each method’s own valid routes and retained complete-request latency. "
             "ASSD is average symmetric surface distance in pixels divided by the qualified oracle waypoint count; "
-            "h95 is symmetric 95th-percentile Hausdorff distance.*",
+            "h95 is symmetric 95th-percentile Hausdorff distance. Latency columns interpolate recorded values; "
+            "a censored row (a timeout, or a time charged without a measurement) enters as its recorded lower "
+            "bound, and the JSON artifact gives the censoring-aware quantiles.*",
             "",
             "| Method | Seed condition | Repeat series | Terminal outcomes across all repeats | Tasks with route divergence |",
             "|---|---|---|---|---:|",
@@ -799,10 +1129,13 @@ def report_artifact(path: str | Path, *, format: str = "markdown") -> str | dict
     for pair in result["comparisons"]:
         for metric in ("cost_regret", "latency_ms"):
             for statistic, estimate in pair["all_task"][metric].items():
+                status = estimate["status"]
+                if estimate.get("includes_censored"):
+                    status += f"; {estimate['n_tasks_censored_in_either']} censored task(s) as lower bounds"
                 lines.append(
                     f"| {cell_text(pair['a'])} − {cell_text(pair['b'])} | {metric} | {statistic} | "
                     f"{number(estimate['estimate'])} | {interval_text(estimate)} | "
-                    f"{estimate['status']} | {pair['all_task']['denominator']} |"
+                    f"{status} | {pair['all_task']['denominator']} |"
                 )
         estimate = pair["all_task"]["legal_route_rate"]
         lines.append(
@@ -902,8 +1235,8 @@ def report_artifact(path: str | Path, *, format: str = "markdown") -> str | dict
             "named exact-fallback variant, and exact classical search. The learned controls reuse the identified "
             "checkpoint. Missing controls remain visible. Exact fallback is excluded from primary learned rows.",
             "",
-            "| Method | Component variant | Tasks | Legal rate | Mean regret | Mean expansions | Work observations | Fallback rate | Median request latency (ms) |",
-            "|---|---|---:|---:|---:|---:|---:|---:|---:|",
+            "| Method | Component variant | Tasks | Legal rate | Mean regret | Mean expansions | Work observations | Repair rate | Fallback rate | Median request latency (ms) |",
+            "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|",
         ]
     )
     for row in attribution["rows"]:
@@ -912,7 +1245,7 @@ def report_artifact(path: str | Path, *, format: str = "markdown") -> str | dict
             f"| {cell_text(row['label'])} | {cell_text(row['control']['variant'])} | {row['denominator']} | "
             f"{number(row['legal_route_rate'])} | {number(row['all_task_cost_regret']['mean'])} | "
             f"{number(expansions.get('mean'))} | {expansions.get('n', 0)} | "
-            f"{number(row['fallback_rate'])} | {number(row['latency_ms']['median'])} |"
+            f"{number(row['repair_rate'])} | {number(row['fallback_rate'])} | {number(row['latency_ms']['median'])} |"
         )
     lines.extend(
         [

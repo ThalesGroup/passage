@@ -37,6 +37,8 @@ evaluator recomputes the route's cost with its own step costs.
 As the [protocol](protocol.md#4-calibration-and-statistical-discipline)
 requires, each entry's decoder parameters must be chosen on the calibration
 split, for each grid size, and frozen before the test pass.
+[Final candidates](final-candidates.md) gives the frozen definition of the two
+entries: network outputs, reference decoders, parameters and checkpoints.
 
 ## 2. Paper results
 

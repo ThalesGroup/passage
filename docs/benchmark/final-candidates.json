@@ -1,0 +1,95 @@
+{
+  "schema": "passage-final-candidates/v1",
+  "frozen_on": "2026-11-02",
+  "status": "final candidates frozen for the 256x256 evaluation and the leaderboard; first-seed multi-resolution checkpoints pending",
+  "decision": "Seg = raw path-logit A*; Reg = scalar cost-to-go + Bellman descent + goal-rooted geometric Dijkstra. No terrain, reference path, reference cost or reachability mask enters either decoder.",
+  "reference_decoders": {
+    "module": "src/passage-eval/baselines/final_decoders.py",
+    "module_sha256": "2a25ad31fda6ac75f369e8546d9fa0239191fb04b1d7204a73045aa880cbafc4",
+    "tests": "tests/passage_eval/test_final_decoders.py",
+    "equivalence_check": "identical paths to the measured campaign kernels on 1024/1024 exposed validation scenes (256) for Seg and for Reg Bellman"
+  },
+  "graph": {
+    "connectivity": 8,
+    "diagonal_policy": "destination_only",
+    "cost_model_for_scoring_only": "elevation",
+    "cost_weight_for_scoring_only": 62.4,
+    "pixel_size_m": 30.0
+  },
+  "input_tensor": {
+    "layout": "NCHW float32 (1, 3, N, N)",
+    "channels": ["(elevation - min) / (max - min) with released calibration min=-430, max=8767", "markers: -1 everywhere, 0 at start, 1 at goal", "obstacles as 0/1"],
+    "preprocessing": "passage_eval.baselines.final_decoders.build_input (Numba)"
+  },
+  "candidates": {
+    "seg": {
+      "name": "seg-raw-logit-astar",
+      "network_output": "path-class logit z = model(image)[:, 1:2] BEFORE any activation (no softmax, no sigmoid)",
+      "decoder": "seg_logit_astar",
+      "decoder_inputs": ["raw path logit", "obstacles", "start", "goal"],
+      "step_cost": "l(u,v) * (1 + w * (max z - z_v)),  l in {1, sqrt(2)}",
+      "heuristic": "eta * octile(v, goal)",
+      "parameters": {"w": 0.25, "eta": 1.5},
+      "parameters_selected_on": "calibration split, 256, 1024 scenes; rule fixed beforehand: minimise regret p90 among settings with median decode time <= 1.5 x that of (0.25, 1.5)",
+      "checkpoint_256": {
+        "sha256": "eee055e084aaaec2aa4befb9db9654882d98fe629bb85e70d24a7bf5575eb79b",
+        "file": "seg-priority-margin-20261031/fits/control/LAST-epoch-15.pt",
+        "seed": 2026,
+        "lineage": ["paper base N-FINAL-segmentation-seed2026 epoch 30 (6594325866a6b767f9b99df5a5471c70bbf3a407ffece9e9a7cfe8215c820fae)", "continuation r256-seg-bce-structured-fusion-20261031 (bb330555a39f3c350952c8dcddec6bfa2dac777f091c3161474c1612fb0f8915)", "continuation seg-priority-margin-20261031 arm control: 1024 TRAIN scenes x 15 passes"],
+        "final_stage_objective": "BCE on raw z_path + 0.006 path_bottleneck_loss + 0.01 structured_path_loss; AdamW lr 1e-6, weight decay 0.01, batch 8",
+        "training_code": "seg-priority-margin-20261031/train.py"
+      },
+      "export": {
+        "recipe": "edge-tradeoff-fp16-20261101/export_models.py (load_seg; static adaptive pools; traced at the target resolution; opset 17)",
+        "recipe_sha256": "0f358d2874a962324d4b6aa4a075f1cbd050c39e26c0df94ebb75d6d79a7eb09",
+        "tensorrt_graph": "GRN rewrite ReduceL2(x) -> Sqrt(ReduceSum(x*x)), rewritten GRN nodes pinned FP32 (rewrite_grn.py, sha256 f76343f4cb31b48366333fadc3c00f600cef02e8031e6fb8590697b0a9e7f16f); mandatory from 512: plain FP16 GRN overflows to all-NaN outputs",
+        "tensorrt_flags": "--fp16 --noTF32 --precisionConstraints=obey --layerPrecisions=<GRN list>:fp32 --layerOutputTypes=<GRN list>:fp32",
+        "openvino": "original export, INFERENCE_PRECISION_HINT=f16 (no NaN observed up to 1024)"
+      }
+    },
+    "reg": {
+      "name": "reg-bellman-descent",
+      "network_output": "softplus cost-to-go V_hat, normalised by the training scale S = 897803.25",
+      "decoder": "reg_bellman_descent",
+      "decoder_inputs": ["predicted cost-to-go", "obstacles", "start", "goal"],
+      "descent": "from u, among free neighbours with V(v) < V(u) (V(goal) = 0), choose argmin V(v) + kappa * 30 * l(u,v) / S",
+      "fallback": "on a local minimum, geometric Dijkstra (costs l) from the goal over reversed edges until it settles any visited descent cell; route = descent prefix to that cell + Dijkstra branch to the goal",
+      "parameters": {"kappa": 8.0, "train_scale": 897803.25},
+      "parameters_selected_on": "calibration split, 256, 1024 scenes; rule fixed beforehand: minimise regret p90, ties by fallback count; kappa grid {0,1,2,4,8,16,32,64}",
+      "checkpoint_256": {
+        "sha256": "dc52d13368fd911ab44ea65801089e8d65213b6b9247dfe38116086808cabb70",
+        "file": "r256-reg-lazy32768-20261031/fits/LAST-pass-04.pt",
+        "seed": 2026,
+        "lineage": ["paper base N-FINAL-regression-seed2026 epoch 30 (contract d67f4e6c8a50c252b9990626515b3f089f5d65ca6cf43bf2f5a916259127eca9)", "continuation r256-reg-factorial-fusion-20261031 local_policy (db48fa97b9113ef560007cb3f0515bd3704459dddd5edb0370cff7a6fb282c7a)", "continuation r256-reg-lazy32768-20261031: 32768 TRAIN scenes x 4 passes, 16384 updates"],
+        "final_stage_objective": "model.loss (reachable-cell reconstruction, recipe bellman) + 0.1 local_policy_loss (T = 0.002, corridor pixel weights 1 + 19 maxpool9(path)) + 0.0074688654225555495 optimal_set_loss; AdamW lr 1e-5, weight decay 0.01, batch 8",
+        "training_code": "r256-reg-lazy32768-20261031/train.py",
+        "not_used": "the descent-consistency loss of r256-reg-descent-consistent-20261102 is NOT part of the final candidate"
+      },
+      "export": {
+        "recipe": "edge-tradeoff-fp16-20261101/export_models.py (load_reg, InferenceNetwork softplus; static adaptive pools; opset 17)",
+        "recipe_sha256": "0f358d2874a962324d4b6aa4a075f1cbd050c39e26c0df94ebb75d6d79a7eb09",
+        "tensorrt_flags": "--fp16 --noTF32 --precisionConstraints=obey with /network/decode_head/classifier/Conv, /network/Resize, /Softplus pinned FP32 (layerPrecisions and layerOutputTypes)",
+        "why_fp32_head": "FP16 rounding of V_hat (~5e-4 near 1) exceeds neighbour differences (3e-5..2e-3) and creates false local minima; Thor 256: FP16 head 260 fallbacks / p90 29.4 %, FP32 head 180 / 27.0 %, FP32 host 214 / 27.1 %",
+        "openvino": "INFERENCE_PRECISION_HINT=f16; per-layer FP32 head not yet available in the runner (known degradation on Tiger)"
+      }
+    }
+  },
+  "evidence_256": {
+    "split": "previously exposed validation, 1024 scenes, 2 repeats; NOT a test result",
+    "campaign": "edge-seg-reg-calibrated-20261102",
+    "nature": "exploratory diagnostics on previously exposed validation scenes; not test results",
+    "seg_regret_p90_p99_percent": {"fp32_host": [7.44, 34.03], "thor_fp16": [7.56, 33.28], "orin_fp16": [7.40, 33.94], "tiger_fp16": [7.35, 36.72]},
+    "reg_regret_p90_p99_percent": {"fp32_host": [22.88, 60.38], "thor_fp32_head": [22.88, 58.25], "orin_fp16": [22.75, 57.09], "tiger_fp16": [24.47, 57.95]},
+    "end_to_end_median_ms": {"seg": {"thor": 3.36, "orin": 6.05, "tiger": 23.19}, "reg": {"thor_fp32_head": 1.99, "orin": 5.31, "tiger": 13.66}},
+    "timing_boundary": "raw in-memory arrays -> path array: Numba pre-processing + FP16 network (copies and synchronisation) + Numba post-processing; validation and recost on host, outside the timer; procedures interleaved per scene in seeded random order"
+  },
+  "multiresolution_plan": {
+    "resolutions": [64, 128, 512, 1024, 2048],
+    "seed": 2026,
+    "initialisation": "the 256 final checkpoint of each candidate (fully convolutional transfer)",
+    "objective": "each candidate's final-stage objective (above); any omitted component must be recorded",
+    "data": "TRAIN split at the target resolution only (900000 rows up to 512, 225000 at 1024, 90000 at 2048); no validation or test scene in training",
+    "schedule": "full schedule declared up front, first measurements from an early milestone checkpoint; the run must be resumable to completion for the final harness evaluation",
+    "decoder_parameters": "frozen at the 256 calibration values (w = 0.25, eta = 1.5, kappa = 8) for every resolution"
+  }
+}

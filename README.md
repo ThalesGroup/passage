@@ -1,9 +1,5 @@
 <!-- PASSAGE code repository README. The title, tagline, executive summary, key facts and citation match the Hugging Face dataset card. -->
 
-<p align="center">
-  <img src="assets/banner.png" alt="PASSAGE banner: real terrain with planned routes" width="100%"/>
-</p>
-
 <h1 align="center">🌍 PASSAGE: real-terrain benchmark for constrained path planning</h1>
 
 <p align="center">
@@ -325,14 +321,7 @@ published with their entries (see [First entries](docs/benchmark/candidates.md))
 
 ## 🗺️ Visual Summary
 
-<p align="center">
-  <img src="assets/sample.png" alt="Six terrain panels: solid green routes without obstacles and short-dashed blue routes with hatched obstacles; white circle and star mark start and goal" width="680"/>
-</p>
-
-<p align="center"><em>PASSAGE v1.0 validation preview sample 0000000024 (256 × 256), the first row of the first validation preview shard, without selection. Columns identify elevation, uphill-slope and energy costs. Solid green denotes free terrain; short-dashed blue denotes obstacle-aware routes. All panels share calibrated elevation in metres. Stored optimality was not revalidated.</em> <a href="assets/sample.provenance.json">Source and rendering checks</a> · <a href="assets/sample.pdf">PDF</a></p>
-
-The paper figures, the notebooks and this image use one
-[trajectory style](docs/TRAJECTORY_STYLE.md) (in French).
+Illustrative validation previews can be generated from an authorised dataset and presentation assets using the [trajectory style](docs/TRAJECTORY_STYLE.md). They are not included in every source distribution.
 
 ---
 

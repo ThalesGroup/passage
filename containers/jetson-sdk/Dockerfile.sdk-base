@@ -1,0 +1,42 @@
+# Locally built SDK base for the thor and orin profiles: official ubuntu:24.04 (pinned by digest) plus
+# Ubuntu packages from a dated snapshot and the NVIDIA Jetson r39.2 (JetPack 7.2.1) packages, all installed
+# from local .deb files whose SHA-256 values were verified against signed indexes (see packages.lock.json).
+# Build offline:  docker build --pull=false --network=none -f Dockerfile.sdk-base ...
+# NOT a vendor image. Not published. No GPU driver userspace (libcuda.so.1 and friends) is installed:
+# the NVIDIA container runtime on the target is expected to inject it.
+ARG UBUNTU_IMAGE
+FROM ${UBUNTU_IMAGE}
+
+ARG UBUNTU_IMAGE
+ARG LOCK_SHA256
+ARG UBUNTU_SNAPSHOT
+ENV DEBIAN_FRONTEND=noninteractive \
+    PIP_BREAK_SYSTEM_PACKAGES=1
+# PIP_BREAK_SYSTEM_PACKAGES: Ubuntu 24.04 marks the system Python as externally managed (PEP 668); the derived
+# image installs its locked wheels into it, as the NVIDIA vendor images allow by default.
+
+COPY repo/ /opt/sdk-repo/
+COPY packages.lock.json verify_repo.py /opt/passage-sdk-base/
+RUN set -eux; \
+    test "$LOCK_SHA256" = 49488c34dd541459c0b3a434451ba465a3871820bccf423ea4d2c77da7581f39; \
+    test "$(sha256sum /opt/passage-sdk-base/packages.lock.json | cut -d' ' -f1)" = "$LOCK_SHA256"; \
+    cd /opt/sdk-repo; \
+    test "$(sha256sum SHA256SUMS | cut -d' ' -f1)" = dbceb762de1c1b9b451cba58ae9b62e893befd596c42e568e5defbffe2a67251; \
+    test -d ubuntu; test -d jetson; test ! -L ubuntu; test ! -L jetson; \
+    test -z "$(find ubuntu jetson -mindepth 1 ! -type f -print -quit)"; \
+    awk '{print $2}' SHA256SUMS | LC_ALL=C sort > /tmp/expected-debs; \
+    find ubuntu jetson -type f -name '*.deb' -print | LC_ALL=C sort > /tmp/actual-debs; \
+    cmp /tmp/expected-debs /tmp/actual-debs; sha256sum -c --quiet SHA256SUMS; \
+    apt-get -o Dir::Etc::sourcelist=/dev/null -o Dir::Etc::sourceparts=/dev/null -o APT::Get::Upgrade=false \
+        --no-install-recommends -y install /opt/sdk-repo/ubuntu/*.deb /opt/sdk-repo/jetson/*.deb; \
+    python3 /opt/passage-sdk-base/verify_repo.py /opt/sdk-repo /opt/passage-sdk-base/packages.lock.json "$LOCK_SHA256"; \
+    ldconfig; \
+    python3 -c "import json,subprocess; want={(e['package'],e['version']) for e in json.load(open('/opt/passage-sdk-base/packages.lock.json'))['packages']}; have={tuple(l.split('=')) for l in subprocess.check_output(['dpkg-query','-W','-f=\${Package}=\${Version}\\n'],text=True).split()}; missing=sorted(want-have); assert not missing, missing; print('all', len(want), 'locked packages installed at the exact versions')"; \
+    cd /; rm -rf /opt/sdk-repo /var/lib/apt/lists/* /var/cache/apt/*; \
+    dpkg --audit
+
+LABEL org.passage.edge.sdk-base="thor-orin; locally built; not a vendor image" \
+      org.passage.edge.sdk-base.ubuntu-image="${UBUNTU_IMAGE}" \
+      org.passage.edge.sdk-base.ubuntu-snapshot="${UBUNTU_SNAPSHOT}" \
+      org.passage.edge.sdk-base.packages-lock-sha256="${LOCK_SHA256}" \
+      org.passage.edge.sdk-base.jetson-repo="https://repo.download.nvidia.com/jetson/common r39.2 main"

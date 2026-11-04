@@ -1,0 +1,43 @@
+"""The minimal input-only boundary for native edge qualification.
+
+This package intentionally has no lease, service, telemetry, or host-inference
+implementation.  Targets receive only sealed ordinary inputs; references and
+scores remain with the host collector.
+"""
+
+from __future__ import annotations
+
+PACKAGE_SCHEMA = "passage-edge-input-package/v1"
+TARGET_RESULT_SCHEMA = "passage-edge-target-result/v1"
+NATIVE_ADAPTER_SCHEMA = "passage-edge-native-adapter/v1"
+FINAL_DECODERS_SHA256 = "2a25ad31fda6ac75f369e8546d9fa0239191fb04b1d7204a73045aa880cbafc4"
+INPUT_MEMBERS = (
+    "sample_ids",
+    "terrain",
+    "obstacles",
+    "starts",
+    "goals",
+    "input_tensor",
+)
+
+
+class EdgeRelayError(ValueError):
+    """A target input, receipt, or collected output is not safe to score."""
+
+
+class PackageError(EdgeRelayError):
+    """A sealed input-only package is malformed, changed, or discloses private data."""
+
+
+__all__ = [
+    "EDGE_TARGETS",
+    "FINAL_DECODERS_SHA256",
+    "INPUT_MEMBERS",
+    "NATIVE_ADAPTER_SCHEMA",
+    "PACKAGE_SCHEMA",
+    "TARGET_RESULT_SCHEMA",
+    "EdgeRelayError",
+    "PackageError",
+]
+
+EDGE_TARGETS = ("thor", "orin", "tiger")
