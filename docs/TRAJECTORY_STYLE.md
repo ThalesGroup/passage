@@ -45,8 +45,10 @@ une couche de présentation distincte dessine leurs dix exemples avec ce profil.
 Pour préparer les illustrations des sept résolutions, depuis `passage/` :
 
 ```bash
-PYTHONPATH=src uv run --frozen python scripts/render_publication_previews.py
+PYTHONPATH=src uv run --frozen python scripts/render_publication_previews.py --assets-dir /chemin/vers/assets-autorises
 ```
+
+Le répertoire fourni doit contenir les trois images de présentation autorisées ; le script vérifie leur présence avant de créer la sortie. Elles ne sont pas incluses dans toutes les distributions source.
 
 Les images, leurs sources et leurs empreintes sont préparées dans
 [hf-presentation](../outputs/trajectory-style-v1-20261017/hf-presentation/).

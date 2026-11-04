@@ -81,6 +81,12 @@ def joint_odd_coverage(
                 "mean_cost_regret": _finite_summary(rows, "cost_regret", "mean"),
                 "median_cost_regret": _finite_summary(rows, "cost_regret", "median"),
                 "median_latency_ms": _finite_summary(rows, "latency_ms", "median"),
+                # Censored requests enter that median as recorded lower bounds; count them when rows say so.
+                "latency_censored_count": (
+                    sum(row.get("latency_censored") is True for row in rows)
+                    if any("latency_censored" in row for row in rows)
+                    else None
+                ),
             }
         output.append({"coordinates": cell["coordinates"], "common_support": is_common, "populations": summaries})
     incomplete = any(count for counts in missing.values() for count in counts.values())

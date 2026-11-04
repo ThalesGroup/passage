@@ -9,9 +9,16 @@ from typing import Iterable, Mapping, Any
 
 import numpy as np
 
-from passage_eval.execution.artifacts import RunArtifact, json_safe, sha256_file
+from passage_eval.execution.artifacts import RunArtifact, json_safe, record_repair_used, sha256_file
 from passage_eval.execution.runner import request_identity
+from passage_eval.execution.timing import REWARM_RECORD_FIELDS, manifest_profile, manifest_warmup
 from passage_eval.metrics.cost import path_cost
+from passage_eval.metrics.latency import (
+    censored_latency_quantiles,
+    latency_censoring,
+    validation_recost_summary,
+    validation_recost_values,
+)
 from passage_eval.metrics.reliability import path_status
 from passage_eval.metrics.summary import per_sample_metrics, aggregate_primary_metrics
 from passage_eval.protocol.contracts import PlanRequest
@@ -128,12 +135,67 @@ def _qualified_reference(reference: Mapping[str, Any], scene: Scene, identity: d
 validate_qualified_reference = _qualified_reference
 
 
+class NegativeRegretHalt(ValueError):
+    """A legal route costs less than the qualified optimum beyond the graph tolerance: the reference is diagnosed.
+
+    The qualified reference ``c*`` is an exact optimum, so no legal route can cost less. Such a route is neither a
+    win nor an exclusion: scoring stops for a diagnosis of the reference (judge R6).
+    """
+
+
+ROSTER_BLOCK_PROVENANCE = "sealed_roster_geographic_block"
+#: Blocks from a ``passage-roster-v1`` table: the block rule's version is not bound, so they are not sealed.
+UNSEALED_ROSTER_BLOCK_PROVENANCE = "unsealed_roster_geographic_block"
+ROSTER_BLOCK_PROVENANCES = (ROSTER_BLOCK_PROVENANCE, UNSEALED_ROSTER_BLOCK_PROVENANCE)
+
+
+def _roster_blocks(
+    table: Mapping[str, Any], roster: list[str], manifest: Mapping[str, Any]
+) -> tuple[dict[str, str], dict[str, Any]]:
+    """Block assignments for the run's tasks from its roster's block table, and their provenance record.
+
+    The table must belong to the roster the run records. Only a ``passage-roster-v2`` table that binds the
+    installed block rule gives *sealed* blocks; a v1 table gives blocks labelled unsealed.
+    """
+    from passage_eval.io.roster import block_table_sealed, check_block_table_binds_run, validate_block_table
+
+    table = validate_block_table(table)
+    run_roster = check_block_table_binds_run(table, manifest)
+    sealed = block_table_sealed(table)
+    missing = [sample_id for sample_id in roster if sample_id not in table["blocks"]]
+    if missing:
+        raise ValueError(f"the roster block table does not list {len(missing)} run task(s), e.g. {missing[:3]}")
+    unplaced = [sample_id for sample_id in roster if table["blocks"][sample_id] is None]
+    record = {
+        "roster_sha256": table["roster_sha256"],
+        "run_roster_sha256": run_roster,
+        "roster_schema": table["roster_schema"],
+        "sealed": sealed,
+        "block_table_sha256": table["block_table_sha256"],
+        "assignment": table["assignment"],
+        "assignment_roster_sha256": table["assignment_roster_sha256"],
+        "function": table["function"],
+        "n_tasks_without_block": len(unplaced),
+    }
+    if unplaced:
+        # A partial assignment is never completed with invented singleton blocks.
+        return {}, dict(record, provenance="unknown", status="unknown_tasks_without_footprint", number_of_blocks=None)
+    blocks = {sample_id: table["blocks"][sample_id] for sample_id in roster}
+    return blocks, dict(
+        record,
+        provenance=ROSTER_BLOCK_PROVENANCE if sealed else UNSEALED_ROSTER_BLOCK_PROVENANCE,
+        status="sealed_roster_blocks" if sealed else "unsealed_roster_blocks",
+        number_of_blocks=len(set(blocks.values())),
+    )
+
+
 def score_run_artifact(
     artifact: RunArtifact,
     scenes: Iterable[Scene],
     *,
     reference_store: Mapping[str, Mapping[str, Any]] | None = None,
     require_qualified_reference: bool = True,
+    geographic_blocks: Mapping[str, Any] | None = None,
 ) -> tuple[dict[str, float], dict[str, np.ndarray]]:
     """Score every recorded repeat, preserving failures and service deadlines.
 
@@ -141,12 +203,27 @@ def score_run_artifact(
     ``manifest.reference_qualification``), never from a candidate request. The
     explicit diagnostic opt-out uses stored labels with a visible unqualified
     policy; stored cost alone does not establish optimality.
+
+    With qualified references, a legal recorded route (any status) whose cost is below ``c*`` beyond the graph
+    tolerance raises ``NegativeRegretHalt``: scoring stops for a diagnosis of the reference.
+
+    ``geographic_blocks`` is the ``roster_block_table`` of the roster the run records. When given, it is the only
+    source of ``cluster_id`` (provenance ``sealed_roster_geographic_block`` for a ``passage-roster-v2`` table
+    that binds the installed block rule, ``unsealed_roster_geographic_block`` for a v1 table) and
+    ``metrics['geographic_blocks']`` records its digest; a table with an unplaced task leaves every block
+    unknown, and a table of another roster, or a run that records no roster, is refused. Without it, blocks come
+    from the declared request metadata as before.
     """
     artifact.validate()
     materialized = list(scenes)
     scene_map = {scene.sample_id: scene for scene in materialized}
     if len(scene_map) != len(materialized) or set(scene_map) != set(artifact.manifest["roster"]):
         raise ValueError("scoring scenes must match the complete unique artifact roster")
+    block_record = None
+    if geographic_blocks is not None:
+        roster_blocks, block_record = _roster_blocks(
+            geographic_blocks, list(artifact.manifest["roster"]), artifact.manifest
+        )
     if reference_store is None:
         reference_store = artifact.manifest.get("reference_qualification")
     if require_qualified_reference and reference_store is None:
@@ -187,10 +264,23 @@ def score_run_artifact(
             for scene, path in zip(row_scenes, paths)
         ]
     )
-    for row, scene, path, cost in zip(artifact.records, row_scenes, paths, costs):
+    below_optimum = []
+    for row, scene, path, cost, reference in zip(artifact.records, row_scenes, paths, costs, row_refs):
         connected, violated, obstacle_cells = path_status(
             path, start=scene.start, goal=scene.goal, obstacles=scene.obstacles
         )
+        graph = identities[scene.sample_id]["graph"]
+        if (
+            require_qualified_reference
+            and connected
+            and not violated
+            and np.isfinite(cost)
+            and cost < reference[1]
+            and not np.isclose(cost, reference[1], rtol=graph["rtol"], atol=graph["atol"])
+        ):
+            below_optimum.append(
+                f"{scene.sample_id} (repeat {row.get('repeat_index')}): {cost!r} < c* {reference[1]!r}"
+            )
         recorded_cost = row.get("recost")
         agrees = (recorded_cost is None and not np.isfinite(cost)) or (
             recorded_cost is not None
@@ -210,6 +300,11 @@ def score_run_artifact(
             or row.get("legal_path") != (connected and not violated and np.isfinite(cost))
         ):
             raise ValueError("offline legality disagrees with timed route validation")
+    if below_optimum:
+        raise NegativeRegretHalt(
+            f"{len(below_optimum)} legal route(s) cost less than the qualified optimum beyond the graph tolerance, "
+            f"e.g. {below_optimum[:3]}; scoring stops for a diagnosis of the reference (no win, no exclusion)"
+        )
     status_ok = np.asarray([row["status"] == "ok" for row in artifact.records], dtype=bool)
     arrays = per_sample_metrics(
         predicted_paths=paths,
@@ -247,6 +342,8 @@ def score_run_artifact(
         (("tile_id",), "declared_tile_id"),
         (("geographic", "tile_id"), "declared_geographic_tile_id"),
     ]
+    if block_record is not None:
+        choices = []  # a sealed roster block table replaces every declaration
     block_map, block_source = {}, "unknown"
     for keys, provenance in choices:
         declared = {}
@@ -261,8 +358,15 @@ def score_run_artifact(
                 block_map = {key: str(value) for key, value in declared.items()}
                 block_source = provenance
             break
+    if block_record is not None and roster_blocks:
+        block_map, block_source = roster_blocks, block_record["provenance"]
     cluster_ids = [block_map.get(scene.sample_id, "") for scene in row_scenes]
     cluster_sources = [block_source] * len(row_scenes)
+    profile = manifest_profile(artifact.manifest)
+    statuses = [row["status"] for row in artifact.records]
+    censored = latency_censoring(
+        statuses, [row.get("latency_charged_not_measured", False) is True for row in artifact.records]
+    )
     arrays.update(
         sample_id=np.asarray([row["sample_id"] for row in artifact.records]),
         repeat_index=np.asarray([row["repeat_index"] for row in artifact.records], dtype=np.int64),
@@ -278,7 +382,11 @@ def score_run_artifact(
         reference_qualified=np.full(n, require_qualified_reference, dtype=bool),
         reference_policy=np.full(n, policy),
         fallback=np.asarray([row["fallback"] for row in artifact.records], dtype=bool),
-        latency_ms=np.asarray([row["total_wall_ms"] for row in artifact.records]),
+        repair_used=np.asarray([record_repair_used(row) for row in artifact.records], dtype=bool),
+        latency_ms=np.asarray([row[profile.latency_field] for row in artifact.records]),
+        latency_censored=censored,
+        # Supervisor validation and recost per record (nan where not recorded), reported apart from the latency.
+        validation_recost_ms=validation_recost_values(artifact.records),
         cluster_id=np.asarray(cluster_ids),
         cluster_provenance=np.asarray(cluster_sources),
         obs_density=np.asarray([float(np.mean(scene.obstacles)) for scene in row_scenes]),
@@ -296,12 +404,31 @@ def score_run_artifact(
         connected_path_rate=float(np.mean(arrays["connected_path"])),
         legal_route_rate=float(np.mean(arrays["valid_path"])),
         fallback_rate=float(np.mean(arrays["fallback"])),
+        repair_rate=float(np.mean(arrays["repair_used"])),
+        direct_success_rate=float(np.mean(arrays["valid_path"] & ~arrays["repair_used"] & ~arrays["fallback"])),
     )
     metrics["all_repeats"] = all_repeats
+    # Legacy summary: linear interpolation over every recorded value, censored or not.
     metrics["latency_all_repeats_ms"] = {
         name: float(np.quantile(arrays["latency_ms"], quantile))
         for name, quantile in (("p50", 0.5), ("p95", 0.95), ("p99", 0.99))
     }
+    # Proposed (not sealed) censoring-aware order statistics over the same requests.
+    metrics["latency_all_repeats_censored"] = censored_latency_quantiles(
+        arrays["latency_ms"],
+        status=arrays["status"],
+        sample_id=arrays["sample_id"],
+        censored=censored,
+        series=artifact.manifest["series"],
+        warmup_complete=(
+            [row[REWARM_RECORD_FIELDS[1]] for row in artifact.records] if profile.rewarm_after_restart else None
+        ),
+        warmup=manifest_warmup(artifact.manifest),  # the declared and performed warm-up, not the series name
+    )
+    metrics["latency_all_repeats_censored"].update(latency_field=profile.latency_field, timing_profile=profile.name)
+    metrics["validation_recost_all_repeats_ms"] = validation_recost_summary(
+        arrays["validation_recost_ms"], inside_latency=profile.validation_in_boundary
+    )
     metrics.update(
         requested_count=n,
         attempted_count=n,
@@ -309,11 +436,15 @@ def score_run_artifact(
         connected_path_rate=float(np.mean(primary["connected_path"])),
         legal_route_rate=float(np.mean(primary["valid_path"])),
         fallback_rate=float(np.mean(primary["fallback"])),
+        repair_rate=float(np.mean(primary["repair_used"])),
+        direct_success_rate=float(np.mean(primary["valid_path"] & ~primary["repair_used"] & ~primary["fallback"])),
         terminal_ok_rate=float(np.mean(status_ok)),
         reference_qualified=bool(require_qualified_reference),
         quality_repeat_index=artifact.manifest["quality_repeat_index"],
         scored_repeat_count=artifact.manifest["repeats"],
     )
+    if block_record is not None:
+        metrics["geographic_blocks"] = block_record
     return metrics, arrays
 
 

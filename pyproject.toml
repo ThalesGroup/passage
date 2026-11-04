@@ -123,18 +123,23 @@ packages = [
     "passage",
     "passage_eval",
     "passage_eval.baselines",
+    "passage_eval.campaign",
+    "passage_eval.campaign.direct",
+    "passage_eval.campaign.edge",
+    "passage_eval.campaign.edge.data",
     "passage_eval.deployment",
     "passage_eval.diagnostics",
     "passage_eval.execution",
     "passage_eval.io",
     "passage_eval.metrics",
     "passage_eval.protocol",
+    "passage_eval.supervision",
     "passage_eval.trustworthiness",
 ]
 
 [tool.setuptools.package-data]
 "passage" = ["py.typed"]
-"passage_eval" = ["py.typed"]
+"passage_eval" = ["py.typed", "campaign/edge/data/*.json"]
 
 # ---------------------------------------------------------------------------
 # Tooling
@@ -168,6 +173,11 @@ markers = [
 line-length = 120
 indent-width = 4
 show-fixes = true
+
+[tool.ruff.format]
+# The frozen reference decoders are pinned by SHA-256 in
+# docs/benchmark/final-candidates.json; formatting would change their bytes.
+exclude = ["src/passage-eval/baselines/final_decoders.py"]
 
 [tool.uv]
 # Pin floors for transitive packages with active CVEs so we never resolve

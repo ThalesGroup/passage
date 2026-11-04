@@ -8,6 +8,7 @@ icon: material/format-list-numbered
 | Author | Date | Version |
 |---|---|---|
 | Geoffrey Delhomme | 2026-10-24 | 1.1 |
+| Geoffrey Delhomme | 2026-11-03 | 1.2 — warm-up units, supervised timing profiles, proposed latency censoring rule, sealed roster blocks |
 
 The evaluator implements the paper's terrain task and decoded-path metrics.
 This page defines the executable contract, reference costs, path metrics,
@@ -124,6 +125,22 @@ remain descriptive and no confirmatory win is returned. An unavailable test
 stays in the six-test family. More method pairs require a prespecified larger
 correction family.
 
+The prospective `passage_eval.protocol.block_randomization` helper implements
+one possible paired test: swap method labels independently by whole geographic
+block, with the same swap across all seeds, and recompute each seed-mean
+aggregate contrast. Exact enumeration is available for small block counts;
+otherwise random swaps include the observed identity in the p-value numerator
+and denominator. The helper leaves geometry unavailable if any block swap could
+remove an entire method's valid subset. Its output explicitly marks assumptions
+as unverified. For each metric, validity requires the paired outcome vectors to
+be exchangeable under every allowed block swap; geometry also requires the
+validity indicators to be exchangeable. Matched observations alone do not prove
+this stronger null. Freeze the test, blocks and random seed before the test
+split, and review their suitability for the actual geography. See the primary
+papers by [Phipson and Smyth](https://gksmyth.github.io/pubs/PermPValuesPreprint.pdf)
+and [Hemerik and Goeman](https://link.springer.com/article/10.1007/s11749-017-0571-1)
+for the identity-adjusted randomization-test principle.
+
 The decision distinguishes demonstrated wins on every primary metric,
 demonstrated trade-offs in both directions, partial evidence in one direction,
 and no demonstrated difference. No demonstrated difference does not establish
@@ -132,7 +149,24 @@ or footprint. [Paired statistics](walkthrough.md) shows the complete API flow.
 The `passage-eval compare` command reports matched-task geographic-block
 intervals for each selected statistic and condition; it does not perform this
 three-checkpoint confirmatory campaign. Missing block identities leave
-uncertainty unknown. Released paper results are reported separately and are
+uncertainty unknown. A pinned task roster (`passage-roster-v2`) seals each
+task's block, the version of the block rule and whether every task must have a
+footprint; `passage-eval compare --roster FILE --roster-sha256 HEX` takes the
+blocks from that roster, which must be the roster every compared run records,
+and a roster derived from another keeps the parent's blocks. Blocks of a
+`passage-roster-v1` roster are used but labelled unsealed. A v2 roster names its
+block rule (transitive union of the 5-degree cells of the used tiles, or the
+5-degree cell of the main tile) and may seal one `unplaced` block for the tasks
+without footprint instead of inventing singleton blocks. The label-free census
+`passage_eval.protocol.block_census` measures the number of blocks and the
+largest block's share for both rules before any result; its adequacy criterion
+(at least 30 blocks, no block above 10 % of the tasks) is a proposal, not a
+sealed value. The optional `python -I -m passage_eval.campaign statistics` command
+links previously pinned campaign aggregates to `compare_primary_metrics` and the
+block randomization test; it is outside the current single-seed qualification. One
+training seed gives descriptive per-seed intervals without p-values or Holm; the
+three declared seeds would give the confirmatory family only when the blocks meet
+the sealed criterion. Released paper results are reported separately and are
 unchanged by these API examples.
 
 ## 5. Trustworthiness and deployment
@@ -144,14 +178,36 @@ America hold-out; each evaluated cohort needs its own identified split policy an
 support analysis. Validation results alone do not establish those axes.
 
 Time the full input-to-path pipeline at batch size one on the executing hardware.
-The CLI runner defaults to five warmup passes and one warm measured pass
-over the selected tasks, with a separate cold pass after candidate construction.
+The unit of `latency_warmup` (default 5) depends on the runner. The in-process
+CLI runner performs that many recorded warm-up *passes* over the selected tasks,
+then one warm measured pass, with a separate cold pass after candidate
+construction. The supervised chain instead performs that many untimed warm-up
+*requests* per warm pass, on inputs disjoint from the roster, in fresh workers
+(section 5.A of the developer guide `docs/benchmark/supervised-execution.md`).
+A supervised series measured without a warm-up is called `unwarmed`. A campaign
+session measures warm requests only, with no cold pass, and reports the cold
+start per session (section 6.M of the same guide).
 Declare `latency_repeats` and freeze the primary `quality_repeat_index` before
 execution. Every timed repeat retains its route, status, complete latency and
 offline quality. These settings differ from the paper's
-resolution-dependent repetition campaign. Device completion precedes the CPU
-route snapshot, legality check and recosting inside the request timer; imports,
-model loading, persistence, reference solving and offline geometry remain outside.
+resolution-dependent repetition campaign. In the in-process runner, device
+completion precedes the CPU route snapshot, legality check and recosting inside
+the request timer; imports, model loading, persistence, reference solving and
+offline geometry remain outside. The manuscript's timing rule keeps validation
+and physical recosting separate from the request latency. Among the supervised
+timing profiles, `supervised_service_v1` and `supervised_service_rewarm_v1`
+follow that rule: they compare and score the service time and record the
+recost separately. The default supervised profile, like the in-process runner,
+keeps the recost inside the timed value. Scores, `compare` and the `bench`
+sidecar report the recorded validation and recost time in its own block
+(`validation_recost_ms`), which states whether the profile counts it inside the
+scored latency; the in-process runner does not record it separately.
+`passage-eval compare` refuses runs whose timing profiles differ. Runs of the
+default profile can still carry different boundaries (in-process, supervised v2
+or v3); by default `compare` accepts that mix and lists the differing
+`timing_boundary` under `procedure_limits`, and only
+`compare --require-identical-limits` refuses it. Do not read a latency contrast
+between different boundaries as a like-for-like measurement.
 On an accelerator, the timer must stop only after the device work has
 finished. The CLI synchronizes CUDA work when the planner uses PyTorch; a
 planner on another runtime must finish its device work before `plan` returns.
@@ -159,6 +215,28 @@ An accelerator label does not select a device or measure latency. A Python
 planner cannot be stopped in the middle of a call: the runner waits for it to
 return and records a late result as a timeout (see
 [Evaluate your planner](contributing-a-method.md)).
+
+**Latency percentiles and censored requests (proposed, not sealed).** Scores
+keep the legacy p50, p95 and p99, linearly interpolated over every recorded
+request time. They also report a censoring-aware block under a proposed rule
+that the author has not sealed (`passage-censored-latency/v1`). Every request of
+the series counts. A timeout, or a time charged to a task that never reached a
+worker, is right-censored and ordered as `+inf`. Each percentile is an order
+statistic (`inverted_cdf`, no interpolation). When its rank falls on a censored
+request, the percentile is reported as censored with a lower bound, not as a
+value. The block also gives the numbers of requests, distinct scenes, repeats
+per scene, successes, timeouts, censored requests and failures that are not
+timeouts; successes, timeouts and other failures add up to the number of
+requests. Success-only percentiles appear as secondary values only. The legacy
+interpolated summaries and the paired latency contrasts of `compare` count the
+censored requests they treat as finite values. A flag states whether the series
+holds at least 100 warm requests, the manuscript's minimum; the flag does not
+admit or refuse a result. A request counts as warm only after the warm-up that
+the run declares and records, never because its series is named `warm`. The
+flag is therefore false when `measure_latency` is false or `latency_warmup` is
+zero, and under the re-warm profile it counts only requests whose warm-up was
+complete. A repeated request is a timing observation, not an additional
+independent scene. Quality is unchanged: a timeout remains a penalized failure.
 
 Parameter count, MACs, peak memory, forward/decoder decomposition, and the
 trustworthiness campaign require additional method-specific measurements. The

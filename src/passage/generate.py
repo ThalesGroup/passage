@@ -129,7 +129,7 @@ GRID_SOLVERS = {"grid_astar", "grid_dijkstra"}
 SPLIT_ORDER = ["train", "calibration", "validation", "test"]
 
 # Default path for hold-out mask (relative to config directory)
-DEFAULT_HOLD_OUT_MASK_PATH = "config/hold_out_mask.png"
+DEFAULT_HOLD_OUT_MASK_PATH = "assets/hold_out_mask.png"
 
 # Conservative auto-caps for large crops when worker count is left to auto-detection.
 # Large resolutions create multiple full-resolution arrays per worker, so using every
@@ -139,7 +139,7 @@ AUTO_CPU_CAPS_BY_RESOLUTION: tuple[tuple[int, int], ...] = (
     (2048, 16),
 )
 
-# Global cache for hold-out mask (loaded once at startup)
+# Hold-out mask shared with generation workers
 _HOLD_OUT_MASK: np.ndarray | None = None
 _HOLD_OUT_MASK_PATH: str | None = None
 
@@ -216,74 +216,44 @@ def _save_png(image_path: Path, image_bgr: np.ndarray) -> None:
     Image.fromarray(rgb_image).save(image_path, format="PNG", compress_level=0)
 
 
-def load_hold_out_mask(mask_path: str | Path | None = None) -> np.ndarray | None:
-    """Load the hold-out mask from a PNG file.
+def load_hold_out_mask(mask_path: str | Path | None = None) -> np.ndarray:
+    """Load a 181x361 PNG mask or fail without disabling geographic filtering.
 
-    The mask is a 181x361 pixel image (1 degree per pixel) where:
-    - Row 0 = latitude +90, Row 180 = latitude -90
-    - Col 0 = longitude -180, Col 360 = longitude +180
-    - Non-zero RGB values indicate hold-out (test-only) regions
-
-    Args:
-        mask_path: Path to the mask PNG file. If None, uses DEFAULT_HOLD_OUT_MASK_PATH.
-
-    Returns:
-        2D numpy array (181, 361) with 0/1 values, or None if mask doesn't exist.
+    The first pixel row corresponds to latitude +90 and the first column to
+    longitude -180. Grayscale and equal-channel RGB/RGBA images are accepted;
+    nonzero pixels mark hold-out regions.
     """
     global _HOLD_OUT_MASK, _HOLD_OUT_MASK_PATH
-
-    if mask_path is None:
-        mask_path = DEFAULT_HOLD_OUT_MASK_PATH
-
-    mask_path = Path(mask_path)
-
-    # Return cached mask if same path
-    if _HOLD_OUT_MASK is not None and _HOLD_OUT_MASK_PATH == str(mask_path):
-        return _HOLD_OUT_MASK
-
-    if not mask_path.exists():
-        logger.debug(f"Hold-out mask not found at {mask_path}, hold-out filtering disabled")
-        _HOLD_OUT_MASK = None
-        _HOLD_OUT_MASK_PATH = None
-        return None
-
+    path = Path(mask_path if mask_path is not None else DEFAULT_HOLD_OUT_MASK_PATH)
+    # A previously loaded path is not evidence that its bytes still exist or match.
+    _HOLD_OUT_MASK = None
+    _HOLD_OUT_MASK_PATH = None
     try:
-        img = Image.open(mask_path)
-        arr = np.array(img)
+        with Image.open(path) as image:
+            if image.format != "PNG" or image.mode not in {"1", "L", "RGB", "RGBA"}:
+                raise ValueError("expected a grayscale or RGB PNG")
+            pixels = np.asarray(image.convert("L") if image.mode == "1" else image)
+        if pixels.shape[:2] != (181, 361):
+            raise ValueError("expected 181x361 pixels")
+        if pixels.ndim == 3:
+            if not (np.array_equal(pixels[:, :, 0], pixels[:, :, 1]) and
+                    np.array_equal(pixels[:, :, 0], pixels[:, :, 2])):
+                raise ValueError("RGB channels must agree")
+            pixels = pixels[:, :, 0]
+        binary_mask = (pixels > 0).astype(np.uint8)
+    except (OSError, ValueError) as exc:
+        raise ValueError(f"hold-out mask is missing or invalid: {path}: {exc}") from exc
+    _HOLD_OUT_MASK = binary_mask
+    _HOLD_OUT_MASK_PATH = str(path)
+    logger.info(f"Loaded hold-out mask from {path}: {np.sum(binary_mask)} hold-out tiles")
+    return binary_mask
 
-        # Handle different image formats (RGBA, RGB, grayscale)
-        if arr.ndim == 3:
-            # Use R channel (all RGB channels should be identical)
-            mask_2d = arr[:, :, 0]
-        else:
-            mask_2d = arr
 
-        # Convert to binary mask (0 or 1)
-        binary_mask = (mask_2d > 0).astype(np.uint8)
-
-        # Validate expected dimensions
-        expected_shape = (181, 361)  # lat: -90 to +90, lon: -180 to +180
-        if binary_mask.shape != expected_shape:
-            logger.warning(
-                f"Hold-out mask has unexpected shape {binary_mask.shape}, expected {expected_shape}. "
-                f"Mask will be resized."
-            )
-            # Resize if needed (shouldn't happen with correct mask)
-            binary_mask = np.array(Image.fromarray(binary_mask).resize((361, 181), Image.NEAREST))
-
-        _HOLD_OUT_MASK = binary_mask
-        _HOLD_OUT_MASK_PATH = str(mask_path)
-
-        hold_out_count = np.sum(binary_mask > 0)
-        logger.info(f"Loaded hold-out mask from {mask_path}: {hold_out_count} tiles in hold-out region")
-
-        return _HOLD_OUT_MASK
-
-    except Exception as e:
-        logger.warning(f"Failed to load hold-out mask from {mask_path}: {e}")
-        _HOLD_OUT_MASK = None
-        _HOLD_OUT_MASK_PATH = None
-        return None
+def _initialize_hold_out_worker(mask: np.ndarray | None) -> None:
+    """Install the parent's already checked mask in a new generation worker."""
+    global _HOLD_OUT_MASK, _HOLD_OUT_MASK_PATH
+    _HOLD_OUT_MASK = mask
+    _HOLD_OUT_MASK_PATH = None
 
 
 def is_tile_in_hold_out(lat: int, lon: int, mask: np.ndarray | None = None) -> bool:
@@ -2203,9 +2173,10 @@ def run_generate(
     # Load hold-out mask for geographic split filtering
     # The mask path can be specified in config or use default
     hold_out_cfg = config.get("hold_out", {}) if isinstance(config, dict) else {}
-    hold_out_enabled = hold_out_cfg.get("enabled", True)  # Enabled by default if mask exists
+    hold_out_enabled = hold_out_cfg.get("enabled", True)  # Enabled by default
     hold_out_mask_path = hold_out_cfg.get("mask_path", DEFAULT_HOLD_OUT_MASK_PATH)
 
+    hold_out_mask = None
     if hold_out_enabled:
         hold_out_mask = load_hold_out_mask(hold_out_mask_path)
 
@@ -2411,7 +2382,7 @@ def run_generate(
                     )
         else:
             logger.info(f"Running with {pool_size} CPUs")
-            with multiprocessing.Pool(pool_size) as pool:
+            with multiprocessing.Pool(pool_size, initializer=_initialize_hold_out_worker, initargs=(hold_out_mask,)) as pool:
                 for idx, success, msg, duration in tqdm(
                     pool.imap_unordered(_generate_sample_wrapper, args_list),
                     total=samples_to_generate,

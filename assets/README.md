@@ -1,9 +1,5 @@
 <!-- PASSAGE Hugging Face Dataset Card -->
 
-<p align="center">
-  <img src="assets/banner.png" alt="PASSAGE — Path Solving Dataset & Generator" width="100%"/>
-</p>
-
 <h1 align="center">🌍 PASSAGE — Real-Terrain Benchmark & Generator</h1>
 
 <p align="center">
@@ -71,9 +67,7 @@ We open-source this toolkit to make terrain-routing methods easier to compare, r
 
 ### Representative Sample
 
-<p align="center">
-  <img src="assets/sample.png" alt="Representative PASSAGE sample" width="720"/>
-</p>
+Illustration available only when the corresponding authorised presentation asset is supplied.
 
 <p align="center"><em>Six stored routes under three travel costs. Green continuous lines show free-terrain routes; blue short dashes show obstacle-aware routes. Calibrated terrain uses the paper's sage–sand palette, with charcoal hatched obstacles and white start/goal markers.</em></p>
 
@@ -81,17 +75,13 @@ We open-source this toolkit to make terrain-routing methods easier to compare, r
 
 The dataset leverages the worldwide elevation data publicly provided by JAXA. Each cell below represents a 5×5 grid of 1°×1° tiles (3600×3600 pixels at 30 m resolution). Black cells indicate regions with no available tile — these are treated as flat tiles at sea level during dataset generation.
 
-<p align="center">
-  <img src="assets/download.png" alt="Download Coverage Map" width="720"/>
-</p>
+Illustration available only when the corresponding authorised presentation asset is supplied.
 
 ### Maximum Elevation Map
 
-<p align="center">
-  <img src="calibration/max_elevation_map.png" alt="Maximum Elevation Map" width="720"/>
-</p>
+The calibration command can generate this map when the source tiles are available.
 
-This visualization shows the **normalized maximum elevation** within each downloaded tile. Brighter regions indicate tiles containing higher terrain (mountain peaks, elevated plateaus); darker regions correspond to low-lying areas (coastal zones, river basins).
+The generated map shows the **normalized maximum elevation** within each downloaded tile. Brighter regions indicate tiles containing higher terrain (mountain peaks, elevated plateaus); darker regions correspond to low-lying areas (coastal zones, river basins).
 
 > **📈 Elevation Range**
 >
@@ -104,19 +94,15 @@ This visualization shows the **normalized maximum elevation** within each downlo
 
 ### Peak-to-Peak Elevation Map
 
-<p align="center">
-  <img src="calibration/ptp_elevation_map.png" alt="Peak-to-Peak Elevation Map" width="720"/>
-</p>
+The calibration command can generate this map when the source tiles are available.
 
-The **peak-to-peak (PTP) elevation map** displays the elevation range (max − min) within each tile. High PTP values (bright regions) indicate significant topographic variation — suitable for challenging pathfinding scenarios. Low PTP values suggest relatively flat terrain.
+A generated **peak-to-peak (PTP) elevation map** displays the elevation range (max − min) within each tile. High PTP values (bright regions) indicate significant topographic variation — suitable for challenging pathfinding scenarios. Low PTP values suggest relatively flat terrain.
 
 ### Hold-Out Region
 
 To assess generalization of trained models, a region containing **South America** is held out. This region was chosen because it concentrates a wide range of elevations representative of all other places in the world map.
 
-<p align="center">
-  <img src="assets/hold_out_mask.png" alt="Hold-Out Mask" width="720"/>
-</p>
+Illustration available only when the corresponding authorised presentation asset is supplied.
 
 ---
 

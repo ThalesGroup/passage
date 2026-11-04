@@ -54,14 +54,25 @@ def test_invalid_bootstrap_arrays_fail(a, b, blocks):
         paired_cluster_bootstrap(a, b, blocks)
 
 
-def _scored_fixture(tmp_path, scene, *, status="ok", metadata=None, data_identity=None, repeats=1, series="warm"):
+def _scored_fixture(
+    tmp_path,
+    scene,
+    *,
+    status="ok",
+    metadata=None,
+    data_identity=None,
+    repeats=1,
+    series="warm",
+    budget=None,
+    procedure=None,
+):
     from passage_eval.execution import run_requests, score_run_artifact, write_scored_artifact
-    from passage_eval.protocol.contracts import PlanRequest, PlanResult
+    from passage_eval.protocol.contracts import BudgetSpec, PlanRequest, PlanResult
     from dataclasses import replace
 
     scenes = scene if isinstance(scene, list) else [scene]
     scenes = [replace(item, metadata=metadata or item.metadata) for item in scenes]
-    requests = [PlanRequest.from_scene(item) for item in scenes]
+    requests = [PlanRequest.from_scene(item, budget=budget or BudgetSpec()) for item in scenes]
     scene_map = {item.sample_id: item for item in scenes}
     from passage.audit import qualified_reference_for_scene
     import hashlib
@@ -83,6 +94,8 @@ def _scored_fixture(tmp_path, scene, *, status="ok", metadata=None, data_identit
         "reference_identity": hashlib.sha256(json.dumps(references, sort_keys=True).encode()).hexdigest(),
         "seed": 1234,
     }
+    if procedure is not None:
+        manifest["procedure"] = procedure
     run = run_requests(Direct(), requests, output_dir=tmp_path, manifest=manifest, repeats=repeats, series=series)
     metrics, arrays = score_run_artifact(run, scenes, reference_store=references)
     write_scored_artifact(run, metrics, arrays)
@@ -471,3 +484,270 @@ def test_declared_support_cluster_keeps_source_footprints_in_one_component():
     assert estimate["n_blocks"] == 1
     assert estimate["status"] == "insufficient_blocks"
     assert estimate["interval"] is None
+
+
+# ---------------------------------------------------------------------------
+# timing profiles, procedure limits and censored latency in comparisons
+# ---------------------------------------------------------------------------
+
+SERVICE_PROFILE = dict(
+    schema="passage-complete-request-supervised-service-v2",
+    timing_boundary="passage-timing-boundary/v4-supervised-ipc-service",
+    timing_profile="supervised_service_v1",
+    procedure={"supervision": {"timing_profile": "supervised_service_v1"}},
+)
+RLIMITS = {"core": 0, "nofile": 1024, "fsize_bytes": 1 << 30, "address_space_bytes": None, "cpu_seconds": None}
+FRAME_LIMITS = {
+    "max_header_bytes": 1 << 20,
+    "max_payload_bytes": 256 << 20,
+    "max_buffers": 16,
+    "max_ndim": 4,
+    "max_dim": 1 << 28,
+    "max_elements": 1 << 28,
+}
+
+
+def _supervision_limits(grace=10.0, restarts=100, rlimits=None, frames=None, profile=None):
+    supervision = {
+        "deadline_grace_ms": grace,
+        "hard_timeout_ms": 600000.0,
+        "limits": {
+            "startup_timeout_s": 600.0,
+            "max_restarts": restarts,
+            "worker_rlimits": dict(RLIMITS, **(rlimits or {})),
+            "ipc_frame_limits": dict(FRAME_LIMITS, **(frames or {})),
+        },
+    }
+    if profile is not None:
+        supervision["timing_profile"] = profile
+    return {"supervision": supervision}
+
+
+SERVICE_PROFILE_WITH_LIMITS = dict(SERVICE_PROFILE, procedure=_supervision_limits(profile="supervised_service_v1"))
+
+
+def _rescored_as(original, destination, scene, manifest_changes):
+    """Rewrite a scored fixture as another timing profile and score it again (synthetic validation)."""
+    import json
+    from passage_eval.execution import read_run_artifact, score_run_artifact, write_scored_artifact
+    from passage_eval.execution.artifacts import write_run_artifact
+
+    artifact = read_run_artifact(original)
+    artifact.manifest.update(manifest_changes)
+    for row in artifact.records:
+        row["service_wall_ms"] = row["total_wall_ms"] / 2
+        row["validation_recost_ms"] = row["total_wall_ms"] - row["service_wall_ms"]
+        row["timing_boundary"] = artifact.manifest["timing_boundary"]
+    write_run_artifact(artifact, destination)
+    refs = json.loads((original / "score_reference_inputs.json").read_text())["reference_qualification"]
+    metrics, arrays = score_run_artifact(artifact, [scene], reference_store=refs)
+    assert arrays["latency_ms"][0] == artifact.records[0]["service_wall_ms"]
+    assert metrics["latency_all_repeats_ms"]["p50"] == artifact.records[0]["service_wall_ms"]
+    write_scored_artifact(artifact, metrics, arrays)
+    return destination
+
+
+def test_comparison_rejects_a_legacy_and_v4_profile_pair(metre_scene, tmp_path):
+    from passage_eval.metrics.comparison import compare_artifacts
+
+    a = _scored_fixture(tmp_path / "a", metre_scene)
+    b = _rescored_as(_scored_fixture(tmp_path / "old_b", metre_scene), tmp_path / "v4", metre_scene, SERVICE_PROFILE)
+    with pytest.raises(ValueError, match="identical timing profiles"):
+        compare_artifacts([a, b], bootstrap_resamples=10)
+
+
+def test_comparison_accepts_two_consistent_service_v4_artifacts(metre_scene, tmp_path):
+    from passage_eval.metrics.comparison import compare_artifacts
+
+    selected = [
+        _rescored_as(
+            _scored_fixture(tmp_path / f"old_{n}", metre_scene), tmp_path / n, metre_scene, SERVICE_PROFILE_WITH_LIMITS
+        )
+        for n in ("a", "b")
+    ]
+    comparison = compare_artifacts(selected, bootstrap_resamples=10, require_identical_limits=True)
+    assert len(comparison["methods"]) == 2 and len(comparison["comparisons"]) == 1
+    assert comparison["timing_profile"] == "supervised_service_v1"
+    assert comparison["procedure_limits"]["identical"] is True
+    assert comparison["procedure_limits"]["unrecorded"] == []
+    for method in comparison["methods"]:
+        assert method["all_repeat_latency_censored"]["latency_field"] == "service_wall_ms"
+        # validation and recost are outside the service boundary and reported beside the latency
+        recost = method["all_repeat_validation_recost_ms"]
+        assert recost["status"] == "recorded" and recost["inside_scored_latency"] is False
+
+
+def test_strict_comparison_refuses_limits_that_neither_run_recorded(metre_scene, tmp_path):
+    from passage_eval.metrics.comparison import compare_artifacts
+
+    selected = [
+        _rescored_as(_scored_fixture(tmp_path / f"old_{n}", metre_scene), tmp_path / n, metre_scene, SERVICE_PROFILE)
+        for n in ("a", "b")
+    ]
+    relaxed = compare_artifacts(selected, bootstrap_resamples=10)
+    limits = relaxed["procedure_limits"]
+    # absent on both sides is not "identical": it is reported as unrecorded
+    assert limits["identical"] is False and limits["differences"] == []
+    assert limits["unrecorded"] == [
+        "deadline_grace_ms",
+        "hard_timeout_ms",
+        "startup_timeout_s",
+        "max_restarts",
+        "worker_rlimits",
+        "ipc_frame_limits",
+    ]
+    with pytest.raises(ValueError, match="strict comparison.*not recorded: deadline_grace_ms"):
+        compare_artifacts(selected, bootstrap_resamples=10, require_identical_limits=True)
+
+
+def _rewrite_manifest(directory, change):
+    import hashlib
+    import json
+
+    manifest_path = directory / "run_manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    change(manifest)
+    manifest_path.write_text(json.dumps(manifest))
+    receipt_path = directory / "score_receipt.json"
+    receipt = json.loads(receipt_path.read_text())
+    receipt["run_manifest_sha256"] = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
+    receipt_path.write_text(json.dumps(receipt))
+
+
+def test_legacy_boundaries_may_differ_by_default_but_not_in_strict_mode(metre_scene, tmp_path):
+    from passage_eval.metrics.comparison import compare_artifacts
+
+    a = _scored_fixture(tmp_path / "a", metre_scene)
+    b = _scored_fixture(tmp_path / "b", metre_scene)
+    _rewrite_manifest(b, lambda m: m.update(timing_boundary="passage-timing-boundary/v2-supervised-ipc"))
+    default = compare_artifacts([a, b], bootstrap_resamples=10)  # today's behaviour is unchanged
+    assert default["procedure_limits"] == dict(default["procedure_limits"], identical=False, strict=False)
+    assert default["procedure_limits"]["differences"] == ["timing_boundary"]
+    with pytest.raises(ValueError, match="strict comparison.*differ: timing_boundary"):
+        compare_artifacts([a, b], bootstrap_resamples=10, require_identical_limits=True)
+
+
+def test_strict_comparison_requires_identical_budgets_and_supervision_limits(metre_scene, tmp_path):
+    from passage_eval.metrics.comparison import compare_artifacts
+    from passage_eval.protocol.contracts import BudgetSpec
+
+    def limits(grace, restarts, **changes):
+        return _supervision_limits(grace, restarts, **changes)
+
+    base = _scored_fixture(
+        tmp_path / "base", metre_scene, budget=BudgetSpec(wall_time_ms=120000.0), procedure=limits(10.0, 100)
+    )
+    same = _scored_fixture(
+        tmp_path / "same", metre_scene, budget=BudgetSpec(wall_time_ms=120000.0), procedure=limits(10.0, 100)
+    )
+    budget = _scored_fixture(
+        tmp_path / "budget", metre_scene, budget=BudgetSpec(wall_time_ms=180000.0), procedure=limits(10.0, 100)
+    )
+    restarts = _scored_fixture(
+        tmp_path / "restarts", metre_scene, budget=BudgetSpec(wall_time_ms=120000.0), procedure=limits(20.0, 3)
+    )
+    assert compare_artifacts([base, same], bootstrap_resamples=10, require_identical_limits=True)["procedure_limits"][
+        "identical"
+    ]
+    rlimits = _scored_fixture(
+        tmp_path / "rlimits",
+        metre_scene,
+        budget=BudgetSpec(wall_time_ms=120000.0),
+        procedure=limits(10.0, 100, rlimits={"cpu_seconds": 60}),
+    )
+    frames = _scored_fixture(
+        tmp_path / "frames",
+        metre_scene,
+        budget=BudgetSpec(wall_time_ms=120000.0),
+        procedure=limits(10.0, 100, frames={"max_payload_bytes": 1 << 20}),
+    )
+    for other, expected in (
+        (budget, ["budget"]),
+        (restarts, ["deadline_grace_ms", "max_restarts"]),
+        (rlimits, ["worker_rlimits"]),
+        (frames, ["ipc_frame_limits"]),
+    ):
+        relaxed = compare_artifacts([base, other], bootstrap_resamples=10)  # default: budgets may differ
+        assert relaxed["procedure_limits"]["differences"] == expected and relaxed["procedure_limits"]["strict"] is False
+        with pytest.raises(ValueError, match="strict comparison"):
+            compare_artifacts([base, other], bootstrap_resamples=10, require_identical_limits=True)
+    with pytest.raises(ValueError, match="boolean"):
+        compare_artifacts([base, same], bootstrap_resamples=10, require_identical_limits="yes")
+
+
+def test_comparison_reports_censored_latency_and_checks_the_stored_flags(metre_scene, tmp_path):
+    import hashlib
+    import json
+
+    from passage_eval.metrics.comparison import compare_artifacts
+
+    a = _scored_fixture(tmp_path / "a", metre_scene, status=["ok", "timeout", "ok"], repeats=3)
+    b = _scored_fixture(tmp_path / "b", metre_scene, repeats=3)
+    result = compare_artifacts([a, b], bootstrap_resamples=10)
+    block = result["methods"][0]["all_repeat_latency_censored"]
+    assert block["status"] == "proposed_not_sealed" and block["method"] == "inverted_cdf"
+    assert (block["n_requests"], block["n_distinct_scenes"], block["n_repeats"], block["n_censored"]) == (3, 1, 3, 1)
+    assert block["quantiles"]["p99"]["censored"] is True and block["quantiles"]["p99"]["value_ms"] is None
+    assert block["meets_min_warm_requests"] is False
+    assert block["meets_min_warm_requests_reason"] == "no_declared_warmup"  # read from the manifest, not the name
+    assert result["methods"][1]["all_repeat_latency_censored"]["n_censored"] == 0
+    # a score whose censoring flags disagree with the timed records is refused
+    with np.load(a / "per_sample.npz", allow_pickle=False) as archive:
+        arrays = {key: archive[key] for key in archive.files}
+    arrays["latency_censored"] = np.zeros_like(arrays["latency_censored"])
+    np.savez(a / "per_sample.npz", **arrays)
+    receipt = json.loads((a / "score_receipt.json").read_text())
+    receipt["per_sample_sha256"] = hashlib.sha256((a / "per_sample.npz").read_bytes()).hexdigest()
+    (a / "score_receipt.json").write_text(json.dumps(receipt))
+    with pytest.raises(ValueError, match="censoring flags"):
+        compare_artifacts([a, b], bootstrap_resamples=10)
+
+
+def test_legacy_latency_summaries_and_contrasts_count_the_censored_requests(metre_scene, tmp_path):
+    from passage_eval.metrics.comparison import compare_artifacts, report_artifact
+
+    a = _scored_fixture(tmp_path / "a", metre_scene, status=["timeout", "ok", "ok"], repeats=3)
+    b = _scored_fixture(tmp_path / "b", metre_scene, repeats=3)
+    result = compare_artifacts([a, b], bootstrap_resamples=10)
+    timed_out, clean = result["methods"]
+    # the primary repeat (0) is the timeout: its interpolated summary treats a lower bound as a value
+    assert timed_out["all_task"]["latency_ms"]["n_censored"] == 1
+    assert timed_out["all_task"]["latency_ms"]["includes_censored"] is True
+    assert timed_out["all_repeat_latency_ms"]["n_censored"] == 1 and timed_out["all_repeat_latency_ms"]["n"] == 3
+    assert clean["all_repeat_latency_ms"]["n_censored"] == 0 and clean["all_repeat_latency_ms"]["censoring"] is None
+    assert timed_out["all_repeat_latency_censored"]["n_censored"] == 1  # the censoring-aware block is unchanged
+    for estimate in result["comparisons"][0]["all_task"]["latency_ms"].values():
+        assert estimate["includes_censored"] is True
+        assert (estimate["n_censored_a"], estimate["n_censored_b"], estimate["n_tasks_censored_in_either"]) == (1, 0, 1)
+    # quality contrasts carry no latency censoring flags and keep their definition
+    assert "includes_censored" not in result["comparisons"][0]["all_task"]["cost_regret"]["median"]
+    attribution = result["component_attribution"]["rows"][0]["latency_ms"]
+    assert attribution["n_censored"] == 1
+    cell = result["joint_odd_coverage"]["cells"][0]["populations"][timed_out["label"]]
+    assert cell["latency_censored_count"] == 1
+    path = tmp_path / "comparison.json"
+    path.write_text(__import__("json").dumps(result))
+    text = report_artifact(path)
+    assert "Censored latency rows" in text and "1 censored task(s) as lower bounds" in text
+
+
+def test_comparison_refuses_tampered_validation_and_recost_times(metre_scene, tmp_path):
+    import hashlib
+    import json
+
+    from passage_eval.metrics.comparison import compare_artifacts
+
+    a, b = (
+        _rescored_as(_scored_fixture(tmp_path / f"old_{n}", metre_scene), tmp_path / n, metre_scene, SERVICE_PROFILE)
+        for n in ("a", "b")
+    )
+    with np.load(a / "per_sample.npz", allow_pickle=False) as archive:
+        arrays = {key: archive[key] for key in archive.files}
+    assert np.isfinite(arrays["validation_recost_ms"]).all()
+    arrays["validation_recost_ms"] = arrays["validation_recost_ms"] + 1.0
+    np.savez(a / "per_sample.npz", **arrays)
+    receipt = json.loads((a / "score_receipt.json").read_text())
+    receipt["per_sample_sha256"] = hashlib.sha256((a / "per_sample.npz").read_bytes()).hexdigest()
+    (a / "score_receipt.json").write_text(json.dumps(receipt))
+    with pytest.raises(ValueError, match="validation and recost"):
+        compare_artifacts([a, b], bootstrap_resamples=10)

@@ -1,0 +1,18 @@
+{
+  "schema": "passage-candidate-replicas/v1",
+  "status": "sealed",
+  "final_candidates_sha256": "23bd37f6240379b8ffba4849614b8a48c88ca7c7adc2f6af17fe348c522b311c",
+  "final_decoders_sha256": "2a25ad31fda6ac75f369e8546d9fa0239191fb04b1d7204a73045aa880cbafc4",
+  "replicas": {
+    "1234": {
+      "status": "sealed",
+      "seg_checkpoint_sha256": "70a4bcd60a3b484b804b4a540a6b23fde3f12ac0113d96919eb94e171e304768",
+      "reg_checkpoint_sha256": "33f195f34df120db2716a75c600af9c5b773237116b1095f6100d4cf0a55b24b"
+    },
+    "3407": {
+      "status": "sealed",
+      "seg_checkpoint_sha256": "10ad13f4b678da156714284fcd1788a998652405a9126d2a20b3a20a62f7f1d7",
+      "reg_checkpoint_sha256": "bb5ec05cf42d31feb530c593d4935e93e876494c8e710d610f90ec374da1c87a"
+    }
+  }
+}

@@ -86,7 +86,7 @@ generation:
 # - For other splits (train, validation, calibration): tiles inside the hold-out region are EXCLUDED.
 # This ensures geographic separation between training and test data.
 hold_out:
-  # Enable geographic hold-out filtering (default: true if mask exists)
+  # Enable geographic hold-out filtering (default: true; a valid mask is required)
   enabled: true
   # Path to the hold-out mask PNG file (181x361 pixels, 1 degree per pixel)
   # Row 0 = lat +90, Row 180 = lat -90; Col 0 = lon -180, Col 360 = lon +180

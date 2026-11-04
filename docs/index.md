@@ -139,14 +139,7 @@ Publish the prepared tree to a Hugging Face dataset repository that you name.
 | Licence | Code: MIT. Data: JAXA AW3D30 terms, see [`DATASET_LICENSE.md`](https://github.com/ThalesGroup/passage/blob/main/DATASET_LICENSE.md) |
 | Paper | *PASSAGE: A Real-Terrain Benchmark for Trustworthy Constrained Path Planning*, NeurIPS 2026, Track on Evaluations and Datasets |
 
-<figure class="pg-figure" markdown>
-<img src="assets/sample.png" alt="Six terrain panels: solid green routes without obstacles and short-dashed blue routes with hatched obstacles; white circle and star mark start and goal" width="760" />
-<figcaption>PASSAGE v1.0 validation preview sample 0000000024 (256 × 256), the first
-row of the first validation preview shard, without selection. Columns are the
-elevation, uphill-slope and energy objectives; solid green routes ignore obstacles
-and short-dashed blue routes respect them. All panels share one elevation scale in
-metres. Stored optimality was not revalidated for this figure.</figcaption>
-</figure>
+Illustrative validation previews are optional and are not included in every source distribution.
 
 ## :sparkles: What you get
 

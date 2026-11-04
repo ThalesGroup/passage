@@ -26,10 +26,12 @@ import passage.generate as gen
 
 
 def test_num_samples_mapping_per_resolution(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
     # Create a minimal config with per-resolution num_samples mapping
     cfg = {
         "resolutions": [64, 128],
         "num_samples": {"64": 3, "128": 5},
+        "hold_out": {"enabled": False},
         "solvers": [
             {
                 "name": "astar_elevation",

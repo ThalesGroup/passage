@@ -159,6 +159,18 @@ def test_seed_checkpoint_factories_and_timing_provenance(tmp_path, metre_scene, 
         assert sidecar["determinism_flag"] == "non_deterministic"
         assert sidecar["extra"]["latency_repeats"] == 2
         assert len(sidecar["extra"]["evaluator_source_hash"]) == 64
+        censored = sidecar["extra"]["latency_e2e_censored"]  # proposed rule, beside the legacy keys
+        assert censored["status"] == "proposed_not_sealed" and censored["n_requests"] == 2
+        assert censored["n_repeats"] == 2 and censored["n_distinct_scenes"] == 1
+        # latency_warmup=0: the warm series follows no declared warm-up, whatever its name
+        assert censored["warmup"]["source"] == "bench_spec_in_process_runner"
+        assert censored["meets_min_warm_requests"] is False
+        assert censored["meets_min_warm_requests_reason"] == "no_declared_warmup"
+        assert {"latency_e2e_ms_p50", "latency_e2e_ms_p95", "latency_e2e_ms_p99"} <= set(sidecar["extra"])
+        # The in-process runner times validation and recost inside the request and records no separate value.
+        recost = sidecar["extra"]["validation_recost_ms"]
+        assert recost["reported_separately"] is True and recost["inside_scored_latency"] is True
+        assert recost["status"] == "not_recorded" and recost["n_requests"] == 2 and recost["n_recorded"] == 0
     from passage_eval import load_leaderboard, rebuild_leaderboard, summarise_leaderboard
 
     rebuild_leaderboard(tmp_path)

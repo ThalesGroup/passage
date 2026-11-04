@@ -722,6 +722,8 @@ def cmd_bench(spec: BenchSpec) -> Path:
     import shutil
     import tempfile
     from passage_eval.execution import score_run_artifact, write_scored_artifact
+    from passage_eval.execution.timing import manifest_profile, manifest_warmup
+    from passage_eval.metrics.latency import censored_latency_quantiles, validation_recost_summary
     from passage_eval.metrics.summary import aggregate_primary_metrics
 
     _validate_spec(spec)
@@ -745,8 +747,9 @@ def cmd_bench(spec: BenchSpec) -> Path:
                 key: value[mask] if value.ndim and len(value) == len(mask) else value for key, value in arrays.items()
             }
             metrics = aggregate_primary_metrics(primary)
-            latencies = np.asarray([record["total_wall_ms"] for record in warm.records])
+            latencies = arrays["latency_ms"]  # the field the artifact's timing profile scores
             timing = {
+                # Legacy keys: linear interpolation over every request, censored or not.
                 "latency_e2e_ms_p50": float(np.percentile(latencies, 50)),
                 "latency_e2e_ms_p95": float(np.percentile(latencies, 95)),
                 "latency_e2e_ms_p99": float(np.percentile(latencies, 99)),
@@ -756,6 +759,20 @@ def cmd_bench(spec: BenchSpec) -> Path:
                 "latency_warmup": spec.latency_warmup,
                 "latency_population": len(warm.records),
                 "quality_repeat_index": spec.quality_repeat_index,
+                # Proposed, not sealed: order statistics with timeouts right-censored (metrics.latency).
+                "latency_e2e_censored": censored_latency_quantiles(
+                    latencies,
+                    status=arrays["status"],
+                    sample_id=arrays["sample_id"],
+                    censored=arrays["latency_censored"],
+                    series=warm.manifest["series"],
+                    warmup=manifest_warmup(warm.manifest),  # measure_latency and latency_warmup, not the name
+                ),
+                # Validation and physical recost, reported apart from the latency (not recorded in-process).
+                "validation_recost_ms": validation_recost_summary(
+                    arrays["validation_recost_ms"],
+                    inside_latency=manifest_profile(warm.manifest).validation_in_boundary,
+                ),
             }
             provenance = dict(
                 spec.extra,
@@ -947,6 +964,17 @@ def _build_parser() -> argparse.ArgumentParser:
     compare.add_argument("--bootstrap-seed", type=int, default=0)
     compare.add_argument("--confidence", type=float, default=0.95)
     compare.add_argument("--odd-spec", type=Path, help="frozen JSON axes and bin edges for joint ODD strata")
+    compare.add_argument(
+        "--require-identical-limits",
+        action="store_true",
+        help="refuse runs whose budgets, timing boundary or supervision limits differ (off by default)",
+    )
+    compare.add_argument(
+        "--roster",
+        type=Path,
+        help="roster (passage-roster-v2, or v1 unsealed) that every compared run records; its blocks are used",
+    )
+    compare.add_argument("--roster-sha256", metavar="HEX", help="pinned roster_sha256 of --roster")
 
     report = sub.add_parser("report", help="render a persisted comparison")
     report.add_argument("--compare", required=True, type=Path)
@@ -962,6 +990,15 @@ def _build_parser() -> argparse.ArgumentParser:
 
     p_init = sub.add_parser("init-spec", help="write a starter passage-bench.yaml spec")
     p_init.add_argument("--out", default="my_method.passage-bench.yaml")
+
+    admission = sub.add_parser(
+        "admission-check", help="check a passage-test-admission/v1 record and print its gate table (G1-G6)"
+    )
+    admission.add_argument("record", type=Path, nargs="?", help="passage-test-admission/v1 record (JSON)")
+    admission.add_argument("--evidence-dir", type=Path, help="directory of the evidence files (default: the record's)")
+    admission.add_argument("--json", action="store_true", help="print the machine-readable report instead of the table")
+    admission.add_argument("--final-candidates", type=Path, help="final-candidates.json (default: the repository's)")
+    admission.add_argument("--template", action="store_true", help="print the unsealed draft template record and exit")
     return parser
 
 
@@ -997,6 +1034,13 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "compare":
         from passage_eval.metrics.comparison import compare_artifacts
 
+        block_table = None
+        if (args.roster is None) != (args.roster_sha256 is None):
+            parser.error("--roster and --roster-sha256 go together")
+        if args.roster is not None:
+            from passage_eval.io.roster import load_roster, roster_block_table
+
+            block_table = roster_block_table(load_roster(args.roster, expected_sha256=args.roster_sha256))
         result = compare_artifacts(
             args.score,
             primary_repeat_index=args.primary_repeat_index,
@@ -1004,6 +1048,8 @@ def main(argv: list[str] | None = None) -> int:
             bootstrap_seed=args.bootstrap_seed,
             confidence=args.confidence,
             odd_spec=json.loads(args.odd_spec.read_text()) if args.odd_spec else None,
+            require_identical_limits=args.require_identical_limits,
+            geographic_blocks=block_table,
         )
         _json_write(args.output, result)
         print(args.output)
@@ -1049,6 +1095,20 @@ def main(argv: list[str] | None = None) -> int:
         path = rebuild_leaderboard(args.root)
         print(f"rebuilt {path}")
         return 0
+    if args.cmd == "admission-check":
+        from passage_eval.protocol import admission as gate
+
+        if args.template:
+            print(json.dumps(gate.template_record(), indent=2, sort_keys=True))
+            return 0
+        if args.record is None:
+            parser.error("admission-check needs a record (or --template)")
+        report = gate.check_admission(args.record, args.evidence_dir, final_candidates=args.final_candidates)
+        if args.json:
+            print(json.dumps(report.to_dict(), indent=2, sort_keys=True))
+        else:
+            print(gate.format_report(report), end="")
+        return 0 if report.all_green else 1
     if args.cmd == "init-spec":
         Path(args.out).parent.mkdir(parents=True, exist_ok=True)
         Path(args.out).write_text(PASSAGE_BENCH_SPEC_TEMPLATE)
