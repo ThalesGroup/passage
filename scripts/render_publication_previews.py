@@ -34,7 +34,11 @@ def digest(path):
         return hashlib.file_digest(stream, 'sha256').hexdigest()
 
 
-def render(output):
+def render(output, *, assets_dir=ROOT / 'assets'):
+    assets_dir = Path(assets_dir)
+    source_assets = [assets_dir / name for name in ('banner.png', 'download.png', 'hold_out_mask.png')]
+    if any(not path.is_file() for path in source_assets):
+        raise ValueError('presentation assets are missing; supply an authorised assets directory')
     output = output.resolve()
     if output == DATA or output.is_relative_to(DATA):
         raise ValueError('Presentation outputs must remain outside the sealed dataset')
@@ -75,8 +79,8 @@ def render(output):
         (assets / f'sample-r{side}.provenance.json').write_text(json.dumps(record, indent=2) + '\n')
         records.append(record)
         print(json.dumps({'resolution': side, 'sample_id': row['id'], 'status': 'rendered'}), flush=True)
-    for name in ('banner.png', 'download.png', 'hold_out_mask.png'):
-        shutil.copyfile(ROOT / 'assets' / name, assets / name)
+    for source in source_assets:
+        shutil.copyfile(source, assets / source.name)
     # Notebook exports can import the same profile without a sibling paper repo.
     shutil.copyfile(Path(__file__).with_name('trajectory_style.py'), output / 'trajectory_style.py')
     for suffix in ('png', 'pdf'):
@@ -95,5 +99,6 @@ def render(output):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, default=ROOT / 'outputs/trajectory-style-v1-20261017/hf-presentation')
+    parser.add_argument('--assets-dir', type=Path, default=ROOT / 'assets', help='directory containing authorised presentation assets')
     args = parser.parse_args()
-    render(args.output)
+    render(args.output, assets_dir=args.assets_dir)

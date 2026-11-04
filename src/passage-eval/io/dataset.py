@@ -17,6 +17,45 @@ from passage_eval.protocol.planner import Scene
 PAPER_DATASET_REPO = "thalesgroup/passage"
 
 
+def _cell_inputs(
+    row: Mapping[str, Any],
+    *,
+    resolution: int,
+    cost_model: str,
+    split: str,
+    cost_weight: float | None,
+    task_variant: str,
+) -> tuple[dict[str, Any], str, str, float]:
+    """Every check of ``scene_from_row`` except those on the released route and cost.
+
+    Returns the decoded inputs (variant applied), the canonical cost model, the
+    released solver name and its weight. Raises on malformed or mismatched inputs.
+    """
+    if not isinstance(row.get("id"), str) or not row["id"].strip():
+        raise ValueError("missing or empty sample ID")
+    split = SPLITS[split]
+    model = canonical_cost_model(cost_model)
+    if task_variant not in {"obstacles", "free"}:
+        raise ValueError("task_variant must be obstacles or free")
+    inputs = decode_scene_inputs(row, resolution=resolution, split=split)
+    metadata = inputs["metadata"]
+    metadata["task_variant"] = task_variant
+    if task_variant == "free":
+        inputs["obstacles"][:] = False
+        inputs["input_tensor"][:, :, 2] = 0
+    matches = [name for name, cfg in metadata["solvers"].items() if canonical_cost_model(cfg["cost_model"]) == model]
+    if len(matches) != 1:
+        raise ValueError(f"expected exactly one released solver for {model}")
+    solver_name = matches[0]
+    cfg = metadata["solvers"][solver_name]
+    weight = float(cfg["weight"])
+    if not np.isfinite(weight) or weight < 0 or cfg["diagonal_movement"] != "always":
+        raise ValueError("invalid released weight or connectivity")
+    if cost_weight is not None and not np.isclose(cost_weight, weight, rtol=1e-6, atol=0):
+        raise ValueError("cost weight override differs from released oracle weight")
+    return inputs, model, solver_name, weight
+
+
 def scene_from_row(
     row: Mapping[str, Any],
     *,
@@ -33,34 +72,16 @@ def scene_from_row(
     """
     sample_id = str(row.get("id", "<missing-id>"))
     try:
-        if not isinstance(row.get("id"), str) or not row["id"].strip():
-            raise ValueError("missing or empty sample ID")
-        split = SPLITS[split]
-        model = canonical_cost_model(cost_model)
-        if task_variant not in {"obstacles", "free"}:
-            raise ValueError("task_variant must be obstacles or free")
-        inputs = decode_scene_inputs(row, resolution=resolution, split=split)
-        metadata = inputs["metadata"]
-        metadata["task_variant"] = task_variant
-        tensor = inputs["input_tensor"]
-        elevation = inputs["elevation"]
-        obstacles = inputs["obstacles"]
+        inputs, model, solver_name, weight = _cell_inputs(
+            row,
+            resolution=resolution,
+            cost_model=cost_model,
+            split=split,
+            cost_weight=cost_weight,
+            task_variant=task_variant,
+        )
+        metadata, obstacles = inputs["metadata"], inputs["obstacles"]
         start, goal = inputs["start"], inputs["goal"]
-        if task_variant == "free":
-            obstacles[:] = False
-            tensor[:, :, 2] = 0
-        matches = [
-            name for name, cfg in metadata["solvers"].items() if canonical_cost_model(cfg["cost_model"]) == model
-        ]
-        if len(matches) != 1:
-            raise ValueError(f"expected exactly one released solver for {model}")
-        solver_name = matches[0]
-        cfg = metadata["solvers"][solver_name]
-        weight = float(cfg["weight"])
-        if not np.isfinite(weight) or weight < 0 or cfg["diagonal_movement"] != "always":
-            raise ValueError("invalid released weight or connectivity")
-        if cost_weight is not None and not np.isclose(cost_weight, weight, rtol=1e-6, atol=0):
-            raise ValueError("cost weight override differs from released oracle weight")
         oracle = row[f"path_{solver_name}_{task_variant}"]
         connected, violated, _ = path_status(oracle, start=start, goal=goal, obstacles=obstacles)
         if not connected or violated:
@@ -70,7 +91,7 @@ def scene_from_row(
             raise ValueError("released oracle cost must be positive and finite")
         return Scene(
             sample_id,
-            elevation,
+            inputs["elevation"],
             obstacles,
             start,
             goal,
@@ -79,7 +100,59 @@ def scene_from_row(
             [tuple(map(int, p)) for p in oracle],
             oracle_cost,
             metadata,
-            tensor,
+            inputs["input_tensor"],
+        )
+    except (KeyError, TypeError, ValueError, IndexError, RuntimeError) as exc:
+        raise ValueError(f"PASSAGE sample {sample_id}: {exc}") from exc
+    except zstandard.ZstdError as exc:
+        raise ValueError(f"PASSAGE sample {sample_id}: corrupt tensor") from exc
+
+
+def scene_from_row_unvalidated_label(
+    row: Mapping[str, Any],
+    *,
+    resolution: int,
+    cost_model: str,
+    split: str,
+    cost_weight: float | None = None,
+    task_variant: str = "obstacles",
+) -> Scene:
+    """Decode one released row like ``scene_from_row`` but keep its stored route and cost as read.
+
+    For reference qualification only: the qualifiers of ``passage.audit`` turn an
+    illegal route or an invalid cost into a qualification reason, as ``audit_row``
+    does, instead of a load failure. Every input check of ``scene_from_row`` still
+    applies. ``oracle_path`` and ``oracle_cost`` are the stored values unchecked (a
+    missing cost is ``None``); never score with this scene.
+    """
+    sample_id = str(row.get("id", "<missing-id>"))
+    try:
+        inputs, model, solver_name, weight = _cell_inputs(
+            row,
+            resolution=resolution,
+            cost_model=cost_model,
+            split=split,
+            cost_weight=cost_weight,
+            task_variant=task_variant,
+        )
+        metadata = inputs["metadata"]
+        stored_path = row.get(f"path_{solver_name}_{task_variant}", [])
+        try:
+            stored_cost = metadata["paths"][solver_name][task_variant]["cost"]
+        except (KeyError, TypeError):
+            stored_cost = None
+        return Scene(
+            sample_id,
+            inputs["elevation"],
+            inputs["obstacles"],
+            inputs["start"],
+            inputs["goal"],
+            model,
+            weight,
+            stored_path,
+            stored_cost,
+            metadata,
+            inputs["input_tensor"],
         )
     except (KeyError, TypeError, ValueError, IndexError, RuntimeError) as exc:
         raise ValueError(f"PASSAGE sample {sample_id}: {exc}") from exc

@@ -10,7 +10,12 @@ from passage_eval.execution.runner import (
     PendingCompletionError,
     drain_pending_requests,
 )
-from passage_eval.execution.scoring import score_run_artifact, write_scored_artifact, validate_qualified_reference
+from passage_eval.execution.scoring import (
+    NegativeRegretHalt,
+    score_run_artifact,
+    validate_qualified_reference,
+    write_scored_artifact,
+)
 
 __all__ = [
     "RunArtifact",
@@ -20,6 +25,7 @@ __all__ = [
     "score_run_artifact",
     "write_scored_artifact",
     "validate_qualified_reference",
+    "NegativeRegretHalt",
     "request_identity",
     "DecoderPlannerAdapter",
     "LegacyPlannerAdapter",

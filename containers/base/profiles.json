@@ -1,0 +1,34 @@
+{
+  "schema": "passage-edge-runtime-profiles/v1",
+  "profiles": {
+    "thor": {
+      "backend": "tensorrt_thor_gpu",
+      "architecture": "aarch64",
+      "python": [3, 12, 3],
+      "packages": {"numpy": "2.5.4", "numba": "0.68.0", "llvmlite": "0.50.0"},
+      "sdk": {
+        "tensorrt": {"exact": "10.16.2.10"},
+        "cuda-python": {"exact": "13.2.0"},
+        "cuda-bindings": {"exact": "13.2.0"}
+      }
+    },
+    "orin": {
+      "backend": "tensorrt_orin_gpu",
+      "architecture": "aarch64",
+      "python": [3, 12, 3],
+      "packages": {"numpy": "2.5.4", "numba": "0.68.0", "llvmlite": "0.50.0"},
+      "sdk": {
+        "tensorrt": {"exact": "10.16.2.10"},
+        "cuda-python": {"exact": "13.2.0"},
+        "cuda-bindings": {"exact": "13.2.0"}
+      }
+    },
+    "tiger": {
+      "backend": "openvino_tiger_gpu",
+      "architecture": "x86_64",
+      "python": [3, 12, 3],
+      "packages": {"numpy": "2.5.4", "numba": "0.68.0", "llvmlite": "0.50.0"},
+      "sdk": {"openvino": {"exact": "2026.4.1"}}
+    }
+  }
+}
