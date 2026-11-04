@@ -318,3 +318,83 @@ def test_session_markers_bind_process_and_stay_outside_request_clock(tmp_path):
     assert 0 < start["marker_monotonic_ns"] <= end["marker_monotonic_ns"]
     assert start["marker_unix_ns"] > 0 and end["marker_unix_ns"] > 0
     assert [event["elapsed_ns"] for event in events if event["kind"] == "request"] == [1_000_000]
+
+
+@pytest.mark.parametrize("release_fails", [False, True])
+def test_existing_journal_remains_unchanged_when_exclusive_open_fails(tmp_path, release_fails):
+    from passage_eval.campaign.direct.direct_session import execute_direct_candidate
+
+    class Closable(RecordingRuntime):
+        def close(self):
+            self.closed = True
+            if release_fails:
+                raise RuntimeError("synthetic release failure")
+
+    dec = Decoders()
+    runtime = Closable(dec)
+    journal = tmp_path / "existing.jsonl"
+    original = b'{"kind":"session_start","owner":"another session"}\n'
+    journal.write_bytes(original)
+    measured = req(16)
+    expected_error = RuntimeError if release_fails else FileExistsError
+    with pytest.raises(expected_error):
+        execute_direct_candidate(lambda: runtime, dec, "reg", [req(0)], [[measured]], [task(measured)], journal)
+    assert runtime.closed
+    assert journal.read_bytes() == original
+
+
+def test_release_event_remains_bound_to_owned_journal_after_path_replacement(tmp_path):
+    from passage_eval.campaign.direct.direct_session import execute_direct_candidate
+
+    journal = tmp_path / "journal.jsonl"
+    moved = tmp_path / "original.jsonl"
+    foreign = b'{"owner":"other"}\n'
+
+    class ReplacingRuntime(RecordingRuntime):
+        def predict(self, tensor):
+            if self.calls == 16:
+                journal.rename(moved)
+                journal.write_bytes(foreign)
+            return super().predict(tensor)
+
+        def close(self):
+            pass
+
+    dec = Decoders()
+    measured = req(16)
+    runtime = ReplacingRuntime(dec)
+    execute_direct_candidate(lambda: runtime, dec, "reg", [req(0)], [[measured]], [task(measured)], journal)
+    assert journal.read_bytes() == foreign
+    assert json.loads(moved.read_text().splitlines()[-1])["kind"] == "runtime_released"
+
+
+def test_invalid_request_does_not_create_a_release_only_journal(tmp_path):
+    from passage_eval.campaign.direct.direct_session import execute_direct_candidate
+
+    class Closable(RecordingRuntime):
+        def close(self):
+            self.closed = True
+
+    dec = Decoders()
+    runtime = Closable(dec)
+    journal = tmp_path / "journal.jsonl"
+    with pytest.raises(ValueError, match="procedure"):
+        execute_direct_candidate(lambda: runtime, dec, "invalid", [req(0)], [], [task(req(16))], journal)
+    assert runtime.closed
+    assert not journal.exists()
+
+
+def test_release_failure_is_recorded_in_owned_journal(tmp_path):
+    from passage_eval.campaign.direct.direct_session import execute_direct_candidate
+
+    class BrokenClose(RecordingRuntime):
+        def close(self):
+            raise RuntimeError("synthetic close failure")
+
+    dec = Decoders()
+    runtime = BrokenClose(dec)
+    journal = tmp_path / "journal.jsonl"
+    measured = req(16)
+    with pytest.raises(RuntimeError, match="synthetic close failure"):
+        execute_direct_candidate(lambda: runtime, dec, "reg", [req(0)], [[measured]], [task(measured)], journal)
+    assert json.loads(journal.read_text().splitlines()[-1])["kind"] == "runtime_release_failed"
