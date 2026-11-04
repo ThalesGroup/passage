@@ -606,7 +606,7 @@ def _blocking_export_job(job, *, ready):
         signal.pause()
 
 
-def test_interrupt_stops_borrowed_native_workers_before_staging_cleanup(tmp_path, monkeypatch):
+def _interrupt_export_scenario(tmp_path, monkeypatch):
     from concurrent.futures import ProcessPoolExecutor
     from functools import partial
     import multiprocessing as mp
@@ -627,7 +627,7 @@ def test_interrupt_stops_borrowed_native_workers_before_staging_cleanup(tmp_path
     reader, writer = spawn.Pipe(duplex=False)
     executor = ProcessPoolExecutor(max_workers=2, mp_context=spawn)
     completed = threading.Event()
-    observed = {"processes": [], "second_interrupt": False, "startup_failed": False, "cleanup_alive": None}
+    observed = {"processes": [], "startup_failed": False, "cleanup_alive": None}
     original_temporary_directory = export.tempfile.TemporaryDirectory
 
     class ObservedStaging(original_temporary_directory):
@@ -646,11 +646,6 @@ def test_interrupt_stops_borrowed_native_workers_before_staging_cleanup(tmp_path
             reader.recv()
         observed["processes"] = list(executor._processes.values())
         os.kill(os.getpid(), signal.SIGINT)
-        # The previous wait(pending) would hang on the second native job.
-        # A second interrupt bounds the regression failure without leaving workers.
-        if not completed.wait(2):
-            observed["second_interrupt"] = True
-            os.kill(os.getpid(), signal.SIGINT)
 
     monkeypatch.setattr(export, "_write_successor_shard", partial(_blocking_export_job, ready=writer))
     monkeypatch.setattr(export.tempfile, "TemporaryDirectory", ObservedStaging)
@@ -663,7 +658,6 @@ def test_interrupt_stops_borrowed_native_workers_before_staging_cleanup(tmp_path
         interrupter.join(timeout=12)
         assert not interrupter.is_alive()
         assert not observed["startup_failed"]
-        assert not observed["second_interrupt"], "export waited for running native work after interrupt"
         assert observed["processes"] and not any(process.is_alive() for process in observed["processes"])
         assert observed["cleanup_alive"] is False, "staging cleanup ran while its producer still lived"
         assert not list(context.export_dirpath.glob(".batch-*"))
@@ -675,3 +669,51 @@ def test_interrupt_stops_borrowed_native_workers_before_staging_cleanup(tmp_path
         _stop_executor(executor, cancel=True)
         reader.close()
         writer.close()
+
+
+def test_interrupt_stops_borrowed_native_workers_before_staging_cleanup(tmp_path):
+    import os
+    from pathlib import Path
+    import signal
+    import subprocess
+    import sys
+
+    # The scenario sends a real SIGINT and runs native jobs that never return.
+    # Bound the entire scenario, including executor shutdown, outside its process.
+    driver = tmp_path / "interrupt_export.py"
+    driver.write_text(
+        "import faulthandler\n"
+        "from pathlib import Path\n"
+        "import sys\n"
+        f"sys.path[:0] = {sys.path!r}\n"
+        f"sys.path.insert(0, {str(Path(__file__).parent)!r})\n"
+        "import pytest\n"
+        "from test_successor_export import _interrupt_export_scenario\n"
+        "if __name__ == '__main__':\n"
+        "    faulthandler.dump_traceback_later(20, repeat=True)\n"
+        "    with pytest.MonkeyPatch.context() as monkeypatch:\n"
+        f"        _interrupt_export_scenario(Path({str(tmp_path)!r}), monkeypatch)\n"
+        "    faulthandler.cancel_dump_traceback_later()\n"
+    )
+    process = subprocess.Popen(
+        [sys.executable, str(driver)],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        start_new_session=True,
+    )
+    timed_out = False
+    try:
+        output, _ = process.communicate(timeout=50)
+    except subprocess.TimeoutExpired:
+        timed_out = True
+    finally:
+        # Kill the isolated group even if its driver exited: a leaked worker
+        # could still own the captured pipe and keep communicate() waiting.
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        output, _ = process.communicate(timeout=5)
+    assert not timed_out, f"interrupt export scenario exceeded 50 seconds:\n{output}"
+    assert process.returncode == 0, output
