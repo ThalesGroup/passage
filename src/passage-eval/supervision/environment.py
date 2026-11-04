@@ -53,6 +53,13 @@ def forbidden_runtime_name(name: str) -> bool:
     return name.startswith(FORBIDDEN_RUNTIME_PREFIXES)
 
 
+def _forbidden_system_runtime_name(name: str) -> bool:
+    """Ignore ONNX Runtime JSON indexes in ``/usr``; declared artifact trees retain the strict rule."""
+    if name.startswith("onnxruntime") and name.endswith(".json"):
+        return False
+    return forbidden_runtime_name(name)
+
+
 @dataclass(frozen=True)
 class RoleBinds:
     """What one worker role is given: its binds and the directories added to its ``sys.path``."""
@@ -142,7 +149,10 @@ class BoundSet:
             if record.flagged
         ]
         return {
-            "rule": f"base name starts with one of {list(FORBIDDEN_RUNTIME_PREFIXES)}",
+            "rule": (
+                f"base name starts with one of {list(FORBIDDEN_RUNTIME_PREFIXES)}; "
+                "implicit system /usr excludes onnxruntime*.json metadata"
+            ),
             "evidence": "supervisor_walk_of_the_hashed_trees",
             "trees_scanned": len(trees),
             "found": found,
@@ -291,7 +301,14 @@ def build_bound_set(
     )
     try:
         stage_declared(bound, declared, protected)
-        runtime_roots = [Path(r) for r in layout.roots] + [Path(os.path.realpath(r)) for r in extra_runtime]
+        explicit_runtime_roots = [Path(os.path.realpath(r)) for r in extra_runtime]
+        runtime_roots = [Path(r) for r in layout.roots] + explicit_runtime_roots
+        # Deduplication folds nested runtimes into /usr. Keep that whole tree strict
+        # when it covers a declared runtime or a separate interpreter environment.
+        strict_roots = explicit_runtime_roots + ([Path(layout.venv_root)] if layout.venv_root is not None else [])
+        strict_system_runtime = any(_inside(root, Path("/usr")) for root in strict_roots) or any(
+            root != Path("/usr") and _inside(root, Path("/usr")) for root in runtime_roots
+        )
         unresolved = [(Path(path), reason) for path, reason in layout.needs_declaration]
         if isolation != "bwrap":
             runtime_roots = [r for r in runtime_roots if r != Path("/usr")]
@@ -322,7 +339,15 @@ def build_bound_set(
             kept.append(root)
         for root in kept:
             record = treehash.hash_tree(
-                root, role="environment", symlinks="record", cache=cache, flag=forbidden_runtime_name
+                root,
+                role="environment",
+                symlinks="record",
+                cache=cache,
+                flag=(
+                    _forbidden_system_runtime_name
+                    if root == Path("/usr") and not strict_system_runtime
+                    else forbidden_runtime_name
+                ),
             )
             bound.environment.append(record)
         if isolation == "bwrap":
