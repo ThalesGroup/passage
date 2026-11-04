@@ -168,7 +168,8 @@ def _process_calibration_tile(job: tuple[Path, tuple[int, int, int, int, int], d
             name, minimum, maximum, error = _process_tile_worker(tile_file)
             if name != tile_file.name:
                 raise ValueError("worker_source_identity_mismatch")
-        if _fingerprint(tile_file) != expected_fingerprint:
+        # A same-size write can preserve mtime and land within one ctime tick.
+        if _fingerprint(tile_file) != expected_fingerprint or _file_hash(tile_file) != source["sha256"]:
             raise ValueError("source_changed_during_calibration")
         if error is None and (
             minimum is None or maximum is None or not np.isfinite([minimum, maximum]).all() or minimum > maximum
@@ -286,8 +287,14 @@ def _run_calibrate_locked(
         current_files = sorted(tiles_path.glob("*_DSM.tif"))
         if any(_external_sidecars(tile) for tile in current_files):
             calibration_errors.append("external_raster_dependency")
-        if [tile.name for tile in current_files] != [tile.name for tile in tile_files] or any(
-            _fingerprint(tile) != fingerprints[tile.name] for tile in current_files
+        if (
+            [tile.name for tile in current_files] != [tile.name for tile in tile_files]
+            or any(_fingerprint(tile) != fingerprints[tile.name] for tile in current_files)
+            or any(
+                (source_hash := outcomes.get(tile.name, {}).get("source", {}).get("sha256")) is not None
+                and _file_hash(tile) != source_hash
+                for tile in current_files
+            )
         ):
             calibration_errors.append("source_inventory_changed_during_calibration")
     except OSError as exc:

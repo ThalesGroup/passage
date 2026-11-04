@@ -367,3 +367,59 @@ def test_timestamp_preserving_source_write_cannot_publish_stale_hash(tmp_path, m
     assert receipt["global_min"] is None
     assert receipt["complete"] is False
     assert "source_changed_during_calibration" in receipt["failures"][0]["reason"]
+
+
+@pytest.mark.parametrize("mutation_phase", ["during_worker", "after_worker"])
+def test_source_mutation_with_unchanged_metadata_fails_closed(tmp_path, monkeypatch, mutation_phase):
+    import os
+    from pathlib import Path
+
+    tiles = tmp_path / "tiles"
+    tiles.mkdir()
+    first = tiles / "N000E000_DSM.tif"
+    second = tiles / "N001E000_DSM.tif"
+    _tile(first, [[10, 20]])
+    _tile(second, [[50, 60]])
+    before = first.stat()
+    original_hash = hashlib.sha256(first.read_bytes()).hexdigest()
+    original_stat = Path.stat
+    original_worker = cal._process_tile_worker
+
+    def coarse_stat(path, *args, **kwargs):
+        stat = original_stat(path, *args, **kwargs)
+        if path != first:
+            return stat
+        fields = {name: getattr(stat, name) for name in dir(stat) if name.startswith("st_")}
+        return os.stat_result(stat, fields | {"st_ctime": before.st_ctime, "st_ctime_ns": before.st_ctime_ns})
+
+    def mutate_source(path):
+        trigger = first if mutation_phase == "during_worker" else second
+        if path == trigger:
+            with rasterio.open(first, "r+") as raster:
+                raster.write(np.array([[30, 40]], dtype=np.float32), 1)
+            os.utime(first, ns=(before.st_atime_ns, before.st_mtime_ns))
+            after = first.stat()
+            assert (after.st_size, after.st_mtime_ns, after.st_ctime_ns) == (
+                before.st_size,
+                before.st_mtime_ns,
+                before.st_ctime_ns,
+            )
+            assert hashlib.sha256(first.read_bytes()).hexdigest() != original_hash
+        return original_worker(path)
+
+    # Model a filesystem whose ctime tick does not advance during the write.
+    monkeypatch.setattr(Path, "stat", coarse_stat)
+    monkeypatch.setattr(cal, "_process_tile_worker", mutate_source)
+    out = tmp_path / "calibrate"
+    with pytest.raises(RuntimeError, match="incomplete"):
+        cal.run_calibrate(str(out), str(tiles), num_cpus=0)
+    receipt = _receipt(out)
+    assert receipt["complete"] is False
+    assert receipt["global_min"] is None
+    assert receipt["global_max"] is None
+    assert receipt["source_inventory"][0]["sha256"] == original_hash
+    if mutation_phase == "during_worker":
+        assert receipt["failed_tiles"] == [first.name]
+        assert "source_changed_during_calibration" in receipt["failures"][0]["reason"]
+    else:
+        assert "source_inventory_changed_during_calibration" in receipt["calibration_errors"]
