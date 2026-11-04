@@ -1,6 +1,8 @@
 """Publication staging and notebook receipts never certify file existence alone."""
 
 import json
+import os
+import shutil
 from pathlib import Path
 
 import nbformat
@@ -90,6 +92,174 @@ def test_parseable_or_tampered_output_is_not_reused_and_changed_input_invalidate
     (stage / "notebook-artifacts/64x64/metrics/_export_receipt.json").unlink()
     prepare_snapshot_notebooks(source, stage, **args)
     assert len(calls) == 10
+
+
+def _executed_outputs(input_path, output_path, parameters, *, omitted=None, timestamp_ns=1_000_000_000, **kwargs):
+    notebook = nbformat.read(input_path, as_version=4)
+    for index, cell in enumerate(notebook.cells):
+        if cell.cell_type == "code":
+            cell.execution_count = index + 1
+    nbformat.write(notebook, output_path)
+    artifacts = Path(parameters["output_dir"])
+    files = {
+        "_export_receipt.json": json.dumps({"report": {"figures": ["figure.pdf", "figure.png"]}}),
+        f"{artifacts.name}-{parameters['resolution']}.json": "{}",
+        "figure.pdf": "new pdf",
+        "figure.png": "new png",
+    }
+    for name, content in files.items():
+        if name != omitted:
+            path = artifacts / name
+            path.write_text(content)
+            os.utime(path, ns=(timestamp_ns, timestamp_ns))
+
+
+def test_fresh_outputs_with_coarse_timestamps_preserve_unwritten_artifacts(tmp_path):
+    source = tmp_path / "dataset"
+    source.mkdir()
+    notebooks = _sources(tmp_path)
+    stage = tmp_path / "stage"
+    artifacts = stage / "notebook-artifacts/64x64/dataset"
+    notes = artifacts / "notes"
+    notes.mkdir(parents=True)
+    (notes / "keep.txt").write_text("user notes")
+    (notes / "empty").mkdir()
+    (notes / "link").symlink_to("keep.txt")
+    (artifacts / "figure.png").write_text("old png")
+    args = dict(notebooks_dirpath=notebooks, resolutions=[64], execute=True, executor=_executed_outputs)
+
+    manifest = prepare_snapshot_notebooks(source, stage, **args)
+    # Identical bytes and timestamps on a forced retry still come from this run.
+    prepare_snapshot_notebooks(source, stage, force=True, **args)
+
+    assert manifest["notebooks"][0]["execution"]["status"] == "executed"
+    assert (artifacts / "figure.png").read_text() == "new png"
+    assert (artifacts / "figure.png").stat().st_mtime_ns == 1_000_000_000
+    assert (notes / "keep.txt").read_text() == "user notes"
+    assert (notes / "empty").is_dir()
+    assert (notes / "link").readlink() == Path("keep.txt")
+    assert "notebook-artifacts/64x64/dataset/notes/keep.txt" not in manifest["notebooks"][0]["artifacts"]
+
+
+@pytest.mark.parametrize("omitted", ["_export_receipt.json", "dataset-64.json", "figure.png"])
+def test_unchanged_old_output_cannot_satisfy_new_execution(tmp_path, omitted):
+    source = tmp_path / "dataset"
+    source.mkdir()
+    notebooks = _sources(tmp_path)
+    stage = tmp_path / "stage"
+    artifacts = stage / "notebook-artifacts/64x64/dataset"
+    artifacts.mkdir(parents=True)
+    old = artifacts / omitted
+    old.write_text("old reviewed output")
+    # Even a misleading future timestamp cannot qualify an unwritten artifact.
+    future_ns = 4_000_000_000_000_000_000
+    os.utime(old, ns=(future_ns, future_ns))
+
+    def execute(input_path, output_path, parameters, **kwargs):
+        skipped = omitted if Path(parameters["output_dir"]).name == "dataset" else None
+        _executed_outputs(input_path, output_path, parameters, omitted=skipped, timestamp_ns=future_ns)
+
+    with pytest.raises(ValueError, match="Missing fresh required output|Missing or external declared figure"):
+        prepare_snapshot_notebooks(
+            source, stage, notebooks_dirpath=notebooks, resolutions=[64], execute=True, executor=execute
+        )
+
+    assert old.read_text() == "old reviewed output"
+    assert old.stat().st_mtime_ns == future_ns
+    assert sorted(path.name for path in artifacts.iterdir()) == [omitted]
+    manifest = json.loads((stage / "notebook-export-manifest.json").read_text())
+    assert manifest["notebooks"][0]["execution"]["status"] == "failed"
+
+
+def test_retention_never_overwrites_new_files_or_follows_directory_links(tmp_path):
+    source = tmp_path / "dataset"
+    source.mkdir()
+    notebooks = _sources(tmp_path)
+    stage = tmp_path / "stage"
+    artifacts = stage / "notebook-artifacts/64x64/dataset"
+    notes = artifacts / "notes"
+    notes.mkdir(parents=True)
+    (notes / "keep.txt").write_text("user notes")
+    (notes / "refresh.txt").write_text("old notes")
+    (artifacts / "dangling").write_text("old file")
+    (artifacts / "redirect").mkdir()
+    (artifacts / "redirect/keep.txt").write_text("old nested file")
+    outside = tmp_path / "outside"
+    outside.mkdir()
+
+    def execute(input_path, output_path, parameters, **kwargs):
+        _executed_outputs(input_path, output_path, parameters)
+        root = Path(parameters["output_dir"])
+        (root / "notes").mkdir()
+        (root / "notes/refresh.txt").write_text("new notes")
+        (root / "dangling").symlink_to("missing")
+        (root / "redirect").symlink_to(outside, target_is_directory=True)
+
+    prepare_snapshot_notebooks(
+        source, stage, notebooks_dirpath=notebooks, resolutions=[64], execute=True, executor=execute
+    )
+
+    assert (notes / "keep.txt").read_text() == "user notes"
+    assert (notes / "refresh.txt").read_text() == "new notes"
+    assert (artifacts / "dangling").readlink() == Path("missing")
+    assert (artifacts / "redirect").readlink() == outside
+    assert list(outside.iterdir()) == []
+
+
+@pytest.mark.parametrize("root_state", ["missing", "file", "symlink"])
+def test_failed_execution_restores_reviewed_bundle_after_root_replacement(tmp_path, root_state):
+    source = tmp_path / "dataset"
+    source.mkdir()
+    notebooks = _sources(tmp_path)
+    stage = tmp_path / "stage"
+    artifacts = stage / "notebook-artifacts/64x64/dataset"
+    artifacts.mkdir(parents=True)
+    (artifacts / "keep.txt").write_text("reviewed artifact")
+    output = stage / "64x64/dataset.ipynb"
+    output.parent.mkdir(parents=True)
+    output.write_text("reviewed notebook")
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "keep.txt").write_text("external file")
+
+    def execute(*args, **kwargs):
+        shutil.rmtree(artifacts)
+        if root_state == "file":
+            artifacts.write_text("partial file")
+        elif root_state == "symlink":
+            artifacts.symlink_to(outside, target_is_directory=True)
+        raise RuntimeError("artifact root replaced")
+
+    with pytest.raises(RuntimeError, match="artifact root replaced"):
+        prepare_snapshot_notebooks(
+            source, stage, notebooks_dirpath=notebooks, resolutions=[64], execute=True, executor=execute
+        )
+
+    assert (artifacts / "keep.txt").read_text() == "reviewed artifact"
+    assert output.read_text() == "reviewed notebook"
+    assert (outside / "keep.txt").read_text() == "external file"
+
+
+@pytest.mark.parametrize("linked_component", ["notebook-artifacts", "notebook-artifacts/64x64/dataset"])
+def test_symlinked_artifact_directory_is_rejected_without_touching_target(tmp_path, linked_component):
+    source = tmp_path / "dataset"
+    source.mkdir()
+    notebooks = _sources(tmp_path)
+    stage = tmp_path / "stage"
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "keep.txt").write_text("external file")
+    link = stage / linked_component
+    link.parent.mkdir(parents=True)
+    link.symlink_to(outside, target_is_directory=True)
+
+    with pytest.raises(ValueError, match="artifact directory must not be a symlink"):
+        prepare_snapshot_notebooks(
+            source, stage, notebooks_dirpath=notebooks, resolutions=[64], execute=True, executor=_executed_outputs
+        )
+
+    assert (outside / "keep.txt").read_text() == "external file"
+    assert sorted(path.name for path in outside.iterdir()) == ["keep.txt"]
 
 
 def test_readonly_hardlinks_and_atomic_replacement_preserve_source(tmp_path):
