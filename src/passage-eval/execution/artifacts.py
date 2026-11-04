@@ -11,9 +11,10 @@ from typing import Any
 
 import numpy as np
 
+from passage_eval.execution.timing import KNOWN_SCHEMAS, LEGACY_SCHEMA, manifest_profile
 from passage_eval.protocol.contracts import STATUSES, STAGES, GraphSpec, BudgetSpec, ordinary_metadata
 
-SCHEMA = "passage-complete-request-v1"
+SCHEMA = LEGACY_SCHEMA
 
 
 def json_safe(value: Any):
@@ -38,6 +39,16 @@ def route_hash(path: np.ndarray) -> str:
     return hashlib.sha256(prefix + b"\0" + path.tobytes()).hexdigest()
 
 
+def record_repair_used(record: dict[str, Any]) -> bool:
+    """Return whether a timed record reports entering repair, even at zero work.
+
+    Repair and exact fallback are separate stages. Stage-work presence counts
+    as an attempted repair even if its budget is exhausted before an expansion.
+    Existing v1 records carry these fields, so no artifact migration is needed.
+    """
+    return record["stage"] == "repair" or "repair" in record["stage_work"]
+
+
 def sha256_file(path: Path) -> str:
     with path.open("rb") as stream:
         return hashlib.file_digest(stream, "sha256").hexdigest()
@@ -55,7 +66,7 @@ class RunArtifact:
         roster = self.manifest.get("roster")
         repeats = self.manifest.get("repeats")
         if (
-            self.manifest.get("schema") != SCHEMA
+            self.manifest.get("schema") not in KNOWN_SCHEMAS
             or not isinstance(roster, list)
             or not roster
             or any(not isinstance(key, str) or not key for key in roster)
@@ -117,6 +128,8 @@ class RunArtifact:
             raise ValueError("terminal records must be complete and unique over roster, repeat and series")
         if len(self.paths) != len(self.records):
             raise ValueError("paths must align with terminal records")
+        profile = manifest_profile(self.manifest)
+        elapsed_field = profile.latency_field
         for record, path in zip(self.records, self.paths):
             if path.dtype.kind not in "iuf" or path.ndim > 2:
                 raise ValueError("raw paths require real numeric arrays of at most two dimensions")
@@ -131,7 +144,7 @@ class RunArtifact:
                 raise ValueError("terminal success requires a legal route")
             if record["legal_path"] and (not record["connected_path"] or record["obstacle_violation"]):
                 raise ValueError("legal route requires connected traversable cells")
-            for key in ("total_wall_ms", "failed_attempt_ms", "drain_ms"):
+            for key in dict.fromkeys(("total_wall_ms", "failed_attempt_ms", "drain_ms", elapsed_field)):
                 if (
                     isinstance(record.get(key), bool)
                     or not isinstance(record.get(key), (int, float))
@@ -139,8 +152,27 @@ class RunArtifact:
                     or record[key] < 0
                 ):
                     raise ValueError(f"{key} must be finite and nonnegative")
+            if profile.boundary is not None:
+                recost = record.get("validation_recost_ms")
+                if (
+                    isinstance(recost, bool)
+                    or not isinstance(recost, (int, float))
+                    or not math.isfinite(recost)
+                    or recost < 0
+                    or not math.isclose(
+                        record["total_wall_ms"], record[elapsed_field] + recost, rel_tol=0, abs_tol=1e-9
+                    )
+                    or record.get("timing_boundary") != self.manifest.get("timing_boundary")
+                ):
+                    raise ValueError("service timing must match its boundary and total accounting")
+            if profile.rewarm_after_restart:
+                complete = record.get("warmup_complete_before_request")
+                if not isinstance(record.get("rewarmed_before_request"), bool) or not (
+                    complete is None or isinstance(complete, bool)
+                ):
+                    raise ValueError("re-warm profile records must state their warm-up state")
             deadline = specs[record["sample_id"]]["budget"]["wall_time_ms"]
-            elapsed = record["total_wall_ms"]
+            elapsed = record[elapsed_field]
             late = deadline is not None and elapsed > deadline
             if (
                 record.get("deadline_ms") != deadline

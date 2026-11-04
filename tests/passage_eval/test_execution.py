@@ -754,3 +754,205 @@ def test_updated_label_identity_cannot_hide_stale_released_optimality_flags(metr
     run = run_requests(lambda request: [(0, 0), (1, 1), (2, 2)], [PlanRequest.from_scene(target)])
     with pytest.raises(ValueError, match="stored label"):
         score_run_artifact(run, [target], reference_store={target.sample_id: reference})
+
+
+# ---------------------------------------------------------------------------
+# timing profiles (passage_eval.execution.timing)
+# ---------------------------------------------------------------------------
+
+SERVICE_MANIFEST = dict(
+    schema="passage-complete-request-supervised-service-v2",
+    timing_boundary="passage-timing-boundary/v4-supervised-ipc-service",
+    timing_profile="supervised_service_v1",
+    procedure={"supervision": {"timing_profile": "supervised_service_v1"}},
+)
+REWARM_MANIFEST = dict(
+    schema="passage-complete-request-supervised-service-v3",
+    timing_boundary="passage-timing-boundary/v5-supervised-ipc-service-rewarm",
+    timing_profile="supervised_service_rewarm_v1",
+    procedure={"supervision": {"timing_profile": "supervised_service_rewarm_v1"}},
+)
+
+
+def _direct_run(scene):
+    class Direct:
+        def plan(self, request):
+            return PlanResult([(0, 0), (1, 1), (2, 2)])
+
+    return run_requests(Direct(), [PlanRequest.from_scene(scene)])
+
+
+def _as_profiled(run, manifest, service_ms=None):
+    run.manifest.update(manifest)
+    for row in run.records:
+        service = row["total_wall_ms"] / 2 if service_ms is None else service_ms
+        row.update(
+            service_wall_ms=service,
+            validation_recost_ms=row["total_wall_ms"] - service,
+            timing_boundary=manifest["timing_boundary"],
+        )
+    return run
+
+
+def test_scoring_rejects_service_procedure_with_legacy_manifest(metre_scene):
+    run = _direct_run(metre_scene)
+    run.manifest["procedure"] = {"supervision": {"timing_profile": "supervised_service_v1"}}
+    with pytest.raises(ValueError, match="timing profile"):
+        score_run_artifact(run, [metre_scene], require_qualified_reference=False)
+
+
+def test_service_profile_rejects_corrupt_timing_and_legacy_schema(metre_scene):
+    run = _direct_run(metre_scene)
+    run.manifest["timing_profile"] = "supervised_service_v1"
+    run.manifest["procedure"] = {"supervision": {"timing_profile": "supervised_service_v1"}}
+    run.records[0].update(service_wall_ms=100.0, validation_recost_ms=1.0, total_wall_ms=10.0)
+    with pytest.raises(ValueError, match="schema|timing"):
+        score_run_artifact(run, [metre_scene], require_qualified_reference=False)
+
+
+def test_service_profile_rejects_corrupted_service_and_total_with_valid_schema(metre_scene):
+    run = _direct_run(metre_scene)
+    run.manifest.update(SERVICE_MANIFEST)
+    run.records[0].update(
+        service_wall_ms=100.0,
+        validation_recost_ms=1.0,
+        total_wall_ms=10.0,
+        timing_boundary="passage-timing-boundary/v4-supervised-ipc-service",
+    )
+    with pytest.raises(ValueError, match="timing"):
+        score_run_artifact(run, [metre_scene], require_qualified_reference=False)
+
+
+@pytest.mark.parametrize(
+    "boundary",
+    ["passage-timing-boundary/v4-supervised-ipc-service", "passage-timing-boundary/v5-supervised-ipc-service-rewarm"],
+)
+def test_legacy_schema_cannot_claim_a_profiled_boundary(metre_scene, boundary):
+    run = _direct_run(metre_scene)
+    run.manifest["timing_boundary"] = boundary
+    with pytest.raises(ValueError, match="timing|boundary"):
+        score_run_artifact(run, [metre_scene], require_qualified_reference=False)
+
+
+@pytest.mark.parametrize("procedure", [None, "bad", {"supervision": None}, {"supervision": "bad"}])
+def test_malformed_procedure_is_rejected_cleanly(procedure):
+    from passage_eval.execution.timing import latency_field
+
+    with pytest.raises(ValueError, match="procedure|supervision"):
+        latency_field({"procedure": procedure})
+
+
+def test_service_artifact_rejects_record_with_legacy_boundary(metre_scene):
+    run = _direct_run(metre_scene)
+    run.manifest.update(SERVICE_MANIFEST)
+    row = run.records[0]
+    row["service_wall_ms"] = row["total_wall_ms"]
+    row["validation_recost_ms"] = 0.0
+    row["timing_boundary"] = "passage-timing-boundary/v3-supervised-ipc-fresh-pass"
+    with pytest.raises(ValueError, match="boundary"):
+        score_run_artifact(run, [metre_scene], require_qualified_reference=False)
+
+
+def test_unknown_timing_profile_is_refused_not_mapped_to_a_default(metre_scene):
+    from passage_eval.execution.timing import get_profile
+
+    with pytest.raises(ValueError, match="unknown timing profile"):
+        get_profile("supervised_service_v9")
+    run = _direct_run(metre_scene)
+    run.manifest.update(SERVICE_MANIFEST, timing_profile="supervised_service_v9")
+    with pytest.raises(ValueError, match="unknown timing profile"):
+        run.validate()
+
+
+def test_profiles_bind_schema_boundary_latency_field_and_rewarm_together():
+    from passage_eval.execution import timing
+    from passage_eval.execution.artifacts import SCHEMA
+    from passage_eval.supervision import READABLE_TIMING_BOUNDARY_IDS, TIMING_BOUNDARY_ID
+
+    assert timing.PROFILES == ("supervised_total_v3", "supervised_service_v1", "supervised_service_rewarm_v1")
+    legacy, service, rewarm = (timing.get_profile(name) for name in timing.PROFILES)
+    assert (legacy.schema, legacy.boundary, legacy.latency_field) == (SCHEMA, None, "total_wall_ms")
+    assert legacy.validation_in_boundary and not service.validation_in_boundary
+    assert (service.schema, service.latency_field, service.rewarm_after_restart) == (
+        "passage-complete-request-supervised-service-v2",
+        "service_wall_ms",
+        False,
+    )
+    assert (rewarm.schema, rewarm.latency_field, rewarm.rewarm_after_restart) == (
+        "passage-complete-request-supervised-service-v3",
+        "service_wall_ms",
+        True,
+    )
+    assert len({legacy.schema, service.schema, rewarm.schema}) == 3
+    assert {service.boundary, rewarm.boundary, TIMING_BOUNDARY_ID} <= set(READABLE_TIMING_BOUNDARY_IDS)
+
+
+@pytest.mark.parametrize("manifest", [SERVICE_MANIFEST, REWARM_MANIFEST])
+def test_profiled_scores_use_the_service_time_and_keep_the_recost_out_of_the_deadline(metre_scene, manifest):
+    run = _as_profiled(_direct_run(metre_scene), manifest)
+    if manifest is REWARM_MANIFEST:
+        run.records[0].update(rewarmed_before_request=False, warmup_complete_before_request=None)
+    metrics, arrays = score_run_artifact(run, [metre_scene], require_qualified_reference=False)
+    assert arrays["latency_ms"].tolist() == [run.records[0]["service_wall_ms"]]
+    assert arrays["latency_ms"][0] < run.records[0]["total_wall_ms"]
+    block = metrics["latency_all_repeats_censored"]
+    assert block["timing_profile"] == manifest["timing_profile"] and block["latency_field"] == "service_wall_ms"
+    # protocol: validation and physical recost stay outside the boundary and are reported separately
+    recorded = run.records[0]["validation_recost_ms"]
+    assert recorded > 0 and arrays["validation_recost_ms"].tolist() == [recorded]
+    recost = metrics["validation_recost_all_repeats_ms"]
+    assert recost["reported_separately"] is True and recost["inside_scored_latency"] is False
+    assert recost["status"] == "recorded" and recost["n_recorded"] == 1
+    assert recost["quantiles_ms"]["p50"] == recost["max_ms"] == recorded
+
+
+def test_in_process_scores_state_that_validation_and_recost_are_inside_the_latency(metre_scene):
+    run = _direct_run(metre_scene)
+    metrics, arrays = score_run_artifact(run, [metre_scene], require_qualified_reference=False)
+    assert np.isnan(arrays["validation_recost_ms"]).all()
+    recost = metrics["validation_recost_all_repeats_ms"]
+    assert recost["inside_scored_latency"] is True and recost["status"] == "not_recorded"
+    assert recost["mean_ms"] is None and recost["quantiles_ms"] == {"p50": None, "p95": None, "p99": None}
+
+
+def test_rewarm_records_must_state_their_warmup_state(metre_scene):
+    run = _as_profiled(_direct_run(metre_scene), REWARM_MANIFEST)
+    with pytest.raises(ValueError, match="warm-up state"):
+        run.validate()
+    for bad in (
+        {"rewarmed_before_request": 1, "warmup_complete_before_request": None},
+        {"rewarmed_before_request": False, "warmup_complete_before_request": "yes"},
+    ):
+        run.records[0].update(bad)
+        with pytest.raises(ValueError, match="warm-up state"):
+            run.validate()
+    run.records[0].update(rewarmed_before_request=True, warmup_complete_before_request=False)
+    run.validate()
+
+
+def test_service_profile_deadline_uses_service_time_not_total(metre_scene):
+    """Under v4 a request whose total exceeds the budget only because of the recost is on time."""
+    request = replace(PlanRequest.from_scene(metre_scene), budget=BudgetSpec(wall_time_ms=50.0))
+
+    class Direct:
+        def plan(self, request):
+            return PlanResult([(0, 0), (1, 1), (2, 2)])
+
+    run = run_requests(Direct(), [request])
+    run.manifest.update(SERVICE_MANIFEST)
+    row = run.records[0]
+    row.update(
+        status="ok",
+        total_wall_ms=80.0,
+        service_wall_ms=40.0,
+        validation_recost_ms=40.0,
+        late_completion=False,
+        failed_attempt_ms=0.0,
+        drain_ms=0.0,
+        deadline_ms=50.0,
+        timing_boundary=SERVICE_MANIFEST["timing_boundary"],
+    )
+    run.validate()
+    row["late_completion"] = True  # the legacy accounting (total > budget) contradicts the service profile
+    with pytest.raises(ValueError, match="deadline"):
+        run.validate()

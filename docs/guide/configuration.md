@@ -125,7 +125,23 @@ hold_out:
 The mask is a 181 × 361 pixel PNG with one pixel per degree: row 0 is latitude
 +90°, column 0 is longitude −180°. Non-zero pixels mark hold-out tiles. Tiles
 inside the mask belong to the `test` split only, and every `test` scene comes
-from them. The shipped mask covers South America.
+from them. Supply an authorised mask at the configured path; it is not included in every source distribution.
+For the legacy generator, use a 1-bit, grayscale, RGB or RGBA PNG; RGB channels must agree.
+When hold-out filtering is enabled, a missing, unreadable or invalid mask stops generation.
+
+The public PASSAGE v1.0 hold-out mask is available separately from the [dataset repository](https://huggingface.co/datasets/thalesgroup/passage). To obtain it manually at the default path and verify its bytes before generation:
+
+```sh
+mkdir -p assets
+test ! -e assets/hold_out_mask.png && test ! -L assets/hold_out_mask.png || { echo "Mask path already exists; verify it separately"; exit 1; }
+curl --fail --location --output assets/hold_out_mask.png \
+  https://huggingface.co/datasets/thalesgroup/passage/resolve/v1.0/assets/hold_out_mask.png
+printf '%s  %s\n' \
+  d53526b04dfa23767b8558126a4372cf7ab96c593079e149a63c497df633715d \
+  assets/hold_out_mask.png | sha256sum --check
+```
+
+Do not proceed if the download or hash check fails. The mask is a geographic control, not a test scene; obtaining it does not read the test split. Review the [dataset terms](../../DATASET_LICENSE.md) and [datasheet](../../DATASHEET.md) for the applicable use conditions. Generation does not download the mask automatically.
 
 ---
 

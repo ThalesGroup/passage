@@ -56,3 +56,37 @@ def tensor_scene(metre_scene):
     tensor[metre_scene.start + (1,)] = 0
     tensor[metre_scene.goal + (1,)] = 1
     return replace(metre_scene, input_tensor=tensor, metadata={"calibration": {"min": 0.0, "max": 1.0}})
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _supervision_tree_hash_cache(tmp_path_factory):
+    """One shared on-disk cache of environment tree digests (e.g. ``/usr``) for the whole session.
+
+    Without it each supervised bwrap run would re-hash the bound interpreter environment. The cache is
+    keyed by stat signature, and the tests that check it use their own directories.
+    """
+    import os
+
+    previous = os.environ.get("PASSAGE_TREE_HASH_CACHE")
+    os.environ["PASSAGE_TREE_HASH_CACHE"] = str(tmp_path_factory.mktemp("tree-hash-cache"))
+    yield
+    if previous is None:
+        os.environ.pop("PASSAGE_TREE_HASH_CACHE", None)
+    else:
+        os.environ["PASSAGE_TREE_HASH_CACHE"] = previous
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _harness_checkout_counts_as_committed():
+    """Gate G2 refuses a harness checkout with uncommitted changes under ``HARNESS_TRACKED_PATHS``.
+
+    The synthetic GREEN admission worlds are built from the running checkout, which may hold the edits under
+    development, so the clean-tree check reports a clean tree here (for the whole session, module fixtures
+    included). ``test_admission.py`` tests the real check on a temporary git repository and shows that a dirty tree
+    turns G2 RED.
+    """
+    from passage_eval.protocol import admission
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(admission, "_uncommitted_harness_paths", lambda root=None: [])
+        yield

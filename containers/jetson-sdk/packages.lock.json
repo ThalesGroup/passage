@@ -1,0 +1,1104 @@
+{
+ "schema": "passage-edge-sdk-base-packages/v1",
+ "deb_count": 94,
+ "packages": [
+  {
+   "package": "cuda-cudart-13-2",
+   "version": "13.2.86-1",
+   "architecture": "arm64",
+   "sha256": "550a1c3c915637b5c0d6538b9eba87471742c4be854438ab8a050caabdea8001",
+   "size": 180622,
+   "file": "jetson/cuda-cudart-13-2_13.2.86-1_arm64.deb",
+   "origin": "https://repo.download.nvidia.com/jetson/common r39.2 main",
+   "archive_path": "pool/main/c/cuda-cudart/cuda-cudart-13-2_13.2.86-1_arm64.deb",
+   "index_verified": true
+  },
+  {
+   "package": "cuda-nvrtc-13-2",
+   "version": "13.2.86-1",
+   "architecture": "arm64",
+   "sha256": "cec8bdb770f98e24be2cad58b00a696b2f115970a09eb51e290fd9e8a4ddb6a2",
+   "size": 29710684,
+   "file": "jetson/cuda-nvrtc-13-2_13.2.86-1_arm64.deb",
+   "origin": "https://repo.download.nvidia.com/jetson/common r39.2 main",
+   "archive_path": "pool/main/c/cuda-nvrtc/cuda-nvrtc-13-2_13.2.86-1_arm64.deb",
+   "index_verified": true
+  },
+  {
+   "package": "cuda-toolkit-13-2-config-common",
+   "version": "13.2.86-1",
+   "architecture": "all",
+   "sha256": "35d856d59c02d5893c831de201d78895b93a0520b594628cff9af9470b3306cb",
+   "size": 17408,
+   "file": "jetson/cuda-toolkit-13-2-config-common_13.2.86-1_all.deb",
+   "origin": "https://repo.download.nvidia.com/jetson/common r39.2 main",
+   "archive_path": "pool/main/c/cuda-cudart/cuda-toolkit-13-2-config-common_13.2.86-1_all.deb",
+   "index_verified": true
+  },
+  {
+   "package": "cuda-toolkit-13-config-common",
+   "version": "13.2.86-1",
+   "architecture": "all",
+   "sha256": "fa71974c9f87cd427b81dd757380c2d5f9d396b4bded62798089c957fed3a26c",
+   "size": 17456,
+   "file": "jetson/cuda-toolkit-13-config-common_13.2.86-1_all.deb",
+   "origin": "https://repo.download.nvidia.com/jetson/common r39.2 main",
+   "archive_path": "pool/main/c/cuda-cudart/cuda-toolkit-13-config-common_13.2.86-1_all.deb",
+   "index_verified": true
+  },
+  {
+   "package": "cuda-toolkit-config-common",
+   "version": "13.2.86-1",
+   "architecture": "all",
+   "sha256": "7f46bcda9ddc013b2746e872fa86fe24b5fb804cf27f4b4cb2b1f3a1b395e0b5",
+   "size": 17452,
+   "file": "jetson/cuda-toolkit-config-common_13.2.86-1_all.deb",
+   "origin": "https://repo.download.nvidia.com/jetson/common r39.2 main",
+   "archive_path": "pool/main/c/cuda-cudart/cuda-toolkit-config-common_13.2.86-1_all.deb",
+   "index_verified": true
+  },
+  {
+   "package": "libnvinfer-plugin10",
+   "version": "10.16.2.10-1+cuda13.2",
+   "architecture": "arm64",
+   "sha256": "a19ba2f43860e768045947f59a63fecd1464feeba353bfb6a096985b3a634710",
+   "size": 15598604,
+   "file": "jetson/libnvinfer-plugin10_10.16.2.10-1+cuda13.2_arm64.deb",
+   "origin": "https://repo.download.nvidia.com/jetson/common r39.2 main",
+   "archive_path": "pool/main/t/tensorrt/libnvinfer-plugin10_10.16.2.10-1+cuda13.2_arm64.deb",
+   "index_verified": true
+  },
+  {
+   "package": "libnvinfer-vc-plugin10",
+   "version": "10.16.2.10-1+cuda13.2",
+   "architecture": "arm64",
+   "sha256": "d7490d02f1ec286843bf796fbd4d3d464ca963d2cf9ceefca1ae7b2b14a4203b",
+   "size": 274586,
+   "file": "jetson/libnvinfer-vc-plugin10_10.16.2.10-1+cuda13.2_arm64.deb",
+   "origin": "https://repo.download.nvidia.com/jetson/common r39.2 main",
+   "archive_path": "pool/main/t/tensorrt/libnvinfer-vc-plugin10_10.16.2.10-1+cuda13.2_arm64.deb",
+   "index_verified": true
+  },
+  {
+   "package": "libnvinfer10",
+   "version": "10.16.2.10-1+cuda13.2",
+   "architecture": "arm64",
+   "sha256": "d02111e3600d91bef407fe537a4179445cdc73fb259bf1f83dd256804de1897e",
+   "size": 2312945538,
+   "file": "jetson/libnvinfer10_10.16.2.10-1+cuda13.2_arm64.deb",
+   "origin": "https://repo.download.nvidia.com/jetson/common r39.2 main",
+   "archive_path": "pool/main/t/tensorrt/libnvinfer10_10.16.2.10-1+cuda13.2_arm64.deb",
+   "index_verified": true
+  },
+  {
+   "package": "libnvonnxparsers10",
+   "version": "10.16.2.10-1+cuda13.2",
+   "architecture": "arm64",
+   "sha256": "f146cbcc4d5d0d29f2c0123dd6a4b16ed1159eff27d03beeab27bbe9a766bff8",
+   "size": 1268598,
+   "file": "jetson/libnvonnxparsers10_10.16.2.10-1+cuda13.2_arm64.deb",
+   "origin": "https://repo.download.nvidia.com/jetson/common r39.2 main",
+   "archive_path": "pool/main/t/tensorrt/libnvonnxparsers10_10.16.2.10-1+cuda13.2_arm64.deb",
+   "index_verified": true
+  },
+  {
+   "package": "python3-libnvinfer",
+   "version": "10.16.2.10-1+cuda13.2",
+   "architecture": "arm64",
+   "sha256": "da1282da12166871f731bb3f058f81b76c4ef22036668111723b0116ba2cf216",
+   "size": 846138,
+   "file": "jetson/python3-libnvinfer_10.16.2.10-1+cuda13.2_arm64.deb",
+   "origin": "https://repo.download.nvidia.com/jetson/common r39.2 main",
+   "archive_path": "pool/main/t/tensorrt/python3-libnvinfer_10.16.2.10-1+cuda13.2_arm64.deb",
+   "index_verified": true
+  },
+  {
+   "package": "binutils",
+   "version": "2.42-4ubuntu2.10",
+   "architecture": "arm64",
+   "sha256": "f3333e2ef1b857f35905194f42e9541ff6a42bef8fbba6d8bb56abff460d4fa2",
+   "size": 18116,
+   "file": "ubuntu/binutils_2.42-4ubuntu2.10_arm64.deb",
+   "origin": "https://snapshot.ubuntu.com/ubuntu/20261025T160000Z noble-updates",
+   "archive_path": "pool/main/b/binutils/binutils_2.42-4ubuntu2.10_arm64.deb",
+   "index_verified": true
+  },
+  {
+   "package": "binutils-aarch64-linux-gnu",
+   "version": "2.42-4ubuntu2.10",
+   "architecture": "arm64",
+   "sha256": "b5311d11d56f2daa82e952612b9578ef675af67714edb9aef7e3dc6cf2531575",
+   "size": 3304470,
+   "file": "ubuntu/binutils-aarch64-linux-gnu_2.42-4ubuntu2.10_arm64.deb",
+   "origin": "https://snapshot.ubuntu.com/ubuntu/20261025T160000Z noble-updates",
+   "archive_path": "pool/main/b/binutils/binutils-aarch64-linux-gnu_2.42-4ubuntu2.10_arm64.deb",
+   "index_verified": true
+  },
+  {
+   "package": "binutils-common",
+   "version": "2.42-4ubuntu2.10",
+   "architecture": "arm64",
+   "sha256": "e2930005b9e4d599cfa8ebddd1d888cbcef7ebec38c8c7dfbc4babbdeaa52c3b",
+   "size": 240286,
+   "file": "ubuntu/binutils-common_2.42-4ubuntu2.10_arm64.deb",
+   "origin": "https://snapshot.ubuntu.com/ubuntu/20261025T160000Z noble-updates",
+   "archive_path": "pool/main/b/binutils/binutils-common_2.42-4ubuntu2.10_arm64.deb",
+   "index_verified": true
+  },
+  {
+   "package": "ca-certificates",
+   "version": "20260816ubuntu0.24.04.1",
+   "architecture": "all",
+   "sha256": "8a0a754aaafed72cc8efb8c1731808133284a84fbfc76a4fcc73fce9e01b4187",
+   "size": 138884,
+   "file": "ubuntu/ca-certificates_20260816ubuntu0.24.04.1_all.deb",
+   "origin": "https://snapshot.ubuntu.com/ubuntu/20261025T160000Z noble-security",
+   "archive_path": "pool/main/c/ca-certificates/ca-certificates_20260816ubuntu0.24.04.1_all.deb",
+   "index_verified": true
+  },
+  {
+   "package": "cmake",
+   "version": "3.28.3-1build7",
+   "architecture": "arm64",
+   "sha256": "0bf2a58f636ad286e7f4552e709dfd1209a4d70056548a6c0c4965d7067e95a5",
+   "size": 10305022,
+   "file": "ubuntu/cmake_3.28.3-1build7_arm64.deb",
+   "origin": "https://snapshot.ubuntu.com/ubuntu/20261025T160000Z noble",
+   "archive_path": "pool/main/c/cmake/cmake_3.28.3-1build7_arm64.deb",
+   "index_verified": true
+  },
+  {
+   "package": "cmake-data",
+   "version": "3.28.3-1build7",
+   "architecture": "all",
+   "sha256": "20a3b644211ce82f35c24f1f5052199adeb0ac159978a8740fd6c0959611557f",
+   "size": 2154936,
+   "file": "ubuntu/cmake-data_3.28.3-1build7_all.deb",
+   "origin": "https://snapshot.ubuntu.com/ubuntu/20261025T160000Z noble",
+   "archive_path": "pool/main/c/cmake/cmake-data_3.28.3-1build7_all.deb",
+   "index_verified": true
+  },
+  {
+   "package": "cpp",
+   "version": "4:13.2.0-7ubuntu1",
+   "architecture": "arm64",
+   "sha256": "133d40380f18509cf137347f7c470d87ccaf75fd1fa488c3b42b7d6ca3c09d30",
+   "size": 22438,
+   "file": "ubuntu/cpp_4%3a13.2.0-7ubuntu1_arm64.deb",
+   "origin": "https://snapshot.ubuntu.com/ubuntu/20261025T160000Z noble",
+   "archive_path": "pool/main/g/gcc-defaults/cpp_13.2.0-7ubuntu1_arm64.deb",
+   "index_verified": true
+  },
+  {
+   "package": "cpp-13",
+   "version": "13.3.0-6ubuntu2~24.04.1",
+   "architecture": "arm64",
+   "sha256": "0f3245c804313d970a2eabb72b68b0f6d8119905e1babdccfcf66f771fa3d9f1",
+   "size": 1038,
+   "file": "ubuntu/cpp-13_13.3.0-6ubuntu2~24.04.1_arm64.deb",
+   "origin": "https://snapshot.ubuntu.com/ubuntu/20261025T160000Z noble-security",
+   "archive_path": "pool/main/g/gcc-13/cpp-13_13.3.0-6ubuntu2~24.04.1_arm64.deb",
+   "index_verified": true
+  },
+  {
+   "package": "cpp-13-aarch64-linux-gnu",
+   "version": "13.3.0-6ubuntu2~24.04.1",
+   "architecture": "arm64",
+   "sha256": "5de37686322fdee9432cabbab469088fe15ff99323fd0302139fd73ddb83e0fe",
+   "size": 9559928,
+   "file": "ubuntu/cpp-13-aarch64-linux-gnu_13.3.0-6ubuntu2~24.04.1_arm64.deb",
+   "origin": "https://snapshot.ubuntu.com/ubuntu/20261025T160000Z noble-security",
+   "archive_path": "pool/main/g/gcc-13/cpp-13-aarch64-linux-gnu_13.3.0-6ubuntu2~24.04.1_arm64.deb",
+   "index_verified": true
+  },
+  {
+   "package": "cpp-aarch64-linux-gnu",
+   "version": "4:13.2.0-7ubuntu1",
+   "architecture": "arm64",
+   "sha256": "52822e3b33c0ccf29b86c6366683ebf61549973b02eda0643437a1fe8a099b9a",
+   "size": 5316,
+   "file": "ubuntu/cpp-aarch64-linux-gnu_4%3a13.2.0-7ubuntu1_arm64.deb",
+   "origin": "https://snapshot.ubuntu.com/ubuntu/20261025T160000Z noble",
+   "archive_path": "pool/main/g/gcc-defaults/cpp-aarch64-linux-gnu_13.2.0-7ubuntu1_arm64.deb",
+   "index_verified": true
+  },
+  {
+   "package": "g++",
+   "version": "4:13.2.0-7ubuntu1",
+   "architecture": "arm64",
+   "sha256": "1c0786b509b97ebce60d6c98de64c7f8a9ed0e68ccdbc908a3feb6045123b89c",
+   "size": 1082,
+   "file": "ubuntu/g++_4%3a13.2.0-7ubuntu1_arm64.deb",
+   "origin": "https://snapshot.ubuntu.com/ubuntu/20261025T160000Z noble",
+   "archive_path": "pool/main/g/gcc-defaults/g++_13.2.0-7ubuntu1_arm64.deb",
+   "index_verified": true
+  },
+  {
+   "package": "g++-13",
+   "version": "13.3.0-6ubuntu2~24.04.1",
+   "architecture": "arm64",
+   "sha256": "2bc3b9363781481b5b3b1c24baa18a3876e12126f355181db83303e9e0bede3b",
+   "size": 16046,
+   "file": "ubuntu/g++-13_13.3.0-6ubuntu2~24.04.1_arm64.deb",
+   "origin": "https://snapshot.ubuntu.com/ubuntu/20261025T160000Z noble-security",
+   "archive_path": "pool/main/g/gcc-13/g++-13_13.3.0-6ubuntu2~24.04.1_arm64.deb",
+   "index_verified": true
+  },
+  {
+   "package": "g++-13-aarch64-linux-gnu",
+   "version": "13.3.0-6ubuntu2~24.04.1",
+   "architecture": "arm64",
+   "sha256": "2b172a55a06c454608e3004d446779b6f31792b2007d17f93d292c007e336c8f",
+   "size": 10892156,
+   "file": "ubuntu/g++-13-aarch64-linux-gnu_13.3.0-6ubuntu2~24.04.1_arm64.deb",
+   "origin": "https://snapshot.ubuntu.com/ubuntu/20261025T160000Z noble-security",
+   "archive_path": "pool/main/g/gcc-13/g++-13-aarch64-linux-gnu_13.3.0-6ubuntu2~24.04.1_arm64.deb",
+   "index_verified": true
+  },
+  {
+   "package": "g++-aarch64-linux-gnu",
+   "version": "4:13.2.0-7ubuntu1",
+   "architecture": "arm64",
+   "sha256": "5920bf2675f86e65338fdc9f7753f7891e07a74616c01c437ba2a7c086c7e42a",
+   "size": 962,
+   "file": "ubuntu/g++-aarch64-linux-gnu_4%3a13.2.0-7ubuntu1_arm64.deb",
+   "origin": "https://snapshot.ubuntu.com/ubuntu/20261025T160000Z noble",
+   "archive_path": "pool/main/g/gcc-defaults/g++-aarch64-linux-gnu_13.2.0-7ubuntu1_arm64.deb",
+   "index_verified": true
+  },
+  {
+   "package": "gcc",
+   "version": "4:13.2.0-7ubuntu1",
+   "architecture": "arm64",
+   "sha256": "11dec7614bba0bd5b7cfad6a9890a4680dac5de6908ae625dd07105679bad67c",
+   "size": 5018,
+   "file": "ubuntu/gcc_4%3a13.2.0-7ubuntu1_arm64.deb",
+   "origin": "https://snapshot.ubuntu.com/ubuntu/20261025T160000Z noble",
+   "archive_path": "pool/main/g/gcc-defaults/gcc_13.2.0-7ubuntu1_arm64.deb",
+   "index_verified": true
+  },
+  {
+   "package": "gcc-13",
+   "version": "13.3.0-6ubuntu2~24.04.1",
+   "architecture": "arm64",
+   "sha256": "04b729a6c728b92c941926be688f8c1a90a89602b10f131516a1e7574cc5b418",
+   "size": 484024,
+   "file": "ubuntu/gcc-13_13.3.0-6ubuntu2~24.04.1_arm64.deb",
+   "origin": "https://snapshot.ubuntu.com/ubuntu/20261025T160000Z noble-security",
+   "archive_path": "pool/main/g/gcc-13/gcc-13_13.3.0-6ubuntu2~24.04.1_arm64.deb",
+   "index_verified": true
+  },
+  {
+   "package": "gcc-13-aarch64-linux-gnu",
+   "version": "13.3.0-6ubuntu2~24.04.1",
+   "architecture": "arm64",
+   "sha256": "618086c3f64d780d0d8ffff2a07bef6115a301e71ee364bcf92c10b9b7dd499c",
+   "size": 18708214,
+   "file": "ubuntu/gcc-13-aarch64-linux-gnu_13.3.0-6ubuntu2~24.04.1_arm64.deb",
+   "origin": "https://snapshot.ubuntu.com/ubuntu/20261025T160000Z noble-security",
+   "archive_path": "pool/main/g/gcc-13/gcc-13-aarch64-linux-gnu_13.3.0-6ubuntu2~24.04.1_arm64.deb",
+   "index_verified": true
+  },
+  {
+   "package": "gcc-13-base",
+   "version": "13.3.0-6ubuntu2~24.04.1",
+   "architecture": "arm64",
+   "sha256": "1c1ca489da0d48237036318189a9b6525abe7703b75495f257f68bccae8c45a7",
+   "size": 51632,
+   "file": "ubuntu/gcc-13-base_13.3.0-6ubuntu2~24.04.1_arm64.deb",
+   "origin": "https://snapshot.ubuntu.com/ubuntu/20261025T160000Z noble-security",
+   "archive_path": "pool/main/g/gcc-13/gcc-13-base_13.3.0-6ubuntu2~24.04.1_arm64.deb",
+   "index_verified": true
+  },
+  {
+   "package": "gcc-aarch64-linux-gnu",
+   "version": "4:13.2.0-7ubuntu1",
+   "architecture": "arm64",
+   "sha256": "14bd5f429f7e91c23fcae70ddc1acf1438adfe246fa3078273f5a0629f64e2dc",
+   "size": 1198,
+   "file": "ubuntu/gcc-aarch64-linux-gnu_4%3a13.2.0-7ubuntu1_arm64.deb",
+   "origin": "https://snapshot.ubuntu.com/ubuntu/20261025T160000Z noble",
+   "archive_path": "pool/main/g/gcc-defaults/gcc-aarch64-linux-gnu_13.2.0-7ubuntu1_arm64.deb",
+   "index_verified": true
+  },
+  {
+   "package": "libarchive13t64",
+   "version": "3.7.2-2ubuntu0.9",
+   "architecture": "arm64",
+   "sha256": "957be45cc63f6c43e83be561c42bca9d41f11301376fa7b82279eca17935cc72",
+   "size": 377834,
+   "file": "ubuntu/libarchive13t64_3.7.2-2ubuntu0.9_arm64.deb",
+   "origin": "https://snapshot.ubuntu.com/ubuntu/20261025T160000Z noble-security",
+   "archive_path": "pool/main/liba/libarchive/libarchive13t64_3.7.2-2ubuntu0.9_arm64.deb",
+   "index_verified": true
+  },
+  {
+   "package": "libasan8",
+   "version": "14.2.0-4ubuntu2~24.04.1",
+   "architecture": "arm64",
+   "sha256": "0b7957bc5bbc5d30eabe8b71bab06e624ac530be7b1b1315d2bd54629cf2559f",
+   "size": 2927874,
+   "file": "ubuntu/libasan8_14.2.0-4ubuntu2~24.04.1_arm64.deb",
+   "origin": "https://snapshot.ubuntu.com/ubuntu/20261025T160000Z noble-security",
+   "archive_path": "pool/main/g/gcc-14/libasan8_14.2.0-4ubuntu2~24.04.1_arm64.deb",
+   "index_verified": true
+  },
+  {
+   "package": "libatomic1",
+   "version": "14.2.0-4ubuntu2~24.04.1",
+   "architecture": "arm64",
+   "sha256": "fdeab74e7ad8572cf69c7024e8040c7ac851f6e667d35f0d429e7a0352840f73",
+   "size": 11604,
+   "file": "ubuntu/libatomic1_14.2.0-4ubuntu2~24.04.1_arm64.deb",
+   "origin": "https://snapshot.ubuntu.com/ubuntu/20261025T160000Z noble-security",
+   "archive_path": "pool/main/g/gcc-14/libatomic1_14.2.0-4ubuntu2~24.04.1_arm64.deb",
+   "index_verified": true
+  },
+  {
+   "package": "libbinutils",
+   "version": "2.42-4ubuntu2.10",
+   "architecture": "arm64",
+   "sha256": "c86634a7471aa27439b9bef7bd91ca8136f01f938c93bf6abe16a8fca758e849",
+   "size": 766448,
+   "file": "ubuntu/libbinutils_2.42-4ubuntu2.10_arm64.deb",
+   "origin": "https://snapshot.ubuntu.com/ubuntu/20261025T160000Z noble-updates",
+   "archive_path": "pool/main/b/binutils/libbinutils_2.42-4ubuntu2.10_arm64.deb",
+   "index_verified": true
+  },
+  {
+   "package": "libbrotli1",
+   "version": "1.1.0-2build2",
+   "architecture": "arm64",
+   "sha256": "cabf3462d908e72f2e594f19ae87c581c4614f099947e38fbd865bf8eae27014",
+   "size": 339424,
+   "file": "ubuntu/libbrotli1_1.1.0-2build2_arm64.deb",
+   "origin": "https://snapshot.ubuntu.com/ubuntu/20261025T160000Z noble",
+   "archive_path": "pool/main/b/brotli/libbrotli1_1.1.0-2build2_arm64.deb",
+   "index_verified": true
+  },
+  {
+   "package": "libc-dev-bin",
+   "version": "2.39-0ubuntu8.9",
+   "architecture": "arm64",
+   "sha256": "85564f1ba7dce372d0fdec055986b428f72cd9c235af1dd29950f589562d19bc",
+   "size": 19684,
+   "file": "ubuntu/libc-dev-bin_2.39-0ubuntu8.9_arm64.deb",
+   "origin": "https://snapshot.ubuntu.com/ubuntu/20261025T160000Z noble-security",
+   "archive_path": "pool/main/g/glibc/libc-dev-bin_2.39-0ubuntu8.9_arm64.deb",
+   "index_verified": true
+  },
+  {
+   "package": "libc6-dev",
+   "version": "2.39-0ubuntu8.9",
+   "architecture": "arm64",
+   "sha256": "9bf6acb8a3433ffe561182517640970d324425fabbbeb54a24d737ba1f3c816b",
+   "size": 1596264,
+   "file": "ubuntu/libc6-dev_2.39-0ubuntu8.9_arm64.deb",
+   "origin": "https://snapshot.ubuntu.com/ubuntu/20261025T160000Z noble-security",
+   "archive_path": "pool/main/g/glibc/libc6-dev_2.39-0ubuntu8.9_arm64.deb",
+   "index_verified": true
+  },
+  {
+   "package": "libcc1-0",
+   "version": "14.2.0-4ubuntu2~24.04.1",
+   "architecture": "arm64",
+   "sha256": "a72eb7353138e671ce46cdb7afc09cd400eaa8ae20e2e7750d40fbbdf63a3811",
+   "size": 49734,
+   "file": "ubuntu/libcc1-0_14.2.0-4ubuntu2~24.04.1_arm64.deb",
+   "origin": "https://snapshot.ubuntu.com/ubuntu/20261025T160000Z noble-security",
+   "archive_path": "pool/main/g/gcc-14/libcc1-0_14.2.0-4ubuntu2~24.04.1_arm64.deb",
+   "index_verified": true
+  },
+  {
+   "package": "libcrypt-dev",
+   "version": "1:4.4.36-4build1",
+   "architecture": "arm64",
+   "sha256": "cadcc00021aa1082a8cb5cd1c2686b25b7a4d396f2029eaa1b12159ca46f1766",
+   "size": 118238,
+   "file": "ubuntu/libcrypt-dev_1%3a4.4.36-4build1_arm64.deb",
+   "origin": "https://snapshot.ubuntu.com/ubuntu/20261025T160000Z noble",
+   "archive_path": "pool/main/libx/libxcrypt/libcrypt-dev_4.4.36-4build1_arm64.deb",
+   "index_verified": true
+  },
+  {
+   "package": "libctf-nobfd0",
+   "version": "2.42-4ubuntu2.10",
+   "architecture": "arm64",
+   "sha256": "c80063890a430e42181e7ad3f0277bb563abc22d556fd5e65c798c4ee8318684",
+   "size": 100868,
+   "file": "ubuntu/libctf-nobfd0_2.42-4ubuntu2.10_arm64.deb",
+   "origin": "https://snapshot.ubuntu.com/ubuntu/20261025T160000Z noble-updates",
+   "archive_path": "pool/main/b/binutils/libctf-nobfd0_2.42-4ubuntu2.10_arm64.deb",
+   "index_verified": true
+  },
+  {
+   "package": "libctf0",
+   "version": "2.42-4ubuntu2.10",
+   "architecture": "arm64",
+   "sha256": "2516f90d292d01eefe9207a623251550d93665f25d262f206f5c6b803389ed6b",
+   "size": 95744,
+   "file": "ubuntu/libctf0_2.42-4ubuntu2.10_arm64.deb",
+   "origin": "https://snapshot.ubuntu.com/ubuntu/20261025T160000Z noble-updates",
+   "archive_path": "pool/main/b/binutils/libctf0_2.42-4ubuntu2.10_arm64.deb",
+   "index_verified": true
+  },
+  {
+   "package": "libcurl4t64",
+   "version": "8.5.0-2ubuntu10.16",
+   "architecture": "arm64",
+   "sha256": "41fa5964da7f422e0729d2355317254e3ee1a28eda9eba70423ed43f77cc7477",
+   "size": 337276,
+   "file": "ubuntu/libcurl4t64_8.5.0-2ubuntu10.16_arm64.deb",
+   "origin": "https://snapshot.ubuntu.com/ubuntu/20261025T160000Z noble-security",
+   "archive_path": "pool/main/c/curl/libcurl4t64_8.5.0-2ubuntu10.16_arm64.deb",
+   "index_verified": true
+  },
+  {
+   "package": "libexpat1",
+   "version": "2.6.1-2ubuntu0.6",
+   "architecture": "arm64",
+   "sha256": "9782206e359ccd50dd5686c2fd5182ed87c777a6d76b0269e38e89dbaac9f3b2",
+   "size": 89808,
+   "file": "ubuntu/libexpat1_2.6.1-2ubuntu0.6_arm64.deb",
+   "origin": "https://snapshot.ubuntu.com/ubuntu/20261025T160000Z noble-security",
+   "archive_path": "pool/main/e/expat/libexpat1_2.6.1-2ubuntu0.6_arm64.deb",
+   "index_verified": true
+  },
+  {
+   "package": "libgcc-13-dev",
+   "version": "13.3.0-6ubuntu2~24.04.1",
+   "architecture": "arm64",
+   "sha256": "609a9410d9a1f25a1cb7847de92ee9f438336a0a3a82d282c3686f52ddd61526",
+   "size": 2473368,
+   "file": "ubuntu/libgcc-13-dev_13.3.0-6ubuntu2~24.04.1_arm64.deb",
+   "origin": "https://snapshot.ubuntu.com/ubuntu/20261025T160000Z noble-security",
+   "archive_path": "pool/main/g/gcc-13/libgcc-13-dev_13.3.0-6ubuntu2~24.04.1_arm64.deb",
+   "index_verified": true
+  },
+  {
+   "package": "libgomp1",
+   "version": "14.2.0-4ubuntu2~24.04.1",
+   "architecture": "arm64",
+   "sha256": "cd49d2e8834d41a6618f097b678980defeebc47271bc7c5aa8ea2c2f1a53b7a6",
+   "size": 144962,
+   "file": "ubuntu/libgomp1_14.2.0-4ubuntu2~24.04.1_arm64.deb",
+   "origin": "https://snapshot.ubuntu.com/ubuntu/20261025T160000Z noble-security",
+   "archive_path": "pool/main/g/gcc-14/libgomp1_14.2.0-4ubuntu2~24.04.1_arm64.deb",
+   "index_verified": true
+  },
+  {
+   "package": "libgprofng0",
+   "version": "2.42-4ubuntu2.10",
+   "architecture": "arm64",
+   "sha256": "ee37f8539eab25c43bd622589932006c6ba90d44e2b7442325fc237f01a3ab5b",
+   "size": 776452,
+   "file": "ubuntu/libgprofng0_2.42-4ubuntu2.10_arm64.deb",
+   "origin": "https://snapshot.ubuntu.com/ubuntu/20261025T160000Z noble-updates",
+   "archive_path": "pool/main/b/binutils/libgprofng0_2.42-4ubuntu2.10_arm64.deb",
+   "index_verified": true
+  },
+  {
+   "package": "libgssapi-krb5-2",
+   "version": "1.20.1-6ubuntu2.10",
+   "architecture": "arm64",
+   "sha256": "7a13651d117e3b8f06139f4aac2184d4efaa8b5d375954b5229f0a332b3d6aeb",
+   "size": 141730,
+   "file": "ubuntu/libgssapi-krb5-2_1.20.1-6ubuntu2.10_arm64.deb",
+   "origin": "https://snapshot.ubuntu.com/ubuntu/20261025T160000Z noble-updates",
+   "archive_path": "pool/main/k/krb5/libgssapi-krb5-2_1.20.1-6ubuntu2.10_arm64.deb",
+   "index_verified": true
+  },
+  {
+   "package": "libhwasan0",
+   "version": "14.2.0-4ubuntu2~24.04.1",
+   "architecture": "arm64",
+   "sha256": "44851293eede488ad89fd12db1bd8bfcb2b732f68ad4c13b83d6e0ce5d7b4bfa",
+   "size": 1604938,
+   "file": "ubuntu/libhwasan0_14.2.0-4ubuntu2~24.04.1_arm64.deb",
+   "origin": "https://snapshot.ubuntu.com/ubuntu/20261025T160000Z noble-security",
+   "archive_path": "pool/main/g/gcc-14/libhwasan0_14.2.0-4ubuntu2~24.04.1_arm64.deb",
+   "index_verified": true
+  },
+  {
+   "package": "libicu74",
+   "version": "74.2-1ubuntu3.1",
+   "architecture": "arm64",
+   "sha256": "48f93acf50dcf237a8d58ce366730a28438ce52d3f06d7a2a88b51261dd791f7",
+   "size": 10806898,
+   "file": "ubuntu/libicu74_74.2-1ubuntu3.1_arm64.deb",
+   "origin": "https://snapshot.ubuntu.com/ubuntu/20261025T160000Z noble-updates",
+   "archive_path": "pool/main/i/icu/libicu74_74.2-1ubuntu3.1_arm64.deb",
+   "index_verified": true
+  },
+  {
+   "package": "libisl23",
+   "version": "0.26-3build1.1",
+   "architecture": "arm64",
+   "sha256": "250bff60f1405c2fa7cd8cdd839f83105c7fec9b42ed6cb5f62e1bcda709bbc2",
+   "size": 669128,
+   "file": "ubuntu/libisl23_0.26-3build1.1_arm64.deb",
+   "origin": "https://snapshot.ubuntu.com/ubuntu/20261025T160000Z noble-updates",
+   "archive_path": "pool/main/i/isl/libisl23_0.26-3build1.1_arm64.deb",
+   "index_verified": true
+  },
+  {
+   "package": "libitm1",
+   "version": "14.2.0-4ubuntu2~24.04.1",
+   "architecture": "arm64",
+   "sha256": "7f7d7c5a26888e5e34eb62a193762eb6a8d5805c5d6f22248f638193d1804993",
+   "size": 28154,
+   "file": "ubuntu/libitm1_14.2.0-4ubuntu2~24.04.1_arm64.deb",
+   "origin": "https://snapshot.ubuntu.com/ubuntu/20261025T160000Z noble-security",
+   "archive_path": "pool/main/g/gcc-14/libitm1_14.2.0-4ubuntu2~24.04.1_arm64.deb",
+   "index_verified": true
+  },
+  {
+   "package": "libjansson4",
+   "version": "2.14-2build2",
+   "architecture": "arm64",
+   "sha256": "a9d513eae76f4efb1c7370413bd21634fcfc0955e103d26af95f298af6c90abd",
+   "size": 34362,
+   "file": "ubuntu/libjansson4_2.14-2build2_arm64.deb",
+   "origin": "https://snapshot.ubuntu.com/ubuntu/20261025T160000Z noble",
+   "archive_path": "pool/main/j/jansson/libjansson4_2.14-2build2_arm64.deb",
+   "index_verified": true
+  },
+  {
+   "package": "libjsoncpp25",
+   "version": "1.9.5-6build1",
+   "architecture": "arm64",
+   "sha256": "2ddcee633e150bd656b149bc687507bdc276080d91a2fe1f508898db20d130bc",
+   "size": 78186,
+   "file": "ubuntu/libjsoncpp25_1.9.5-6build1_arm64.deb",
+   "origin": "https://snapshot.ubuntu.com/ubuntu/20261025T160000Z noble",
+   "archive_path": "pool/main/libj/libjsoncpp/libjsoncpp25_1.9.5-6build1_arm64.deb",
+   "index_verified": true
+  },
+  {
+   "package": "libk5crypto3",
+   "version": "1.20.1-6ubuntu2.10",
+   "architecture": "arm64",
+   "sha256": "f05865643982afcec53b08c20e5e69be364f632dd63342009eec99f2ceb180c9",
+   "size": 85774,
+   "file": "ubuntu/libk5crypto3_1.20.1-6ubuntu2.10_arm64.deb",
+   "origin": "https://snapshot.ubuntu.com/ubuntu/20261025T160000Z noble-updates",
+   "archive_path": "pool/main/k/krb5/libk5crypto3_1.20.1-6ubuntu2.10_arm64.deb",
+   "index_verified": true
+  },
+  {
+   "package": "libkeyutils1",
+   "version": "1.6.3-3build1",
+   "architecture": "arm64",
+   "sha256": "d141e94ed3b32ea6540f2e927a83b3d42cd4378256a1aad60cda583ffdbd78af",
+   "size": 9654,
+   "file": "ubuntu/libkeyutils1_1.6.3-3build1_arm64.deb",
+   "origin": "https://snapshot.ubuntu.com/ubuntu/20261025T160000Z noble",
+   "archive_path": "pool/main/k/keyutils/libkeyutils1_1.6.3-3build1_arm64.deb",
+   "index_verified": true
+  },
+  {
+   "package": "libkrb5-3",
+   "version": "1.20.1-6ubuntu2.10",
+   "architecture": "arm64",
+   "sha256": "0ba099c96bfe18c168e0c12f92408c7a389566692db959be4afc88bd23466963",
+   "size": 349720,
+   "file": "ubuntu/libkrb5-3_1.20.1-6ubuntu2.10_arm64.deb",
+   "origin": "https://snapshot.ubuntu.com/ubuntu/20261025T160000Z noble-updates",
+   "archive_path": "pool/main/k/krb5/libkrb5-3_1.20.1-6ubuntu2.10_arm64.deb",
+   "index_verified": true
+  },
+  {
+   "package": "libkrb5support0",
+   "version": "1.20.1-6ubuntu2.10",
+   "architecture": "arm64",
+   "sha256": "62d276c37b371c0d48de636d14f55d12f93aa18164ffe16d6fa66a81caeacf74",
+   "size": 35356,
+   "file": "ubuntu/libkrb5support0_1.20.1-6ubuntu2.10_arm64.deb",
+   "origin": "https://snapshot.ubuntu.com/ubuntu/20261025T160000Z noble-updates",
+   "archive_path": "pool/main/k/krb5/libkrb5support0_1.20.1-6ubuntu2.10_arm64.deb",
+   "index_verified": true
+  },
+  {
+   "package": "libldap2",
+   "version": "2.6.10+dfsg-0ubuntu0.24.04.1",
+   "architecture": "arm64",
+   "sha256": "60893ca2782c2e52dc3b7b192be0169228beb91f7c87e93abaeca5871c5f16ee",
+   "size": 195858,
+   "file": "ubuntu/libldap2_2.6.10+dfsg-0ubuntu0.24.04.1_arm64.deb",
+   "origin": "https://snapshot.ubuntu.com/ubuntu/20261025T160000Z noble-updates",
+   "archive_path": "pool/main/o/openldap/libldap2_2.6.10+dfsg-0ubuntu0.24.04.1_arm64.deb",
+   "index_verified": true
+  },
+  {
+   "package": "liblsan0",
+   "version": "14.2.0-4ubuntu2~24.04.1",
+   "architecture": "arm64",
+   "sha256": "21bb80325192b0cce6ccd041a8d823609c5e656bdda43368db6cdfe501593188",
+   "size": 1289238,
+   "file": "ubuntu/liblsan0_14.2.0-4ubuntu2~24.04.1_arm64.deb",
+   "origin": "https://snapshot.ubuntu.com/ubuntu/20261025T160000Z noble-security",
+   "archive_path": "pool/main/g/gcc-14/liblsan0_14.2.0-4ubuntu2~24.04.1_arm64.deb",
+   "index_verified": true
+  },
+  {
+   "package": "libmpc3",
+   "version": "1.3.1-1build1.1",
+   "architecture": "arm64",
+   "sha256": "efc4a44fb7382db33bf3adbfd0058201fd73d0e56fd48662d653e9a93f6139da",
+   "size": 56402,
+   "file": "ubuntu/libmpc3_1.3.1-1build1.1_arm64.deb",
+   "origin": "https://snapshot.ubuntu.com/ubuntu/20261025T160000Z noble-updates",
+   "archive_path": "pool/main/m/mpclib3/libmpc3_1.3.1-1build1.1_arm64.deb",
+   "index_verified": true
+  },
+  {
+   "package": "libmpfr6",
+   "version": "4.2.1-1build1.1",
+   "architecture": "arm64",
+   "sha256": "83517e4377082a35dcce66ec5310881a848486279f64d737919d1819b7884201",
+   "size": 329460,
+   "file": "ubuntu/libmpfr6_4.2.1-1build1.1_arm64.deb",
+   "origin": "https://snapshot.ubuntu.com/ubuntu/20261025T160000Z noble-updates",
+   "archive_path": "pool/main/m/mpfr4/libmpfr6_4.2.1-1build1.1_arm64.deb",
+   "index_verified": true
+  },
+  {
+   "package": "libnghttp2-14",
+   "version": "1.59.0-1ubuntu0.4",
+   "architecture": "arm64",
+   "sha256": "ec812e0b82dfb315b140020f4c8434191a89cf42c49dbb82605d0892b6783b59",
+   "size": 74758,
+   "file": "ubuntu/libnghttp2-14_1.59.0-1ubuntu0.4_arm64.deb",
+   "origin": "https://snapshot.ubuntu.com/ubuntu/20261025T160000Z noble-security",
+   "archive_path": "pool/main/n/nghttp2/libnghttp2-14_1.59.0-1ubuntu0.4_arm64.deb",
+   "index_verified": true
+  },
+  {
+   "package": "libpsl5t64",
+   "version": "0.21.2-1.1build1",
+   "architecture": "arm64",
+   "sha256": "886d485c74567b855bcd19b6f353a769a08b58c111b2d8275a908a469c15d4bf",
+   "size": 57436,
+   "file": "ubuntu/libpsl5t64_0.21.2-1.1build1_arm64.deb",
+   "origin": "https://snapshot.ubuntu.com/ubuntu/20261025T160000Z noble",
+   "archive_path": "pool/main/libp/libpsl/libpsl5t64_0.21.2-1.1build1_arm64.deb",
+   "index_verified": true
+  },
+  {
+   "package": "libpython3-stdlib",
+   "version": "3.12.3-0ubuntu2.1",
+   "architecture": "arm64",
+   "sha256": "b6bd0a5e6fa11f2bae6da48707abe6b8245412cbf34e376cb3b9af0968b7122a",
+   "size": 10088,
+   "file": "ubuntu/libpython3-stdlib_3.12.3-0ubuntu2.1_arm64.deb",
+   "origin": "https://snapshot.ubuntu.com/ubuntu/20261025T160000Z noble-security",
+   "archive_path": "pool/main/p/python3-defaults/libpython3-stdlib_3.12.3-0ubuntu2.1_arm64.deb",
+   "index_verified": true
+  },
+  {
+   "package": "libpython3.12-minimal",
+   "version": "3.12.3-1ubuntu0.17",
+   "architecture": "arm64",
+   "sha256": "11790e3fc5deb4867c7fb762aa5f4f710093501f62b60ef16dd427ea2495bcc6",
+   "size": 835130,
+   "file": "ubuntu/libpython3.12-minimal_3.12.3-1ubuntu0.17_arm64.deb",
+   "origin": "https://snapshot.ubuntu.com/ubuntu/20261025T160000Z noble-security",
+   "archive_path": "pool/main/p/python3.12/libpython3.12-minimal_3.12.3-1ubuntu0.17_arm64.deb",
+   "index_verified": true
+  },
+  {
+   "package": "libpython3.12-stdlib",
+   "version": "3.12.3-1ubuntu0.17",
+   "architecture": "arm64",
+   "sha256": "b9462bf2f55bfffaf304a597c7964354e0d49ab20eed028f55f7183f2210581e",
+   "size": 2038562,
+   "file": "ubuntu/libpython3.12-stdlib_3.12.3-1ubuntu0.17_arm64.deb",
+   "origin": "https://snapshot.ubuntu.com/ubuntu/20261025T160000Z noble-security",
+   "archive_path": "pool/main/p/python3.12/libpython3.12-stdlib_3.12.3-1ubuntu0.17_arm64.deb",
+   "index_verified": true
+  },
+  {
+   "package": "libreadline8t64",
+   "version": "8.2-4build1",
+   "architecture": "arm64",
+   "sha256": "7f46b2f3ca588cd2f05d2cfb6844017309760b4201105cdfda4b339f9e6c69da",
+   "size": 153046,
+   "file": "ubuntu/libreadline8t64_8.2-4build1_arm64.deb",
+   "origin": "https://snapshot.ubuntu.com/ubuntu/20261025T160000Z noble",
+   "archive_path": "pool/main/r/readline/libreadline8t64_8.2-4build1_arm64.deb",
+   "index_verified": true
+  },
+  {
+   "package": "librhash0",
+   "version": "1.4.3-3build1",
+   "architecture": "arm64",
+   "sha256": "5406df3423dc0ce53a4f6ff0b786a597c7b5ad3b8e3a51a04bec85d5fe1ab82f",
+   "size": 126360,
+   "file": "ubuntu/librhash0_1.4.3-3build1_arm64.deb",
+   "origin": "https://snapshot.ubuntu.com/ubuntu/20261025T160000Z noble",
+   "archive_path": "pool/main/r/rhash/librhash0_1.4.3-3build1_arm64.deb",
+   "index_verified": true
+  },
+  {
+   "package": "librtmp1",
+   "version": "2.4+20151223.gitfa8646d.1-2build7",
+   "architecture": "arm64",
+   "sha256": "fb771b2743120d9d44ee9989fd485205680976f7bf89f2f1ac5df50238ea1db7",
+   "size": 57804,
+   "file": "ubuntu/librtmp1_2.4+20151223.gitfa8646d.1-2build7_arm64.deb",
+   "origin": "https://snapshot.ubuntu.com/ubuntu/20261025T160000Z noble",
+   "archive_path": "pool/main/r/rtmpdump/librtmp1_2.4+20151223.gitfa8646d.1-2build7_arm64.deb",
+   "index_verified": true
+  },
+  {
+   "package": "libsasl2-2",
+   "version": "2.1.28+dfsg1-5ubuntu3.1",
+   "architecture": "arm64",
+   "sha256": "05da24adf2b95285ce7eaf9a2ea902fbf4f756a796c8adbfd221d746035df44b",
+   "size": 54660,
+   "file": "ubuntu/libsasl2-2_2.1.28+dfsg1-5ubuntu3.1_arm64.deb",
+   "origin": "https://snapshot.ubuntu.com/ubuntu/20261025T160000Z noble-updates",
+   "archive_path": "pool/main/c/cyrus-sasl2/libsasl2-2_2.1.28+dfsg1-5ubuntu3.1_arm64.deb",
+   "index_verified": true
+  },
+  {
+   "package": "libsasl2-modules-db",
+   "version": "2.1.28+dfsg1-5ubuntu3.1",
+   "architecture": "arm64",
+   "sha256": "ee8237dfd0d26df4d5fbfd3a9b132ae9f34f05b4508176b8bd1839f12739d94c",
+   "size": 21552,
+   "file": "ubuntu/libsasl2-modules-db_2.1.28+dfsg1-5ubuntu3.1_arm64.deb",
+   "origin": "https://snapshot.ubuntu.com/ubuntu/20261025T160000Z noble-updates",
+   "archive_path": "pool/main/c/cyrus-sasl2/libsasl2-modules-db_2.1.28+dfsg1-5ubuntu3.1_arm64.deb",
+   "index_verified": true
+  },
+  {
+   "package": "libsframe1",
+   "version": "2.42-4ubuntu2.10",
+   "architecture": "arm64",
+   "sha256": "4e2ef8c92da324c7f8e8f055c8c698e37c93b886602766e7e72ac178835c9a31",
+   "size": 15428,
+   "file": "ubuntu/libsframe1_2.42-4ubuntu2.10_arm64.deb",
+   "origin": "https://snapshot.ubuntu.com/ubuntu/20261025T160000Z noble-updates",
+   "archive_path": "pool/main/b/binutils/libsframe1_2.42-4ubuntu2.10_arm64.deb",
+   "index_verified": true
+  },
+  {
+   "package": "libsqlite3-0",
+   "version": "3.45.1-1ubuntu2.8",
+   "architecture": "arm64",
+   "sha256": "85925089ef6820a5b6ed80bb490d187465e49687c388333895680fda54e3ee06",
+   "size": 690864,
+   "file": "ubuntu/libsqlite3-0_3.45.1-1ubuntu2.8_arm64.deb",
+   "origin": "https://snapshot.ubuntu.com/ubuntu/20261025T160000Z noble-security",
+   "archive_path": "pool/main/s/sqlite3/libsqlite3-0_3.45.1-1ubuntu2.8_arm64.deb",
+   "index_verified": true
+  },
+  {
+   "package": "libssh-4",
+   "version": "0.10.6-2ubuntu0.5",
+   "architecture": "arm64",
+   "sha256": "f1b8da917a3d65ca77918027206b55b69d62795df2676c39828d4439bc97e68f",
+   "size": 192306,
+   "file": "ubuntu/libssh-4_0.10.6-2ubuntu0.5_arm64.deb",
+   "origin": "https://snapshot.ubuntu.com/ubuntu/20261025T160000Z noble-security",
+   "archive_path": "pool/main/libs/libssh/libssh-4_0.10.6-2ubuntu0.5_arm64.deb",
+   "index_verified": true
+  },
+  {
+   "package": "libstdc++-13-dev",
+   "version": "13.3.0-6ubuntu2~24.04.1",
+   "architecture": "arm64",
+   "sha256": "e4911c9281d73b318ca47cb7976011a7dc13e299a91a06bc6d3e2d174cc2ce51",
+   "size": 2397276,
+   "file": "ubuntu/libstdc++-13-dev_13.3.0-6ubuntu2~24.04.1_arm64.deb",
+   "origin": "https://snapshot.ubuntu.com/ubuntu/20261025T160000Z noble-security",
+   "archive_path": "pool/main/g/gcc-13/libstdc++-13-dev_13.3.0-6ubuntu2~24.04.1_arm64.deb",
+   "index_verified": true
+  },
+  {
+   "package": "libtsan2",
+   "version": "14.2.0-4ubuntu2~24.04.1",
+   "architecture": "arm64",
+   "sha256": "00beb501f4979c7fd3a978b52a489ea7dbfc1203e5c56936e4c0ea5c2032fb3d",
+   "size": 2696830,
+   "file": "ubuntu/libtsan2_14.2.0-4ubuntu2~24.04.1_arm64.deb",
+   "origin": "https://snapshot.ubuntu.com/ubuntu/20261025T160000Z noble-security",
+   "archive_path": "pool/main/g/gcc-14/libtsan2_14.2.0-4ubuntu2~24.04.1_arm64.deb",
+   "index_verified": true
+  },
+  {
+   "package": "libubsan1",
+   "version": "14.2.0-4ubuntu2~24.04.1",
+   "architecture": "arm64",
+   "sha256": "a5b4383f70f41cd949315c89e99e6416a0ee48037f7c5ea6b33f88f3c733757a",
+   "size": 1157016,
+   "file": "ubuntu/libubsan1_14.2.0-4ubuntu2~24.04.1_arm64.deb",
+   "origin": "https://snapshot.ubuntu.com/ubuntu/20261025T160000Z noble-security",
+   "archive_path": "pool/main/g/gcc-14/libubsan1_14.2.0-4ubuntu2~24.04.1_arm64.deb",
+   "index_verified": true
+  },
+  {
+   "package": "libuv1t64",
+   "version": "1.48.0-1.1build1",
+   "architecture": "arm64",
+   "sha256": "28bd1e33e5ff44f1878e757c42951bfafd26e92a5865b72ad33622e1251f45c2",
+   "size": 95346,
+   "file": "ubuntu/libuv1t64_1.48.0-1.1build1_arm64.deb",
+   "origin": "https://snapshot.ubuntu.com/ubuntu/20261025T160000Z noble",
+   "archive_path": "pool/main/libu/libuv1/libuv1t64_1.48.0-1.1build1_arm64.deb",
+   "index_verified": true
+  },
+  {
+   "package": "libxml2",
+   "version": "2.9.14+dfsg-1.3ubuntu3.10",
+   "architecture": "arm64",
+   "sha256": "a80d5bb7f41abae8cf3bd822672f732bd91eef8f2fabdadec3beab02acd1ca01",
+   "size": 735876,
+   "file": "ubuntu/libxml2_2.9.14+dfsg-1.3ubuntu3.10_arm64.deb",
+   "origin": "https://snapshot.ubuntu.com/ubuntu/20261025T160000Z noble-security",
+   "archive_path": "pool/main/libx/libxml2/libxml2_2.9.14+dfsg-1.3ubuntu3.10_arm64.deb",
+   "index_verified": true
+  },
+  {
+   "package": "linux-libc-dev",
+   "version": "6.8.0-147.147",
+   "architecture": "arm64",
+   "sha256": "e489840ff836f22ae92c1bc3534ea8c68bcce2c4500e39ba560bbefc1b25e359",
+   "size": 1568718,
+   "file": "ubuntu/linux-libc-dev_6.8.0-147.147_arm64.deb",
+   "origin": "https://snapshot.ubuntu.com/ubuntu/20261025T160000Z noble-security",
+   "archive_path": "pool/main/l/linux/linux-libc-dev_6.8.0-147.147_arm64.deb",
+   "index_verified": true
+  },
+  {
+   "package": "make",
+   "version": "4.3-4.1build2",
+   "architecture": "arm64",
+   "sha256": "3bbbf5d426bc68fc232fc4e20f135aaf3eb76a514839acf82eeffa0dce9c81d4",
+   "size": 178236,
+   "file": "ubuntu/make_4.3-4.1build2_arm64.deb",
+   "origin": "https://snapshot.ubuntu.com/ubuntu/20261025T160000Z noble",
+   "archive_path": "pool/main/m/make-dfsg/make_4.3-4.1build2_arm64.deb",
+   "index_verified": true
+  },
+  {
+   "package": "media-types",
+   "version": "10.1.0",
+   "architecture": "all",
+   "sha256": "31bfb7eec55ab6d34a50ba995150e1498d4cb897714085d8025e330d3b529747",
+   "size": 27474,
+   "file": "ubuntu/media-types_10.1.0_all.deb",
+   "origin": "https://snapshot.ubuntu.com/ubuntu/20261025T160000Z noble",
+   "archive_path": "pool/main/m/media-types/media-types_10.1.0_all.deb",
+   "index_verified": true
+  },
+  {
+   "package": "netbase",
+   "version": "6.4",
+   "architecture": "all",
+   "sha256": "8cdbc9c3dca01e660759bf9d840f72e45ac72faf5d19ca1faecacaf6a60c1a87",
+   "size": 13112,
+   "file": "ubuntu/netbase_6.4_all.deb",
+   "origin": "https://snapshot.ubuntu.com/ubuntu/20261025T160000Z noble",
+   "archive_path": "pool/main/n/netbase/netbase_6.4_all.deb",
+   "index_verified": true
+  },
+  {
+   "package": "openssl",
+   "version": "3.0.13-0ubuntu3.16",
+   "architecture": "arm64",
+   "sha256": "07fa666e2dfe758e5c4e19ccc695a19e8a56fb512fa55bd7de89219a1e65d372",
+   "size": 985334,
+   "file": "ubuntu/openssl_3.0.13-0ubuntu3.16_arm64.deb",
+   "origin": "https://snapshot.ubuntu.com/ubuntu/20261025T160000Z noble-security",
+   "archive_path": "pool/main/o/openssl/openssl_3.0.13-0ubuntu3.16_arm64.deb",
+   "index_verified": true
+  },
+  {
+   "package": "python3",
+   "version": "3.12.3-0ubuntu2.1",
+   "architecture": "arm64",
+   "sha256": "ea792b91e0fc9e249b96b960d14e04a8b7107029988546e8dd3511b74a693a6c",
+   "size": 23004,
+   "file": "ubuntu/python3_3.12.3-0ubuntu2.1_arm64.deb",
+   "origin": "https://snapshot.ubuntu.com/ubuntu/20261025T160000Z noble-security",
+   "archive_path": "pool/main/p/python3-defaults/python3_3.12.3-0ubuntu2.1_arm64.deb",
+   "index_verified": true
+  },
+  {
+   "package": "python3-minimal",
+   "version": "3.12.3-0ubuntu2.1",
+   "architecture": "arm64",
+   "sha256": "883f362e7ea23d3de5483c0b5c31774f75897cc46d34840371b5fe7a0cc3a83c",
+   "size": 27444,
+   "file": "ubuntu/python3-minimal_3.12.3-0ubuntu2.1_arm64.deb",
+   "origin": "https://snapshot.ubuntu.com/ubuntu/20261025T160000Z noble-security",
+   "archive_path": "pool/main/p/python3-defaults/python3-minimal_3.12.3-0ubuntu2.1_arm64.deb",
+   "index_verified": true
+  },
+  {
+   "package": "python3-pip",
+   "version": "24.0+dfsg-1ubuntu1.3",
+   "architecture": "all",
+   "sha256": "4e1af0b6f0b52c847ffa7b192b9f650845b99ff300138af05ab9a6252eb75682",
+   "size": 1319940,
+   "file": "ubuntu/python3-pip_24.0+dfsg-1ubuntu1.3_all.deb",
+   "origin": "https://snapshot.ubuntu.com/ubuntu/20261025T160000Z noble-security",
+   "archive_path": "pool/universe/p/python-pip/python3-pip_24.0+dfsg-1ubuntu1.3_all.deb",
+   "index_verified": true
+  },
+  {
+   "package": "python3-pkg-resources",
+   "version": "68.1.2-2ubuntu1.2",
+   "architecture": "all",
+   "sha256": "13caaa69d5ba8b02e90087d4bcef714c0581e591e820804d15d12f582055147a",
+   "size": 167914,
+   "file": "ubuntu/python3-pkg-resources_68.1.2-2ubuntu1.2_all.deb",
+   "origin": "https://snapshot.ubuntu.com/ubuntu/20261025T160000Z noble-security",
+   "archive_path": "pool/main/s/setuptools/python3-pkg-resources_68.1.2-2ubuntu1.2_all.deb",
+   "index_verified": true
+  },
+  {
+   "package": "python3-setuptools",
+   "version": "68.1.2-2ubuntu1.2",
+   "architecture": "all",
+   "sha256": "27ede03d8c5046c30cf1dcdc8835708408d27bdd3561e881b5d66656e6ff23e7",
+   "size": 396614,
+   "file": "ubuntu/python3-setuptools_68.1.2-2ubuntu1.2_all.deb",
+   "origin": "https://snapshot.ubuntu.com/ubuntu/20261025T160000Z noble-security",
+   "archive_path": "pool/main/s/setuptools/python3-setuptools_68.1.2-2ubuntu1.2_all.deb",
+   "index_verified": true
+  },
+  {
+   "package": "python3-wheel",
+   "version": "0.42.0-2",
+   "architecture": "all",
+   "sha256": "e1a4076425d3d1f1772b11bff6a025055723b2d0a4972f9519849ddaa8cd3953",
+   "size": 53052,
+   "file": "ubuntu/python3-wheel_0.42.0-2_all.deb",
+   "origin": "https://snapshot.ubuntu.com/ubuntu/20261025T160000Z noble",
+   "archive_path": "pool/universe/w/wheel/python3-wheel_0.42.0-2_all.deb",
+   "index_verified": true
+  },
+  {
+   "package": "python3.12",
+   "version": "3.12.3-1ubuntu0.17",
+   "architecture": "arm64",
+   "sha256": "4dcc676815989c3d32ef43f8b98d37ecfd60cff8a47022152120246f21903cf0",
+   "size": 650732,
+   "file": "ubuntu/python3.12_3.12.3-1ubuntu0.17_arm64.deb",
+   "origin": "https://snapshot.ubuntu.com/ubuntu/20261025T160000Z noble-security",
+   "archive_path": "pool/main/p/python3.12/python3.12_3.12.3-1ubuntu0.17_arm64.deb",
+   "index_verified": true
+  },
+  {
+   "package": "python3.12-minimal",
+   "version": "3.12.3-1ubuntu0.17",
+   "architecture": "arm64",
+   "sha256": "be39fa8380f1e65fc02701cdbc8652acd924d8576b4ba1bd772141040a22b15f",
+   "size": 2253306,
+   "file": "ubuntu/python3.12-minimal_3.12.3-1ubuntu0.17_arm64.deb",
+   "origin": "https://snapshot.ubuntu.com/ubuntu/20261025T160000Z noble-security",
+   "archive_path": "pool/main/p/python3.12/python3.12-minimal_3.12.3-1ubuntu0.17_arm64.deb",
+   "index_verified": true
+  },
+  {
+   "package": "readline-common",
+   "version": "8.2-4build1",
+   "architecture": "all",
+   "sha256": "879bfd7f8a9bc4c0f7cdc777cdd8bc6de5f8c4a2ac80c060322a1b22f13504bb",
+   "size": 56484,
+   "file": "ubuntu/readline-common_8.2-4build1_all.deb",
+   "origin": "https://snapshot.ubuntu.com/ubuntu/20261025T160000Z noble",
+   "archive_path": "pool/main/r/readline/readline-common_8.2-4build1_all.deb",
+   "index_verified": true
+  },
+  {
+   "package": "rpcsvc-proto",
+   "version": "1.4.2-0ubuntu7",
+   "architecture": "arm64",
+   "sha256": "ae527152fc2bf9c1a645c2620d802b0849db32c8aa48328b4ae94c59cc57bcc9",
+   "size": 64816,
+   "file": "ubuntu/rpcsvc-proto_1.4.2-0ubuntu7_arm64.deb",
+   "origin": "https://snapshot.ubuntu.com/ubuntu/20261025T160000Z noble",
+   "archive_path": "pool/main/r/rpcsvc-proto/rpcsvc-proto_1.4.2-0ubuntu7_arm64.deb",
+   "index_verified": true
+  },
+  {
+   "package": "tzdata",
+   "version": "2026e-0ubuntu0.24.04.1",
+   "architecture": "all",
+   "sha256": "2f6794a7f31753fc947d9ac02ff03ea46510f34864f9d132a93d7b105e3c4447",
+   "size": 282136,
+   "file": "ubuntu/tzdata_2026e-0ubuntu0.24.04.1_all.deb",
+   "origin": "https://snapshot.ubuntu.com/ubuntu/20261025T160000Z noble-security",
+   "archive_path": "pool/main/t/tzdata/tzdata_2026e-0ubuntu0.24.04.1_all.deb",
+   "index_verified": true
+  }
+ ],
+ "ubuntu_snapshot": "https://snapshot.ubuntu.com/ubuntu/20261025T160000Z",
+ "verification": {
+  "inrelease": {
+   "noble": {
+    "gpgv_ok": true,
+    "signing_key": [
+     [
+      "F6ECB3762474EDA9D21B7022871920D1991BC93C",
+      ""
+     ]
+    ]
+   },
+   "noble-updates": {
+    "gpgv_ok": true,
+    "signing_key": [
+     [
+      "F6ECB3762474EDA9D21B7022871920D1991BC93C",
+      ""
+     ]
+    ]
+   },
+   "noble-security": {
+    "gpgv_ok": true,
+    "signing_key": [
+     [
+      "F6ECB3762474EDA9D21B7022871920D1991BC93C",
+      ""
+     ]
+    ]
+   }
+  },
+  "packages_files": {
+   "noble/main": {
+    "file": "snapshot.ubuntu.com_ubuntu_20261025T160000Z_dists_noble_main_binary-arm64_Packages",
+    "sha256": "423c9185185cfc15df7bb3e748afc94b79ed09e0c437a0589aace46b61090d29",
+    "matches_signed_release": true
+   },
+   "noble/universe": {
+    "file": "snapshot.ubuntu.com_ubuntu_20261025T160000Z_dists_noble_universe_binary-arm64_Packages",
+    "sha256": "adb1c01115c3b11d2a5cde43b17ce3c53fa7cc48f834b930f63910d2c7dc74f5",
+    "matches_signed_release": true
+   },
+   "noble-updates/main": {
+    "file": "snapshot.ubuntu.com_ubuntu_20261025T160000Z_dists_noble-updates_main_binary-arm64_Packages",
+    "sha256": "2cb5edd160ff753bb9a5d8703b6b43c866321b862fa294039021dbbe25318683",
+    "matches_signed_release": true
+   },
+   "noble-updates/universe": {
+    "file": "snapshot.ubuntu.com_ubuntu_20261025T160000Z_dists_noble-updates_universe_binary-arm64_Packages",
+    "sha256": "3af7e3caf93d34d07695b817abc29a8ddfd10b87727a04403e765a33ec620387",
+    "matches_signed_release": true
+   },
+   "noble-security/main": {
+    "file": "snapshot.ubuntu.com_ubuntu_20261025T160000Z_dists_noble-security_main_binary-arm64_Packages",
+    "sha256": "ba36c8b7ea72675eea32757a1c9922659536367dc560f76a7f245276dc1df639",
+    "matches_signed_release": true
+   },
+   "noble-security/universe": {
+    "file": "snapshot.ubuntu.com_ubuntu_20261025T160000Z_dists_noble-security_universe_binary-arm64_Packages",
+    "sha256": "9d1256b2e294c665c43b8504bfd0cc48ec882ce5b485384a8dd49f1ff5e25347",
+    "matches_signed_release": true
+   }
+  }
+ }
+}

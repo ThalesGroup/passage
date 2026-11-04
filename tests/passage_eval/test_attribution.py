@@ -106,6 +106,7 @@ def test_declared_checkpoint_alias_requires_measured_identity_and_work(identity,
             }
         )
     result = _component_attribution(runs, primary, variants, ["task"])
+    assert all(row["latency_ms"]["n_censored"] is None for row in result["rows"])  # no flags given: unknown
     assert result["status"] == expected
     assert result["complete_checkpoint_controls"] == (
         ["declared-alias"] if expected == "complete_control_matrix" else []

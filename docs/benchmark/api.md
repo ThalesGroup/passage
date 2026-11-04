@@ -68,6 +68,42 @@ labels stay evaluator-owned. See
 
 ---
 
+## Timing profiles, latency censoring and batch bounds
+
+The censoring rule and the re-warm profile are proposals, not sealed rules. The
+developer guide `docs/benchmark/supervised-execution.md` (sections 5.G to 5.I,
+6.I and 6.J) explains them, including the separate report of validation and
+recost time and the request limits that strict comparison requires; the [evaluation protocol](protocol.md) states the
+proposed censoring rule.
+
+::: passage_eval.execution.timing
+    options:
+      show_root_heading: true
+      members: false
+      show_source: false
+
+::: passage_eval.execution.timing.manifest_warmup
+    options:
+      show_root_heading: true
+      show_source: false
+
+::: passage_eval.metrics.latency.censored_latency_quantiles
+    options:
+      show_root_heading: true
+      show_source: false
+
+::: passage_eval.metrics.latency.validation_recost_summary
+    options:
+      show_root_heading: true
+      show_source: false
+
+::: passage_eval.protocol.batching.check_batch_plan
+    options:
+      show_root_heading: true
+      show_source: false
+
+---
+
 ## Top-level package
 
 ::: passage_eval

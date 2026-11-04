@@ -1,0 +1,43 @@
+import pytest
+from passage_eval.protocol.geographic_blocks import source_window_blocks
+
+
+def test_tasks_sharing_a_five_degree_block_or_a_crossing_share_a_cluster():
+    records = [
+        {"sample_id": "a", "source_windows": [{"lat": 0, "lon": 0}]},
+        {"sample_id": "b", "source_windows": [{"lat": 4, "lon": 4}, {"lat": 4, "lon": 5}]},
+        {"sample_id": "c", "source_windows": [{"lat": 1, "lon": 6}]},
+        {"sample_id": "d", "source_windows": [{"lat": 20, "lon": 40}]},
+    ]
+    result = source_window_blocks(records, block_degrees=5)
+    assert result["task_blocks"]["a"] == result["task_blocks"]["b"] == result["task_blocks"]["c"]
+    assert result["task_blocks"]["d"] != result["task_blocks"]["a"]
+    assert result["crossing_task_count"] == 1
+    assert result["number_of_blocks"] == 2
+
+
+def test_antimeridian_longitudes_are_normalized_to_the_same_source_tile():
+    records = [
+        {"sample_id": "east", "source_windows": [{"lat": 1, "lon": 180}]},
+        {"sample_id": "west", "source_windows": [{"lat": 1, "lon": -180}]},
+    ]
+    result = source_window_blocks(records, block_degrees=5)
+    assert result["task_blocks"]["east"] == result["task_blocks"]["west"]
+
+
+@pytest.mark.parametrize(
+    "records",
+    [
+        [],
+        [{"sample_id": "a", "source_windows": []}],
+        [{"sample_id": "a", "source_windows": [{"lat": True, "lon": 1}]}],
+        [{"sample_id": "a", "source_windows": [{"lat": 90, "lon": 1}]}],
+        [
+            {"sample_id": "a", "source_windows": [{"lat": 0, "lon": 1}]},
+            {"sample_id": "a", "source_windows": [{"lat": 2, "lon": 3}]},
+        ],
+    ],
+)
+def test_bad_or_unidentified_source_footprints_are_rejected(records):
+    with pytest.raises((ValueError, TypeError)):
+        source_window_blocks(records, block_degrees=5)

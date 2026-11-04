@@ -1295,6 +1295,7 @@ class TestTilesNeeded:
     @pytest.mark.generate
     def test_run_generate_logs_for_high_resolution(self, monkeypatch, tmp_path, capsys):
         """Run generate with a large resolution and ensure logging contains diagnostics."""
+        monkeypatch.chdir(tmp_path)
         # Use small TILE_SIZE_PX to force many tiles
         monkeypatch.setattr(gen, "TILE_SIZE_PX", 16)
 
@@ -1314,6 +1315,7 @@ class TestTilesNeeded:
             "resolutions": [160],
             "num_samples": 1,
             "generation": {"seed": 314159},
+            "hold_out": {"enabled": False},
             "solvers": [
                 {
                     "name": "test_solver",

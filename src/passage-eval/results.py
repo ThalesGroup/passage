@@ -854,6 +854,8 @@ def summarise_leaderboard(
         "latency_e2e_ms_p50",
         "latency_e2e_ms_p95",
         "latency_e2e_ms_p99",
+        "latency_e2e_censored",
+        "validation_recost_ms",
         "latency_fwd_ms_p50",
         "latency_decoder_ms_p50",
     }

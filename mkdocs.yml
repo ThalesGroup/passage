@@ -16,6 +16,9 @@ exclude_docs: |
   /DATA_QUALIFICATION.md
   /TRAJECTORY_STYLE.md
   /_partials/
+  /benchmark/supervised-execution.md
+  /benchmark/test-admission.md
+  /benchmark/campaign.md
   /overrides/
 
 repo_url: "https://github.com/ThalesGroup/passage"
@@ -242,6 +245,7 @@ nav:
       - "passage-eval Package": benchmark/passage-eval.md
       - "Leaderboard": benchmark/leaderboard.md
       - "First entries": benchmark/candidates.md
+      - "Final candidates": benchmark/final-candidates.md
       - "Evaluate your planner": benchmark/contributing-a-method.md
       - "Reproducible Notebooks":
           - "Overview": benchmark/notebooks/index.md
