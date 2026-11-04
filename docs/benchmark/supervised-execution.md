@@ -688,7 +688,10 @@ accidents, not against a hostile candidate. Independent evidence now exists for 
 hashes each bound tree it also lists every entry whose name starts with `onnxruntime` or `libonnxruntime`
 (distributions, `*.dist-info`, shared libraries) in `supervision.forbidden_modules.supervisor_scan`, and a verified run
 refuses such a tree (section 4.E). That scan is a name walk of the hashed bytes, not a scan of the worker's mapped
-libraries: an ONNX Runtime renamed on disk or built into another library is not found by it.
+libraries. In the implicit system `/usr` tree, `onnxruntime*.json` indexes (such as vcpkg version metadata) are hashed
+but do not count as runtime artifacts. Declared candidate and runtime trees retain the strict prefix rule;
+an explicit runtime or separate interpreter environment under `/usr` keeps that whole tree strict.
+An ONNX Runtime renamed on disk or built into another library is not found by the scan.
 
 ### 4.E. What a run may claim: purpose
 
@@ -1316,8 +1319,8 @@ State plainly, as of version 0.4:
 - A candidate environment can contain native code that the sandbox runs. A verified run pins its bytes; nothing here
   reviews them.
 - **ONNX Runtime is excluded by name.** The supervisor-side scan finds entries named `onnxruntime*`/`libonnxruntime*`
-  in the trees it hashes; the run-time check is self-reported. A renamed copy, or one linked into another library, is
-  not found by either.
+  in the trees it hashes, except `onnxruntime*.json` metadata in the implicit system `/usr` tree; the run-time check
+  is self-reported. A renamed copy, or one linked into another library, is not found by either.
 - Run artifacts hold bounded candidate-controlled text and are private until reviewed.
 - Restarted workers are cold under the default and v4 profiles; the v5 re-warm is a proposed policy, exercised with
   CPU fixtures only. After a failed re-warm, v5 runs the rest of the pass on workers without a complete warm-up
