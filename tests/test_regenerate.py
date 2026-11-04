@@ -1,5 +1,6 @@
 """Bounded release orchestration keeps identity and deletion gates observable."""
 
+import hashlib
 import importlib
 import json
 from pathlib import Path
@@ -7,6 +8,7 @@ from types import SimpleNamespace
 
 import pytest
 import yaml
+from PIL import Image
 
 
 def workflow():
@@ -34,7 +36,6 @@ def inputs(tmp_path):
     (tiles / "N000E000_DSM.tif").write_bytes(b"fixture")
     calibration = tmp_path / "calibrate.json"
     from passage.calibrate import CALIBRATION_SCHEMA, VALID_DATA_POLICY, _canonical_hash, _receipt_hash
-    import hashlib
 
     source_hash = hashlib.sha256(b"fixture").hexdigest()
     inventory = [{"filename": "N000E000_DSM.tif", "size_bytes": 7, "sha256": source_hash}]
@@ -65,6 +66,12 @@ def inputs(tmp_path):
     config["generation"]["dataset_version"] = "passage-successor-v1"
     config["resolutions"] = [64]
     config["num_samples"] = {64: 100}
+    # Public exports omit the release mask; exercise enabled controls with local input.
+    mask_path = tmp_path / "holdout.png"
+    mask = Image.new("L", (361, 181))
+    mask.putpixel((180, 90), 255)
+    mask.save(mask_path)
+    config["hold_out"] = {"enabled": True, "mask_path": str(mask_path)}
     config_path = tmp_path / "config.yaml"
     config_path.write_text(yaml.safe_dump(config))
     return config_path, tiles, calibration
@@ -123,6 +130,30 @@ def test_dry_run_validates_inputs_without_writes(tmp_path, disk_space):
         dry_run=True,
     )
     assert result["status"] == "planned"
+    mask = tmp_path / "holdout.png"
+    assert result["identity"]["frozen_controls"] == {
+        "hold_out_enabled": True,
+        "hold_out_mask_path": str(mask),
+        "hold_out_mask_sha256": hashlib.sha256(mask.read_bytes()).hexdigest(),
+    }
+    assert not final.exists()
+    assert not scratch.exists()
+
+
+def test_dry_run_rejects_missing_enabled_holdout_without_writes(tmp_path, disk_space):
+    w = workflow()
+    config, tiles, calibration = inputs(tmp_path)
+    (tmp_path / "holdout.png").unlink()
+    final, scratch = tmp_path / "final", tmp_path / "scratch"
+    with pytest.raises(FileNotFoundError, match="holdout[.]png"):
+        w.run_regenerate(
+            config_filepath=config,
+            tiles_dirpath=tiles,
+            calibration_filepath=calibration,
+            dataset_dirpath=final,
+            scratch_dirpath=scratch,
+            dry_run=True,
+        )
     assert not final.exists()
     assert not scratch.exists()
 
