@@ -3,6 +3,7 @@
 import hashlib
 import importlib
 import json
+import os
 from types import SimpleNamespace
 
 import pytest
@@ -48,6 +49,7 @@ def test_lfs_and_git_blob_known_hashes_cover_all_source_files(tmp_path, monkeypa
     assert result["status"] == "complete"
     assert result["content_verified"] is True
     assert result["verified_files"] == result["required_files"] == 2
+    assert result["bytes_read_this_run"] == 18
     manifest = json.loads((output / "manifest.json").read_text())
     entries = {entry["path"]: entry for entry in manifest["files"]}
     assert entries["README.md"]["expected_hash"] == "ce013625030ba8dba906f756967f9e9ca394464a"
@@ -66,6 +68,51 @@ def test_valid_resume_reads_no_source_bytes_and_ignores_truncated_tail(tmp_path,
     assert result["status"] == "complete"
     assert result["resumed_files"] == 1
     assert result["bytes_read_this_run"] == 0
+
+
+def test_progress_without_content_recheck_cannot_resume(tmp_path, monkeypatch):
+    root, output, _ = snapshot(tmp_path, monkeypatch, [("one", b"abc", True)])
+    auth().authenticate_snapshot(root, "owner/data", REVISION, output)
+    progress = output / "progress.jsonl"
+    records = [json.loads(line) for line in progress.read_text().splitlines()]
+    for record in records:
+        record.pop("content_rechecked", None)
+    progress.write_text("".join(json.dumps(record) + "\n" for record in records))
+    before = auth()._file_stat(root / "one", root)
+    (root / "one").write_bytes(b"xyz")
+    monkeypatch.setattr(auth(), "_file_stat", lambda path, root: before)
+
+    result = auth().authenticate_snapshot(root, "owner/data", REVISION, output)
+
+    assert result["status"] == "partial"
+    assert result["content_verified"] is False
+    assert result["resumed_files"] == 0
+    assert result["mismatched_files"] == 1
+    assert result["bytes_read_this_run"] == 3
+
+
+@pytest.mark.parametrize("failure", [OSError("read failed"), KeyboardInterrupt()])
+def test_final_content_recheck_failure_leaves_partial_receipt(tmp_path, monkeypatch, failure):
+    root, output, _ = snapshot(tmp_path, monkeypatch, [("one", b"abc", True)])
+    original = auth()._digest_file
+    reads = 0
+
+    def fail_recheck(*args, **kwargs):
+        nonlocal reads
+        reads += 1
+        if reads == 2:
+            raise failure
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(auth(), "_digest_file", fail_recheck)
+    if isinstance(failure, KeyboardInterrupt):
+        with pytest.raises(KeyboardInterrupt):
+            auth().authenticate_snapshot(root, "owner/data", REVISION, output)
+    else:
+        auth().authenticate_snapshot(root, "owner/data", REVISION, output)
+    receipt = json.loads((output / "receipt.json").read_text())
+    assert receipt["status"] == "partial"
+    assert receipt["content_verified"] is False
 
 
 def test_modified_file_invalidates_resume_and_preserves_mismatch(tmp_path, monkeypatch):
@@ -91,8 +138,14 @@ def test_missing_and_size_mismatched_files_prevent_complete_receipt(tmp_path, mo
     assert result["verified_files"] == 0
 
 
-def test_modification_during_hash_is_not_verified(tmp_path, monkeypatch):
-    root, output, _ = snapshot(tmp_path, monkeypatch, [("one", b"abc", True)])
+@pytest.mark.parametrize("same_stat", [False, True])
+@pytest.mark.parametrize("lfs", [False, True])
+def test_modification_during_hash_is_not_verified(tmp_path, monkeypatch, same_stat, lfs):
+    root, output, _ = snapshot(tmp_path, monkeypatch, [("one", b"abc", lfs)])
+    if same_stat:
+        # Same-size writes can share metadata timestamps on coarse filesystems.
+        before = auth()._file_stat(root / "one", root)
+        monkeypatch.setattr(auth(), "_file_stat", lambda path, root: before)
     original = auth()._digest_file
 
     def mutate(*args, **kwargs):
@@ -103,7 +156,10 @@ def test_modification_during_hash_is_not_verified(tmp_path, monkeypatch):
     monkeypatch.setattr(auth(), "_digest_file", mutate)
     result = auth().authenticate_snapshot(root, "owner/data", REVISION, output)
     assert result["status"] == "partial"
+    assert result["content_verified"] is False
     assert result["changed_files"] == 1
+    assert result["verified_files"] == 0
+    assert (root / "one").read_bytes() == b"xyz"
 
 
 def test_pinned_manifest_change_never_reuses_previous_records(tmp_path, monkeypatch):
@@ -114,8 +170,12 @@ def test_pinned_manifest_change_never_reuses_previous_records(tmp_path, monkeypa
         auth().authenticate_snapshot(root, "owner/data", REVISION, output)
 
 
-def test_file_changed_after_its_worker_finishes_is_rejected(tmp_path, monkeypatch):
+@pytest.mark.parametrize("same_stat", [False, True])
+def test_file_changed_after_its_worker_finishes_is_rejected(tmp_path, monkeypatch, same_stat):
     root, output, _ = snapshot(tmp_path, monkeypatch, [("first", b"abc", True), ("second", b"def", True)])
+    if same_stat:
+        before = {path: auth()._file_stat(path, root) for path in root.iterdir()}
+        monkeypatch.setattr(auth(), "_file_stat", lambda path, root: before[path])
     original = auth()._digest_file
 
     def mutate_earlier(path, *args, **kwargs):
@@ -127,6 +187,33 @@ def test_file_changed_after_its_worker_finishes_is_rejected(tmp_path, monkeypatc
     monkeypatch.setattr(auth(), "_digest_file", mutate_earlier)
     result = auth().authenticate_snapshot(root, "owner/data", REVISION, output, workers=1)
     assert result["status"] == "partial"
+    assert result["content_verified"] is False
+    assert result["changed_files"] == 1
+    assert result["verified_files"] == 1
+
+
+def test_file_changed_by_later_content_recheck_is_rejected(tmp_path, monkeypatch):
+    root, output, _ = snapshot(tmp_path, monkeypatch, [("first", b"abc", True), ("second", b"def", True)])
+    original = auth()._digest_file
+    second_reads = 0
+
+    def mutate_earlier(path, *args, **kwargs):
+        nonlocal second_reads
+        result = original(path, *args, **kwargs)
+        if path.name == "second":
+            second_reads += 1
+            if second_reads == 2:
+                first = root / "first"
+                before = first.stat()
+                first.write_bytes(b"xyz")
+                os.utime(first, ns=(before.st_atime_ns, before.st_mtime_ns + 1_000_000_000))
+        return result
+
+    monkeypatch.setattr(auth(), "_digest_file", mutate_earlier)
+    result = auth().authenticate_snapshot(root, "owner/data", REVISION, output, workers=1)
+
+    assert result["status"] == "partial"
+    assert result["content_verified"] is False
     assert result["changed_files"] == 1
     assert result["verified_files"] == 1
 

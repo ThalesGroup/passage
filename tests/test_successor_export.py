@@ -684,24 +684,32 @@ def test_interrupt_stops_borrowed_native_workers_before_staging_cleanup(tmp_path
     driver.write_text(
         "import faulthandler\n"
         "from pathlib import Path\n"
+        "import signal\n"
         "import sys\n"
         f"sys.path[:0] = {sys.path!r}\n"
         f"sys.path.insert(0, {str(Path(__file__).parent)!r})\n"
         "import pytest\n"
         "from test_successor_export import _interrupt_export_scenario\n"
         "if __name__ == '__main__':\n"
+        "    signal.signal(signal.SIGINT, signal.default_int_handler)\n"
         "    faulthandler.dump_traceback_later(20, repeat=True)\n"
         "    with pytest.MonkeyPatch.context() as monkeypatch:\n"
         f"        _interrupt_export_scenario(Path({str(tmp_path)!r}), monkeypatch)\n"
         "    faulthandler.cancel_dump_traceback_later()\n"
     )
-    process = subprocess.Popen(
-        [sys.executable, str(driver)],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-        start_new_session=True,
-    )
+    # Noninteractive CI runners can pass down an ignored SIGINT. Exercise that
+    # launch condition explicitly, then restore pytest's own handler immediately.
+    previous_sigint = signal.signal(signal.SIGINT, signal.SIG_IGN)
+    try:
+        process = subprocess.Popen(
+            [sys.executable, str(driver)],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            start_new_session=True,
+        )
+    finally:
+        signal.signal(signal.SIGINT, previous_sigint)
     timed_out = False
     try:
         output, _ = process.communicate(timeout=50)
