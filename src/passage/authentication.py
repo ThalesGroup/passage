@@ -176,6 +176,9 @@ def authenticate_snapshot(
     ``output`` must be outside ``root``. Workers are bounded to 1–8, with at most
     one 8 MiB block buffered per worker. Matching successful records can resume
     without rereading unchanged files; device/inode/size/mtime/ctime must agree.
+    Newly hashed matching files are reread before completion to detect content
+    changes hidden by timestamp granularity. The source must remain quiescent;
+    these observations do not establish an atomic snapshot against writers.
     Per-file progress is flushed on completion, summaries every ten seconds.
     Missing, changed, mismatching, or unreadable files return a partial receipt.
     Network/manifest errors raise; KeyboardInterrupt writes a partial receipt
@@ -221,6 +224,7 @@ def _run(root: Path, repo: str, revision: str, output: Path, workers: int) -> di
             valid = (
                 record is not None
                 and record.get("status") == "verified"
+                and record.get("content_rechecked") is True
                 and record.get("observed_hash") == entry["expected_hash"]
                 and record.get("algorithm") == entry["algorithm"]
                 and record.get("stat") == _file_stat(root / entry["path"], root)
@@ -331,7 +335,33 @@ def _run(root: Path, repo: str, revision: str, output: Path, workers: int) -> di
                     for future in futures:
                         future.cancel()
                     raise
-            # Reject observations that went stale after an earlier worker completed.
+            # Stat identity alone misses same-size writes within a timestamp tick.
+            # Only completed content rechecks may be reused by a later run.
+            for record in list(results.values()):
+                if record["status"] != "verified":
+                    continue
+                reason = "stat_changed_before_receipt"
+                try:
+                    path = root / record["path"]
+                    unchanged = record["stat"] == _file_stat(path, root)
+                    if unchanged and not record.get("content_rechecked", False):
+                        observed = _digest_file(path, record["algorithm"], record["stat"]["size"], counter, stop)
+                        unchanged = observed == record["expected_hash"]
+                        if not unchanged:
+                            reason = "content_changed_before_receipt"
+                        else:
+                            unchanged = record["stat"] == _file_stat(path, root)
+                        if unchanged:
+                            record_result({**record, "content_rechecked": True})
+                except InterruptedError:
+                    record_result({**record, "status": "interrupted"})
+                    continue
+                except (OSError, ValueError) as error:
+                    record_result({**record, "status": "error", "reason": str(error)})
+                    continue
+                if not unchanged:
+                    record_result({**record, "status": "changed", "reason": reason})
+            # A later content recheck may invalidate an earlier observation.
             for record in list(results.values()):
                 if record["status"] != "verified":
                     continue
