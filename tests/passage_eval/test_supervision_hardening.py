@@ -219,6 +219,12 @@ def bench(entry="hpkg.entry:Planner", kwargs=None, **changes):
     )
 
 
+def interpreter_runtime_binds() -> tuple[str, ...]:
+    """Declare a test interpreter installed outside the sandbox's built-in /usr mount."""
+    prefix = Path(sys.executable).resolve().parent.parent
+    return () if prefix.is_relative_to("/usr") else (str(prefix),)
+
+
 @contextlib.contextmanager
 def runner_for(
     cand_dir,
@@ -234,7 +240,10 @@ def runner_for(
 ):
     spec = bench(entry, kwargs, **(spec_changes or {}))
     iso = sandbox.IsolationConfig(
-        level=isolation, ro_binds=tuple(str(p) for p in ro_binds), protected_paths=tuple(str(p) for p in protected)
+        level=isolation,
+        ro_binds=tuple(str(p) for p in ro_binds),
+        runtime_binds=interpreter_runtime_binds() if isolation == "bwrap" else (),
+        protected_paths=tuple(str(p) for p in protected),
     )
     settings = dict(ipc_baseline_pings=2, ipc_baseline_warmup=0, startup_timeout_s=120.0, deadline_grace_ms=20.0)
     settings.update(config_changes)
@@ -270,7 +279,7 @@ def verified_runner_for(
     spec = bench(entry, kwargs, **(spec_changes or {}))
     diagnostic = SupervisorConfig(
         worker_python=sys.executable,
-        isolation=sandbox.IsolationConfig(level="bwrap"),
+        isolation=sandbox.IsolationConfig(level="bwrap", runtime_binds=interpreter_runtime_binds()),
         candidate_paths=(str(cand_dir),),
         ipc_baseline_pings=2,
         ipc_baseline_warmup=0,
@@ -435,7 +444,13 @@ def test_loaded_files_are_only_a_cross_check_and_the_manifest_labels_them_self_r
 
 
 def make_config(isolation="bwrap", **changes):
-    return SupervisorConfig(worker_python=sys.executable, isolation=sandbox.IsolationConfig(level=isolation), **changes)
+    return SupervisorConfig(
+        worker_python=sys.executable,
+        isolation=sandbox.IsolationConfig(
+            level=isolation, runtime_binds=interpreter_runtime_binds() if isolation == "bwrap" else ()
+        ),
+        **changes,
+    )
 
 
 def fake_roster(sha="a" * 64):
@@ -954,6 +969,7 @@ def write_spec(root: Path, cand_dir: Path, *, n_rows=2, warm_rows=None, **change
 
 
 def cli_run(spec_path, output, cand_dir, isolation, *extra):
+    interpreter_binds = [arg for root in interpreter_runtime_binds() for arg in ("--runtime-bind", root)]
     return supervision_main(
         [
             "run",
@@ -969,6 +985,7 @@ def cli_run(spec_path, output, cand_dir, isolation, *extra):
             str(cand_dir),
             "--ipc-baseline-pings",
             "2",
+            *(interpreter_binds if isolation == "bwrap" else []),
             *extra,
         ]
     )
@@ -1442,7 +1459,9 @@ def environment_pins(cand_dir, entries, *, isolation="bwrap") -> list[str]:
     """Digests of every interpreter-environment tree the sandbox binds, as an operator reads them from a diagnostic run."""
     config = SupervisorConfig(
         worker_python=sys.executable,
-        isolation=sandbox.IsolationConfig(level=isolation),
+        isolation=sandbox.IsolationConfig(
+            level=isolation, runtime_binds=interpreter_runtime_binds() if isolation == "bwrap" else ()
+        ),
         candidate_paths=(str(cand_dir),),
     )
     environment = inspect_environment(config, entries)

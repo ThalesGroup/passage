@@ -247,6 +247,11 @@ def bench_spec(entry, kwargs=None, **changes):
     return replace(spec, **changes)
 
 
+def interpreter_runtime_binds() -> tuple[str, ...]:
+    prefix = Path(sys.executable).resolve().parent.parent
+    return () if prefix.is_relative_to("/usr") else (str(prefix),)
+
+
 @contextlib.contextmanager
 def runner_for(
     cand_dir,
@@ -266,7 +271,7 @@ def runner_for(
         level=isolation,
         env_set=env_set or {},
         ro_binds=tuple(ro_binds),
-        runtime_binds=tuple(runtime_binds),
+        runtime_binds=tuple(runtime_binds) + (interpreter_runtime_binds() if isolation == "bwrap" else ()),
         protected_paths=tuple(protected),
     )
     settings = dict(ipc_baseline_pings=3, ipc_baseline_warmup=1, startup_timeout_s=120.0, deadline_grace_ms=20.0)
@@ -926,6 +931,7 @@ def write_spec(root, release_row, cand_dir, **changes):
 
 
 def cli_run(spec_path, output, cand_dir, isolation, *extra):
+    interpreter_binds = [arg for root in interpreter_runtime_binds() for arg in ("--runtime-bind", root)]
     return supervision_main(
         [
             "run",
@@ -943,6 +949,7 @@ def cli_run(spec_path, output, cand_dir, isolation, *extra):
             "5",
             "--warmup-split",
             "calibration",
+            *(interpreter_binds if isolation == "bwrap" else []),
             *extra,
         ]
     )

@@ -33,6 +33,13 @@ import pyarrow.parquet as pq
 import pytest
 
 HERE = Path(__file__).resolve().parent
+
+
+def interpreter_runtime_binds() -> list[str]:
+    prefix = Path(sys.executable).resolve().parent.parent
+    return [] if prefix.is_relative_to("/usr") else [str(prefix)]
+
+
 BLOCK_SALT = "synthetic-test-v1/r0003/roster-v1/blocks-0/"  # first six rows: 10, 4, 5, 1, 3, 6 (all placed)
 WARM_SALT = "synthetic-warmup/r0003/"
 FULL_FILES = [range(0, 5), range(5, 9), range(9, 11)]  # rows 0-10: every row has a footprint
@@ -752,7 +759,7 @@ def campaign_world(root: Path, *, procedures=("astar", "seg", "reg"), batch_size
                 "decoder_kwargs": {},
                 "precision": None,
                 "candidate_paths": [str(settings.get("candidate_dir", candidate))],
-                "runtime_binds": [],
+                "runtime_binds": settings.get("runtime_binds", interpreter_runtime_binds()),
                 "decoder_allow_sha256": [],
                 "planner_allow_sha256": settings.get("planner_allow_sha256", ["e" * 64]),
                 "environment_allow_sha256": settings.get("environment_allow_sha256", ["a" * 64]),
@@ -774,7 +781,7 @@ def campaign_world(root: Path, *, procedures=("astar", "seg", "reg"), batch_size
                 "decoder_kwargs": {},
                 "precision": "float32_field",
                 "candidate_paths": [str(candidate)],
-                "runtime_binds": [],
+                "runtime_binds": interpreter_runtime_binds(),
                 "decoder_allow_sha256": ["b" * 64],
                 "planner_allow_sha256": [],
                 "environment_allow_sha256": ["a" * 64],

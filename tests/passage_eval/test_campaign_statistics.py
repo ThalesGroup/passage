@@ -529,36 +529,44 @@ def test_persistent_native_latency_reports_quantiles_without_degenerate_single_s
 def _rule8_native_record(record):
     record["protocol"]["profile"] = "rule8_native_persistent"
     record["protocol"]["decisions"]["confirmatory_analysis"]["value"]["draws"] = 10000
-    record["evidence"]["replica_catalog"] = {"path":"replicas.json","sha256":"a"*64}
+    record["evidence"]["replica_catalog"] = {"path": "replicas.json", "sha256": "a" * 64}
     record["evidence"]["references"]["historical_roster"] = None
     for candidate in record["candidates"].values():
         candidate["targets"] = {}
 
 
-@pytest.mark.parametrize("n_blocks,expected", [(32,"confirmatory"),(18,"descriptive_blocks_inadequate")])
+@pytest.mark.parametrize("n_blocks,expected", [(32, "confirmatory"), (18, "descriptive_blocks_inadequate")])
 def test_rule8_direct_profile_uses_three_seed_quality_cis_without_inventing_latency_sessions(n_blocks, expected):
-    aggregates=world(n_blocks=n_blocks,seeds=(1234,2026,3407))
+    aggregates = world(n_blocks=n_blocks, seeds=(1234, 2026, 3407))
     for aggregate in aggregates:
-        aggregate["timing_profile"]="native_raw_path_persistent_v1"
-        aggregate["qualification_profile"]="rule8_native_persistent"
+        aggregate["timing_profile"] = "native_raw_path_persistent_v1"
+        aggregate["qualification_profile"] = "rule8_native_persistent"
         for entry in aggregate["per_seed"].values():
-            sessions=entry["latency_sessions"]
-            entry["latency_sessions"]=[{
-                "session":0,"warmup_complete":None,
-                **{key:[value for session in sessions for value in session[key]]
-                   for key in ("sample_ids","latency_ms","censored","status")}}]
-    campaigns,records=sealed_family(aggregates,mutate=_rule8_native_record)
-    result=stats(campaigns,protocol_records=records,draws=10000)
+            sessions = entry["latency_sessions"]
+            entry["latency_sessions"] = [
+                {
+                    "session": 0,
+                    "warmup_complete": None,
+                    **{
+                        key: [value for session in sessions for value in session[key]]
+                        for key in ("sample_ids", "latency_ms", "censored", "status")
+                    },
+                }
+            ]
+    campaigns, records = sealed_family(aggregates, mutate=_rule8_native_record)
+    result = stats(campaigns, protocol_records=records, draws=10000)
     assert result["quality"]["mode"] == expected
     assert result["sealing"]["protocol_records"] == {
-        str(aggregate["seeds"][0]):aggregate["protocol_record_sha256"]
-        for aggregate in campaigns if aggregate["procedure"] == "seg"}
-    assert result["completeness"]["seeds"] == [1234,2026,3407]
+        str(aggregate["seeds"][0]): aggregate["protocol_record_sha256"]
+        for aggregate in campaigns
+        if aggregate["procedure"] == "seg"
+    }
+    assert result["completeness"]["seeds"] == [1234, 2026, 3407]
     assert result["quality"]["intervals"]["cost_regret_median"]["n_bootstrap"] == 10000
-    for seed in (1234,2026,3407):
+    for seed in (1234, 2026, 3407):
         assert result["latency"][str(seed)]["contrast_a_minus_b"] is None
         assert result["latency"][str(seed)]["procedures"]["seg"]["quantiles"]["p50"]["ci_low"] is None
-    with pytest.raises(S.StatisticsInputError,match="matching protocol records"):
+    with pytest.raises(S.StatisticsInputError, match="matching protocol records"):
         stats(campaigns)
 
 
@@ -566,10 +574,10 @@ def test_rule8_three_seed_analysis_refuses_a_substituted_replica_commitment():
     def substitute(record):
         _rule8_native_record(record)
         if record["protocol"]["decisions"]["seeds"]["value"] == [1234]:
-            record["evidence"]["replica_catalog"]["sha256"]="b"*64
+            record["evidence"]["replica_catalog"]["sha256"] = "b" * 64
 
-    campaigns,records=sealed_family(mutate=substitute)
-    result=stats(campaigns,protocol_records=records,draws=10000)
+    campaigns, records = sealed_family(mutate=substitute)
+    result = stats(campaigns, protocol_records=records, draws=10000)
     assert result["sealing"]["confirmatory_allowed"] is False
     assert "different replica catalogue digests" in "; ".join(result["sealing"]["reasons"])
     assert result["quality"]["p_values"] is None and result["quality"]["holm"] is None

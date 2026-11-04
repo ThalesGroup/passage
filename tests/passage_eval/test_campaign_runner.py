@@ -72,7 +72,7 @@ def test_validation_plan_accepts_only_the_pinned_replica_checkpoint(campaign, se
     digest = pinned.sha256_bytes(path.read_bytes())
     catalog = replicas.load_replica_catalog(path, digest)
     plan = copy.deepcopy(campaign.plan)
-    plan["replica_catalog"] = {"path":str(path),"sha256":digest}
+    plan["replica_catalog"] = {"path": str(path), "sha256": digest}
     plan["seeds"] = [seed]
     for name, entry in plan["procedures"].items():
         spec_path = Path(entry["spec"]["path"])
@@ -80,13 +80,13 @@ def test_validation_plan_accepts_only_the_pinned_replica_checkpoint(campaign, se
         spec["seeds"] = [seed]
         entry["spec"]["sha256"] = W.write_json(spec_path, spec)
         if name in ("seg", "reg"):
-            entry["checkpoint_sha256"] = replicas.replica_identity(catalog,name,seed)["checkpoint_sha256"]
+            entry["checkpoint_sha256"] = replicas.replica_identity(catalog, name, seed)["checkpoint_sha256"]
     W.write_plan(campaign, plan)
-    assert PL.read_plan(campaign.plan_path,campaign.sha).plan["seeds"] == [seed]
-    plan["procedures"]["seg"]["checkpoint_sha256"] = "0"*64
-    W.write_plan(campaign,plan)
-    with pytest.raises(PL.PlanError,match="checkpoint differs"):
-        PL.read_plan(campaign.plan_path,campaign.sha)
+    assert PL.read_plan(campaign.plan_path, campaign.sha).plan["seeds"] == [seed]
+    plan["procedures"]["seg"]["checkpoint_sha256"] = "0" * 64
+    W.write_plan(campaign, plan)
+    with pytest.raises(PL.PlanError, match="checkpoint differs"):
+        PL.read_plan(campaign.plan_path, campaign.sha)
 
 
 @pytest.mark.parametrize(
@@ -1401,7 +1401,7 @@ def test_roster_s_admission_allows_only_edge_seg_reg_seed_2026(admitted, monkeyp
     record = pinned.read_pinned_json(checked.admission.record_path, checked.admission.record_sha256)
     record["protocol"]["decisions"]["roster_selection"]["value"]["n"] = 1024
     # Unit scope probe: substitute the reader result, rather than mutating an authentic admitted artifact.
-    monkeypatch.setattr(PL.pinned,"read_pinned_json",lambda path,digest:record)
+    monkeypatch.setattr(PL.pinned, "read_pinned_json", lambda path, digest: record)
     with pytest.raises(PL.PlanError, match="exactly the Seg and Reg"):
         PL._check_against_admission(copy.deepcopy(checked.plan), checked.admission, checked.chain, checked.specs)
     plan = copy.deepcopy(checked.plan)
@@ -1416,24 +1416,24 @@ def test_roster_s_admission_allows_only_edge_seg_reg_seed_2026(admitted, monkeyp
 
 
 def test_candidate_record_substitution_after_grant_check_is_refused(admitted, monkeypatch):
-    _,checked=admitted
-    grant=checked.admission
-    record_path=Path(grant.record_path)
-    original=record_path.read_bytes()
-    substituted=pinned.strict_json_loads(original)
-    substituted["candidates"]["seg"]["checkpoint_sha256"]="0"*64
-    real_check=type(grant).ensure_unchanged
+    _, checked = admitted
+    grant = checked.admission
+    record_path = Path(grant.record_path)
+    original = record_path.read_bytes()
+    substituted = pinned.strict_json_loads(original)
+    substituted["candidates"]["seg"]["checkpoint_sha256"] = "0" * 64
+    real_check = type(grant).ensure_unchanged
 
     def replace_after_check(self):
         real_check(self)
         record_path.write_bytes(pinned.canonical_json(substituted))
 
-    monkeypatch.setattr(type(grant),"ensure_unchanged",replace_after_check)
+    monkeypatch.setattr(type(grant), "ensure_unchanged", replace_after_check)
     try:
-        with pytest.raises(pinned.PinnedFileError,match="SHA-256 mismatch"):
-            PL._check_procedures(checked.plan,checked.admissible,True,grant)
-        with pytest.raises(pinned.PinnedFileError,match="SHA-256 mismatch"):
-            PL._check_against_admission(checked.plan,grant,checked.chain,checked.specs)
+        with pytest.raises(pinned.PinnedFileError, match="SHA-256 mismatch"):
+            PL._check_procedures(checked.plan, checked.admissible, True, grant)
+        with pytest.raises(pinned.PinnedFileError, match="SHA-256 mismatch"):
+            PL._check_against_admission(checked.plan, grant, checked.chain, checked.specs)
     finally:
         record_path.write_bytes(original)
 

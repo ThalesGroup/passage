@@ -1,4 +1,5 @@
 """Bind the admitted S runner to the command recorded by the G2 rehearsal."""
+
 from __future__ import annotations
 
 import hashlib
@@ -39,8 +40,10 @@ def verify_tiger_observation(image):
     from passage_eval.campaign.direct.rule8_bwrap import verify_running_bwrap
 
     checked = verify_running_bwrap(
-        image.get("bwrap_proof"), image.get("container_digest"),
-        config_sha256=image.get("configuration_sha256"), index_sha256=image.get("input_index_sha256"),
+        image.get("bwrap_proof"),
+        image.get("container_digest"),
+        config_sha256=image.get("configuration_sha256"),
+        index_sha256=image.get("input_index_sha256"),
         process_in_scope=lambda pid, scope: pid == image.get("pid") and scope == image.get("scope"),
     )
     if any(pinned.canonical_json(image.get(key)) != pinned.canonical_json(value) for key, value in checked.items()):
@@ -64,16 +67,28 @@ def verify_g2_runner(grant, target, procedure, runner_argv, *, rootfs_export_sha
     image_path, image_sha = pinned.file_ref(entry.get("image_start"))
     image = pinned.read_pinned_json(pinned.resolve_inside(grant.evidence_dir, image_path), image_sha)
     observed = image.get("runner_argv")
-    if (type(image.get("pid")) is not int or image["pid"] <= 0
-            or type(image.get("namespace_pid")) is not int or image["namespace_pid"] <= 0
-            or not isinstance(image.get("scope"), str) or not image["scope"]
-            or (target != "tiger" and (not isinstance(image.get("container_id"), str)
-                                        or not re.fullmatch(r"[0-9a-f]{64}", image["container_id"])))
-            or image.get("target") != target or image.get("procedure") != procedure or observed != validation
-            or not isinstance(observed, list)
-            or hashlib.sha256(json.dumps(observed, separators=(",", ":")).encode()).hexdigest()
-            != image.get("runner_argv_sha256")
-            or image.get("container_digest") != record["candidates"][procedure]["targets"][target]["container_digest"]):
+    if (
+        type(image.get("pid")) is not int
+        or image["pid"] <= 0
+        or type(image.get("namespace_pid")) is not int
+        or image["namespace_pid"] <= 0
+        or not isinstance(image.get("scope"), str)
+        or not image["scope"]
+        or (
+            target != "tiger"
+            and (
+                not isinstance(image.get("container_id"), str)
+                or not re.fullmatch(r"[0-9a-f]{64}", image["container_id"])
+            )
+        )
+        or image.get("target") != target
+        or image.get("procedure") != procedure
+        or observed != validation
+        or not isinstance(observed, list)
+        or hashlib.sha256(json.dumps(observed, separators=(",", ":")).encode()).hexdigest()
+        != image.get("runner_argv_sha256")
+        or image.get("container_digest") != record["candidates"][procedure]["targets"][target]["container_digest"]
+    ):
         raise ValueError("G2 runner is not linked to observed image execution")
     from passage_eval.campaign.direct.direct_host_scoring import verify_drain
     from passage_eval.campaign.direct.oci_validation_relay import _journal_binding
@@ -86,27 +101,38 @@ def verify_g2_runner(grant, target, procedure, runner_argv, *, rootfs_export_sha
     journal = pinned.read_pinned(pinned.resolve_inside(grant.evidence_dir, journal_path), journal_sha)
     marks = _journal_binding(journal, image.get("namespace_pid"))
     job, observed_job = drain.get("job_id"), image.get("job_id")
-    if (not isinstance(job, str) or not isinstance(observed_job, str)
-            or parse_job_id(job) != job or parse_job_id(observed_job) != observed_job or job != observed_job):
+    if (
+        not isinstance(job, str)
+        or not isinstance(observed_job, str)
+        or parse_job_id(job) != job
+        or parse_job_id(observed_job) != observed_job
+        or job != observed_job
+    ):
         raise ValueError("G2 drain job differs from observed image session")
-    if (finish.get("scope") != image.get("scope") or finish.get("runner_pid") != image.get("pid")
-            or finish.get("container_digest") != image.get("container_digest")
-            or finish.get("exit_code") != 0
-            or (target != "tiger" and finish.get("container_id") != image.get("container_id"))
-            or marks.get("journal_markers") != "matched"
-            or finish.get("runner_session_uuid") != marks.get("runner_session_uuid")
-            or entry.get("native_execution", {}).get("session_id") != journal_sha):
+    if (
+        finish.get("scope") != image.get("scope")
+        or finish.get("runner_pid") != image.get("pid")
+        or finish.get("container_digest") != image.get("container_digest")
+        or finish.get("exit_code") != 0
+        or (target != "tiger" and finish.get("container_id") != image.get("container_id"))
+        or marks.get("journal_markers") != "matched"
+        or finish.get("runner_session_uuid") != marks.get("runner_session_uuid")
+        or entry.get("native_execution", {}).get("session_id") != journal_sha
+    ):
         raise ValueError("G2 runner observation is not linked to the validation journal")
     verify_drain(drain, target=target, procedure=procedure, job_id=drain.get("job_id"), scope=image["scope"])
     if runner_identity(validation) != runner_identity(runner_argv):
         raise ValueError("admitted runner differs from G2 validation")
     if target == "tiger":
         verify_tiger_observation(image)
-        if (not pinned.is_hex64(rootfs_export_sha256) or not isinstance(rootfs_exceptions, dict)
-                or entry.get("rootfs_export_sha256") != rootfs_export_sha256
-                or image.get("rootfs_archive_sha256") != rootfs_export_sha256
-                or pinned.canonical_json(entry.get("rootfs_exceptions")) != pinned.canonical_json(rootfs_exceptions)
-                or pinned.canonical_json(image.get("rootfs_exceptions")) != pinned.canonical_json(rootfs_exceptions)):
+        if (
+            not pinned.is_hex64(rootfs_export_sha256)
+            or not isinstance(rootfs_exceptions, dict)
+            or entry.get("rootfs_export_sha256") != rootfs_export_sha256
+            or image.get("rootfs_archive_sha256") != rootfs_export_sha256
+            or pinned.canonical_json(entry.get("rootfs_exceptions")) != pinned.canonical_json(rootfs_exceptions)
+            or pinned.canonical_json(image.get("rootfs_exceptions")) != pinned.canonical_json(rootfs_exceptions)
+        ):
             raise ValueError("admitted Tiger rootfs differs from G2 validation")
     elif rootfs_export_sha256 is not None or rootfs_exceptions is not None:
         raise ValueError("rootfs binding only applies to Tiger")

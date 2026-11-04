@@ -365,11 +365,11 @@ def test_g6_binds_each_replica_to_a_separate_pinned_catalogue(world, seed):
         candidate = record["candidates"][name]
         candidate["checkpoint_sha256"] = replicas.replica_identity(catalogue, name, seed)["checkpoint_sha256"]
         bundle = W.write_bundle(world.evidence, name, "orin", candidate["checkpoint_sha256"])
-        candidate["targets"]["orin"].update(bundle=bundle,bundle_sha256=bundle["sha256"])
+        candidate["targets"]["orin"].update(bundle=bundle, bundle_sha256=bundle["sha256"])
         attest_environment(world, record, name)
     report = check(world, record)
     assert report.gate("G6").status == "GREEN", report.gate("G6").reasons
-    catalogue["replicas"][str(seed)]["seg_checkpoint_sha256"] = "0"*64
+    catalogue["replicas"][str(seed)]["seg_checkpoint_sha256"] = "0" * 64
     W.write_json(world.evidence / "replicas.json", catalogue)
     record["evidence"]["replica_catalog"] = W.ref(world.evidence, world.evidence / "replicas.json")
     assert "checkpoint_differs_from_final_candidates" in codes(check(world, record), "G6")
@@ -641,8 +641,10 @@ def test_preparation_stays_scoped_and_never_grants_execution_while_evidence_is_m
 
 
 @pytest.mark.parametrize("seeds", [[2026], [3407], [1234, 2026, 3407]])
-@pytest.mark.parametrize("profile", [PROFILE,"rule8_native_persistent"])
-def test_standalone_supervisor_refuses_native_grant_before_any_roster_or_scene_read(tmp_path, monkeypatch, seeds, profile):
+@pytest.mark.parametrize("profile", [PROFILE, "rule8_native_persistent"])
+def test_standalone_supervisor_refuses_native_grant_before_any_roster_or_scene_read(
+    tmp_path, monkeypatch, seeds, profile
+):
     from passage_eval.cli import BenchSpec
     from passage_eval.protocol.guards import TestSplitRefused
     from passage_eval.supervision import sandbox, supervisor

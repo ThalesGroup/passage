@@ -25,15 +25,18 @@ _KEYS = {
 }
 
 
-def frozen_candidate_identity(procedure: str, *, seed: int = 2026, replica_catalog=None, replica_catalog_sha256=None) -> dict[str, Any]:
+def frozen_candidate_identity(
+    procedure: str, *, seed: int = 2026, replica_catalog=None, replica_catalog_sha256=None
+) -> dict[str, Any]:
     """Read the exact frozen 256 candidate from the committed local harness."""
     if procedure not in ("seg", "reg"):
         raise EdgeRelayError("only the frozen Seg and Reg candidates have an edge identity")
     if seed != 2026:
         from passage_eval.protocol.replicas import load_replica_catalog, replica_identity
+
         if replica_catalog is None or not pinned.is_hex64(replica_catalog_sha256):
             raise EdgeRelayError("replica identity requires its pinned catalogue")
-        return replica_identity(load_replica_catalog(replica_catalog,replica_catalog_sha256),procedure,seed)
+        return replica_identity(load_replica_catalog(replica_catalog, replica_catalog_sha256), procedure, seed)
     from passage_eval import cli
     from passage_eval.protocol.admission import committed_final_candidates
 
@@ -68,7 +71,12 @@ def validate_native_adapter(receipt: Any, *, expected_seed: int = 2026) -> dict[
             raise EdgeRelayError(f"native adapter {field} must be a SHA-256")
     if checked["final_decoders_sha256"] != FINAL_DECODERS_SHA256:
         raise EdgeRelayError("native adapter decoder SHA-256 differs from frozen final_decoders.py")
-    if type(expected_seed) is not int or expected_seed not in (1234,2026,3407) or type(checked["seed"]) is not int or checked["seed"] != expected_seed:
+    if (
+        type(expected_seed) is not int
+        or expected_seed not in (1234, 2026, 3407)
+        or type(checked["seed"]) is not int
+        or checked["seed"] != expected_seed
+    ):
         raise EdgeRelayError("native adapter seed must equal its pinned expected seed")
     return checked
 
