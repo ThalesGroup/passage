@@ -100,6 +100,7 @@ jobs:
       - name: Run tests with coverage
         run: |
           uv run --locked python --version
+          uv run --locked python -c 'import os, sys; assert sys.version_info[:2] == tuple(map(int, os.environ["UV_PYTHON"].split(".")))'
           uv run --locked pytest \
             --cov \
             --cov-report=xml:coverage.xml \
