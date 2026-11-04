@@ -216,11 +216,17 @@ def check_validation_edge_relay_request(request: ValidationEdgeRelayRequest) -> 
 
     _require(request.target in EDGE_TARGETS, "validation edge relay target must be Thor, Orin, or Tiger")
     _require(tuple(request.procedures) == SPLIT_PROCEDURES, "validation edge relay runs exactly Seg and Reg")
-    _require(type(request.seed) is int and request.seed in (1234,2026,3407), "validation edge relay needs a declared training seed")
+    _require(
+        type(request.seed) is int and request.seed in (1234, 2026, 3407),
+        "validation edge relay needs a declared training seed",
+    )
     if request.seed != 2026:
         from passage_eval.protocol.replicas import load_replica_catalog
-        _require(request.replica_catalog is not None and pinned.is_hex64(request.replica_catalog_sha256),
-                 "replica validation requires its pinned catalogue")
+
+        _require(
+            request.replica_catalog is not None and pinned.is_hex64(request.replica_catalog_sha256),
+            "replica validation requires its pinned catalogue",
+        )
         load_replica_catalog(request.replica_catalog, request.replica_catalog_sha256)
     _require(
         isinstance(request.candidates, Mapping) and set(request.candidates) == set(SPLIT_PROCEDURES),
@@ -520,7 +526,9 @@ def _check_order_and_aggregation(plan: dict[str, Any]) -> None:
     )
 
 
-def _check_procedures(plan: dict[str, Any], admissible: dict[str, Any], allow_test: bool, admission=None) -> dict[str, dict]:
+def _check_procedures(
+    plan: dict[str, Any], admissible: dict[str, Any], allow_test: bool, admission=None
+) -> dict[str, dict]:
     from passage_eval.cli import BenchSpec
     from passage_eval.protocol.admission import FROZEN_DECODER_ENTRIES
     from passage_eval.protocol.contracts import BudgetSpec
@@ -534,18 +542,27 @@ def _check_procedures(plan: dict[str, Any], admissible: dict[str, Any], allow_te
         admission.ensure_unchanged()
         record = pinned.read_pinned_json(admission.record_path, admission.record_sha256)
         from passage_eval.protocol.admission import REPLICA_PROFILES
+
         if record["protocol"].get("profile") in REPLICA_PROFILES:
             seeds = record["protocol"]["decisions"]["seeds"]["value"]
-            replicas = {name:{"seed":seeds[0], "sha256":candidate["checkpoint_sha256"]}
-                        for name,candidate in record["candidates"].items()}
+            replicas = {
+                name: {"seed": seeds[0], "sha256": candidate["checkpoint_sha256"]}
+                for name, candidate in record["candidates"].items()
+            }
     elif plan.get("replica_catalog") is not None:
         from passage_eval.protocol.replicas import load_replica_catalog, replica_identity
-        ref = _keys(plan["replica_catalog"], {"path","sha256"}, "replica_catalog")
-        path = _absolute(ref["path"],"replica_catalog.path", allow_test_component=allow_test)
-        catalog = load_replica_catalog(path,ref["sha256"],harness_commit=plan["harness"]["commit"])
-        _require(len(plan["seeds"]) == 1,"one replica seed is required")
-        replicas = {name:{"seed":plan["seeds"][0],"sha256":replica_identity(catalog,name,plan["seeds"][0])["checkpoint_sha256"]}
-                    for name in SPLIT_PROCEDURES}
+
+        ref = _keys(plan["replica_catalog"], {"path", "sha256"}, "replica_catalog")
+        path = _absolute(ref["path"], "replica_catalog.path", allow_test_component=allow_test)
+        catalog = load_replica_catalog(path, ref["sha256"], harness_commit=plan["harness"]["commit"])
+        _require(len(plan["seeds"]) == 1, "one replica seed is required")
+        replicas = {
+            name: {
+                "seed": plan["seeds"][0],
+                "sha256": replica_identity(catalog, name, plan["seeds"][0])["checkpoint_sha256"],
+            }
+            for name in SPLIT_PROCEDURES
+        }
     specs = {}
     for name, procedure in procedures.items():
         p = _keys(procedure, _PROCEDURE_KEYS, f"procedures.{name}")
@@ -565,7 +582,9 @@ def _check_procedures(plan: dict[str, Any], admissible: dict[str, Any], allow_te
             _hex_list(p["decoder_allow_sha256"], f"{name}.decoder_allow_sha256", required=True)
             _hex_list(p["split_procedure_allow_sha256"], f"{name}.split_procedure_allow_sha256", required=True)
             _require(p["planner_allow_sha256"] == [], f"{name}: planner pins apply to planner mode only")
-            checkpoint = replicas.get(name) or ((frozen.get("candidates") or {}).get(name) or {}).get("checkpoint_256") or {}
+            checkpoint = (
+                replicas.get(name) or ((frozen.get("candidates") or {}).get(name) or {}).get("checkpoint_256") or {}
+            )
             _require(
                 p["checkpoint_sha256"] == checkpoint.get("sha256"),
                 f"{name}: checkpoint differs from final-candidates.json",
@@ -763,9 +782,12 @@ def _check_against_admission(
         _require(set(plan["procedures"]) == {"seg", "reg"}, "roster S admits exactly the Seg and Reg procedures")
         _require(sorted(order["procedures"]) == ["reg", "seg"], "roster S orders exactly the Seg and Reg procedures")
         from passage_eval.protocol.admission import REPLICA_PROFILES
+
         if record["protocol"].get("profile") in REPLICA_PROFILES:
-            _require(plan["seeds"] == decisions["seeds"] and len(plan["seeds"]) == 1,
-                     "roster S runs only the one seed of its admitted replica record")
+            _require(
+                plan["seeds"] == decisions["seeds"] and len(plan["seeds"]) == 1,
+                "roster S runs only the one seed of its admitted replica record",
+            )
         else:
             _require(plan["seeds"] == [2026], "roster S is descriptive for training seed 2026 only")
         _require(plan["target"] in EDGE_TARGETS, "roster S runs on Thor, Orin or Tiger only")

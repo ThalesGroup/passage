@@ -90,7 +90,10 @@ def _candidate(value: Mapping[str, Any]) -> dict[str, Any]:
     _need(isinstance(value, Mapping) and set(value) == {"checkpoint_sha256", "seed"}, "candidate binding differs")
     checked = dict(value)
     _require_hex(checked["checkpoint_sha256"], "candidate checkpoint_sha256")
-    _need(type(checked["seed"]) is int and checked["seed"] in (1234,2026,3407), "candidate seed must be 1234,2026 or3407")
+    _need(
+        type(checked["seed"]) is int and checked["seed"] in (1234, 2026, 3407),
+        "candidate seed must be 1234,2026 or3407",
+    )
     return checked
 
 
@@ -136,10 +139,17 @@ def build_input_package(
     candidate_binding = _candidate(candidate) if candidate is not None else None
     if candidate_binding is not None and candidate_binding["seed"] != 2026:
         from passage_eval.protocol.replicas import load_replica_catalog, replica_identity
-        _need(replica_catalog is not None and pinned.is_hex64(replica_catalog_sha256), "replica package requires its pinned catalogue")
-        catalog = load_replica_catalog(replica_catalog,replica_catalog_sha256)
-        identity = replica_identity(catalog,procedure,candidate_binding["seed"])
-        _need(candidate_binding["checkpoint_sha256"] == identity["checkpoint_sha256"], "replica checkpoint differs from catalogue")
+
+        _need(
+            replica_catalog is not None and pinned.is_hex64(replica_catalog_sha256),
+            "replica package requires its pinned catalogue",
+        )
+        catalog = load_replica_catalog(replica_catalog, replica_catalog_sha256)
+        identity = replica_identity(catalog, procedure, candidate_binding["seed"])
+        _need(
+            candidate_binding["checkpoint_sha256"] == identity["checkpoint_sha256"],
+            "replica checkpoint differs from catalogue",
+        )
     root = Path(root)
     _need(not root.exists(), f"package directory already exists: {root}")
     root.mkdir(mode=0o700, parents=True)

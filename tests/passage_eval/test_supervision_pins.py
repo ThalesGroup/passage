@@ -14,6 +14,7 @@ import stat
 import struct
 import subprocess
 import sys
+import time
 from dataclasses import replace
 from pathlib import Path
 
@@ -185,6 +186,7 @@ def test_process_isolation_records_that_the_pinned_view_is_not_enforced(cand):
         assert view["pinned"] is True and view["narrowed_to_pinned_tree"] is False
         assert view["enforced_by"] == "not_enforced_process_isolation_shares_the_file_system"
         assert view["import_paths"] == [str(cand.resolve())]
+        assert "interpreter_aliases" not in view
         assert H.run_one(runner, H.request_for(0))["counters_source"] == "operator_decoder"
 
 
@@ -288,7 +290,9 @@ def test_a_verified_run_with_an_unpinned_planner_or_decoder_is_refused(cand):
 def warm_session_cache(cand, entries) -> None:
     """Make sure the session-wide digest cache holds the environment trees, so that the next inspection reuses it."""
     config = H.SupervisorConfig(
-        worker_python=sys.executable, isolation=sandbox.IsolationConfig(level="bwrap"), candidate_paths=(str(cand),)
+        worker_python=sys.executable,
+        isolation=sandbox.IsolationConfig(level="bwrap", runtime_binds=H.interpreter_runtime_binds()),
+        candidate_paths=(str(cand),),
     )
     H.inspect_environment(config, entries).close()
 
@@ -390,7 +394,7 @@ def test_a_verified_run_refuses_onnxruntime_in_a_staged_candidate_tree_and_in_a_
     runtime = tmp_path / "extra-runtime"
     runtime.mkdir()
     (runtime / "libonnxruntime.so").write_bytes(b"\x7fELF")
-    iso = sandbox.IsolationConfig(level="bwrap", runtime_binds=(str(runtime),))
+    iso = sandbox.IsolationConfig(level="bwrap", runtime_binds=(str(runtime), *H.interpreter_runtime_binds()))
     config = H.SupervisorConfig(
         worker_python=sys.executable, isolation=iso, candidate_paths=(str(cand),), staging_dir=str(tmp_path)
     )
@@ -503,6 +507,10 @@ def test_a_staged_copy_that_was_changed_and_put_back_is_caught_by_its_stat_signa
         target = staged / "impl.py"
         before = target.stat()
         original = target.read_bytes()
+        # Give even a coarse filesystem clock a new tick before the transient
+        # write. A same-tick ctime cannot attest that the file was touched.
+        deadline_ns = before.st_ctime_ns + 1_000_000_000
+        time.sleep(max(0, deadline_ns - time.time_ns()) / 1_000_000_000)
         os.chmod(target, 0o600)
         target.write_bytes(b"MARK = 'evil'\n")  # a transient change ...
         target.write_bytes(original)  # ... undone: same bytes

@@ -134,7 +134,9 @@ def run_target(
 ) -> TargetRun:
     """Run a blocking native adapter only after its declared local artifacts verify."""
     package = verify_package(package_root, package_sha256)
-    checked = validate_native_adapter(receipt,expected_seed=(package.manifest.get("candidate") or {}).get("seed",2026))
+    checked = validate_native_adapter(
+        receipt, expected_seed=(package.manifest.get("candidate") or {}).get("seed", 2026)
+    )
     if (
         checked["target"] != package.manifest["target"]
         or checked["package_sha256"] != package.sha256

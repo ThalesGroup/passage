@@ -160,7 +160,11 @@ def test_probe_reports_runtime_without_candidate_execution(candidate_tree):
     probe = probe_for(candidate_tree, ["flat:fn"])
     assert probe["modules"]["flat"]["origin"] == str(candidate_tree / "flat.py")
     assert str(candidate_tree) not in probe["sys_path"]  # candidate dirs are not runtime binds
-    layout = sandbox.static_runtime_layout(sys.executable, trusted_roots=sandbox.evaluator_roots())  # read from files
+    prefix = Path(sys.executable).resolve().parent.parent
+    declared = () if prefix.is_relative_to("/usr") else (prefix,)
+    layout = sandbox.static_runtime_layout(
+        sys.executable, extra_roots=declared, trusted_roots=sandbox.evaluator_roots()
+    )  # read from files
     assert "/usr" in layout.roots and all(Path(root).is_absolute() for root in layout.roots)
     assert not any(candidate_tree == Path(root) or candidate_tree in Path(root).parents for root in layout.roots)
     assert sandbox.uncovered_probe_paths(probe, [*layout.roots, candidate_tree]) == []

@@ -156,9 +156,7 @@ def test_admitted_preflight_enforces_shared_g2_runner_and_rootfs(monkeypatch, tm
         "procedure": "reg",
         "compiled_manifest": None,
         "grn_evidence": None,
-        "artifact_paths": {
-            k: "/srv/passage/payload/" + k for k in ("bundle", "checkpoint", "engine", "decoder")
-        },
+        "artifact_paths": {k: "/srv/passage/payload/" + k for k in ("bundle", "checkpoint", "engine", "decoder")},
         "artifact_pins": {"bundle": sha},
     }
     spec = {key: None for key in relay._KEYS}
@@ -197,9 +195,11 @@ def test_admitted_preflight_enforces_shared_g2_runner_and_rootfs(monkeypatch, tm
     monkeypatch.setattr(admitted_stream, "bind_target_config", lambda *a, **kw: SimpleNamespace(config_bytes=raw))
     monkeypatch.setattr(relay, "_bundle_artifact_paths", lambda *a: [])
     comparisons = []
+
     def compare(*args, **kwargs):
         comparisons.append((args, kwargs))
         return {"rootfs_archive_sha256": sha, "exceptions": {}}
+
     monkeypatch.setattr(relay.bwrap_lineage, "compare", compare)
     calls = []
     monkeypatch.setattr(runner_binding, "verify_g2_runner", lambda *args, **kw: calls.append((args, kw)))

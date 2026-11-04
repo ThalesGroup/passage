@@ -171,6 +171,7 @@ def test_isolation_record_never_claims_more_than_the_level_provides(tmp_path):
         sandbox.IsolationConfig(level="bwrap"), [tmp_path], bwrap_version="bubblewrap 0.9.0"
     )
     assert boxed["network"] == "unshared_loopback_only" and boxed["read_only_binds"] == [str(tmp_path)]
+    assert "interpreter_aliases" not in boxed
     assert {
         "gpu_memory_cap",
         "seccomp_filter",

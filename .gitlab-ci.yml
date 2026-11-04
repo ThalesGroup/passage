@@ -27,7 +27,7 @@ test:
     matrix:
       - PYTHON_VERSION: ["3.11", "3.12"]
   script:
-    - apt-get update -qq && apt-get install -y --no-install-recommends libgl1
+    - apt-get update -qq && apt-get install -y --no-install-recommends libgl1 zstd
     - uv sync --locked --group dev
     - uv run --locked python --version
     - uv run --locked pytest --cov --cov-report=xml:coverage.xml --cov-report=term-missing -x -v
@@ -38,7 +38,6 @@ test:
 
 pages:
   stage: deploy
-  needs: []
   script:
     - test -n "$CI_PAGES_URL"
     - export SITE_URL="${CI_PAGES_URL%/}/"

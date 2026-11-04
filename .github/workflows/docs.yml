@@ -23,23 +23,22 @@ on:
       - "mkdocs.yml"
       - "src/**"
       - ".github/workflows/docs.yml"
+  # Manual runs build an archive; Pages deployment requires a push to main.
   workflow_dispatch:
 
 permissions:
   contents: read
 
-# Allow only one Pages deploy at a time, but do not cancel in-progress runs;
-# the queue ordering matters because each run replaces the live site.
+# Keep builds for different refs independent. Only main can deploy Pages;
+# do not cancel a running main deployment.
 concurrency:
-  group: pages
+  group: pages-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
   # -----------------------------------------------------------------------
-  # Build — runs on every push and PR so docs failures surface early. The
-  # built site is uploaded as a Pages artifact that only the deploy job
-  # consumes. Decoupled from lint/test in ci.yml on purpose: a docs change
-  # ships even when CI is red.
+  # Build — runs on every configured push and PR so docs failures surface
+  # early. A downloadable archive remains available even without Pages.
   # -----------------------------------------------------------------------
   build:
     name: Build site
@@ -49,6 +48,7 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0  # full history for git-revision-date-localized
+          persist-credentials: false
 
       - name: Set up Python
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
@@ -80,24 +80,36 @@ jobs:
           retention-days: 30
 
       - name: Upload Pages artifact
-        if: github.event_name == 'push'
+        if: >-
+          github.event_name == 'push' && vars.DEPLOY_PAGES == 'true' &&
+          github.ref == 'refs/heads/main'
         uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3.0.1
         with:
           path: ./site
+
+  publication_checks:
+    name: Verify publication
+    if: >-
+      github.event_name == 'push' && vars.DEPLOY_PAGES == 'true' &&
+      github.ref == 'refs/heads/main'
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
 
   # -----------------------------------------------------------------------
   # Deploy — on push to main, once GitHub Pages is available.
   # The organisation's plan offers no Pages site for a private repository.
   # When the repository is public: enable Pages with "GitHub Actions" as the
-  # source, set the repository variable DEPLOY_PAGES to "true", and re-run
-  # this workflow. Independent of CI; deploys as soon as `build` succeeds.
+  # source, set the repository variable DEPLOY_PAGES to "true", and push a
+  # documentation-relevant change to main. Deployment waits for the site
+  # build and the CI checks.
   # -----------------------------------------------------------------------
   deploy:
     name: Deploy to GitHub Pages
     if: >-
       github.event_name == 'push' && vars.DEPLOY_PAGES == 'true' &&
       github.ref == 'refs/heads/main'
-    needs: build
+    needs: [build, publication_checks]
     runs-on: ubuntu-latest
     permissions:
       contents: read

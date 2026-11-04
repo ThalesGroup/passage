@@ -25,7 +25,9 @@ def fixture(root):
     known.write_bytes(b"synthetic-host-key")
     engine = "1" * 64
     compiled = root / "compiled.json"
-    compiled_sha = write(compiled, {"engine": "engine", "engine_sha256": engine, "runtime_versions": {"tensorrt": "10.16.2.10"}})
+    compiled_sha = write(
+        compiled, {"engine": "engine", "engine_sha256": engine, "runtime_versions": {"tensorrt": "10.16.2.10"}}
+    )
     bundle = root / "bundle.json"
     bundle_sha = write(bundle, {"artifacts": {"model.onnx": "c" * 64}})
     config = {
@@ -83,8 +85,10 @@ def fixture(root):
         "compiled_manifest_host": str(compiled),
         "bundle_manifest_host": str(bundle),
         "target_work_root": "/var/lib/passage/runs",
-        "target_readonly_mounts": [f"/var/lib/passage/payload/{name}" for name in
-                                   ("bundle.json", "checkpoint", "engine", "decoder", "compiled.json", "model.onnx")],
+        "target_readonly_mounts": [
+            f"/var/lib/passage/payload/{name}"
+            for name in ("bundle.json", "checkpoint", "engine", "decoder", "compiled.json", "model.onnx")
+        ],
         "runner_argv": [
             "/usr/bin/python3",
             "-I",
@@ -104,8 +108,10 @@ def fixture(root):
         "timeout_seconds": 1000,
         "replica_catalog": None,
         "replica_catalog_sha256": None,
-        "validation_roster": None, "validation_roster_sha256": None,
-        "warmup_roster": None, "warmup_roster_sha256": None,
+        "validation_roster": None,
+        "validation_roster_sha256": None,
+        "warmup_roster": None,
+        "warmup_roster_sha256": None,
     }
     spec_path = root / "spec.json"
     spec_sha = write(spec_path, spec)
@@ -177,7 +183,9 @@ def test_uuid_pid_markers_are_distinct_from_journal_hash_and_must_match():
 
 @pytest.mark.parametrize("sender_fails", [False, True])
 @pytest.mark.parametrize("interrupt_drain", [None, 1, 2, 14, 15])
-def test_synthetic_host_sequence_observes_image_before_input_and_matches_uuid(tmp_path, monkeypatch, sender_fails, interrupt_drain):
+def test_synthetic_host_sequence_observes_image_before_input_and_matches_uuid(
+    tmp_path, monkeypatch, sender_fails, interrupt_drain
+):
     path, sha, spec, config, manifest = fixture(tmp_path / "fixtures")
     monkeypatch.setenv("AGENT_OPS_JOB", "job:0123456789abcdef")
     monkeypatch.setattr(relay, "_lease", lambda *args: None)
@@ -238,6 +246,7 @@ def test_synthetic_host_sequence_observes_image_before_input_and_matches_uuid(tm
         if "DRAINED" in command:
             if interrupt_drain:
                 import os
+
                 os.kill(os.getpid(), interrupt_drain)
             return Result(b"DRAINED")
         raise AssertionError(command)
@@ -329,7 +338,6 @@ def test_replica_validation_requires_catalogue_and_exact_checkpoint(tmp_path, se
         relay.load_spec(missing_path, missing_pin)
 
 
-
 def test_queue_refuses_multiple_sessions_in_one_job(tmp_path):
     with pytest.raises(ValueError, match="one drained session per job"):
         relay.run_validation_queue(tmp_path / "queue.json", "a" * 64)
@@ -340,18 +348,24 @@ def test_lease_loss_does_not_touch_remote_target(tmp_path, monkeypatch):
     monkeypatch.setenv("AGENT_OPS_JOB", "job:0123456789abcdef")
     monkeypatch.setattr(relay, "_validation_provenance", lambda *args: None)
     calls = []
+
     def lease(*args):
         calls.append("lease")
         if len(calls) > 1:
             raise RuntimeError("expired")
+
     monkeypatch.setattr(relay, "_lease", lease)
+
     class Process:
         stdin = io.BytesIO()
         pid = 42
+
         def poll(self):
             return None
+
         def wait(self, timeout):
             return 0
+
     monkeypatch.setattr(relay.os, "killpg", lambda *args: None)
     monkeypatch.setattr(relay.subprocess, "Popen", lambda *args, **kwargs: Process())
     monkeypatch.setattr(relay, "_ssh", lambda *args: pytest.fail("remote command after lease loss"))
@@ -371,7 +385,9 @@ def test_validation_provenance_pins_rosters_and_checks_128_inputs(tmp_path, monk
     main_file, warm_file = tmp_path / "main.json", tmp_path / "warm.json"
     main_sha, warm_sha = write(main_file, main_roster), write(warm_file, warm_roster)
     monkeypatch.setattr(roster_io, "validate_roster", lambda value: value)
-    monkeypatch.setattr(raw_identity, "task_from_full", lambda sid, identity: {"sample_id": sid, "raw_input_sha256": identity})
+    monkeypatch.setattr(
+        raw_identity, "task_from_full", lambda sid, identity: {"sample_id": sid, "raw_input_sha256": identity}
+    )
     rows = [raw_identity.task_from_full(t["sample_id"], t["input_identity"]) for t in measured]
     raw = b"".join(json.dumps(row, sort_keys=True, separators=(",", ":")).encode() + b"\n" for row in rows)
     root = tmp_path / "inputs"
@@ -379,8 +395,13 @@ def test_validation_provenance_pins_rosters_and_checks_128_inputs(tmp_path, monk
     (root / "index.jsonl").write_bytes(raw)
     (root / "warmup.npz").write_bytes(b"synthetic")
     warm_rows = [raw_identity.task_from_full(t["sample_id"], t["input_identity"]) for t in warm]
-    spec = {"validation_roster": str(main_file), "validation_roster_sha256": main_sha,
-            "warmup_roster": str(warm_file), "warmup_roster_sha256": warm_sha, "prepared_root": str(root)}
+    spec = {
+        "validation_roster": str(main_file),
+        "validation_roster_sha256": main_sha,
+        "warmup_roster": str(warm_file),
+        "warmup_roster_sha256": warm_sha,
+        "prepared_root": str(root),
+    }
     prepared = {"count": 128, "index_sha256": hashlib.sha256(raw).hexdigest(), "warmup_index": warm_rows}
     config = {"warmup_index": warm_rows}
     relay._validation_provenance(spec, config, prepared)
@@ -408,10 +429,14 @@ def test_admitted_spec_requires_bound_configuration(tmp_path, monkeypatch):
         relay.load_spec(spec_path, spec_sha)
     raw = config_path.read_bytes()
     session = SimpleNamespace(config_bytes=raw, rule8_scope=None)
-    monkeypatch.setattr(admitted_stream, "bind_target_config", lambda *_args, **_kwargs: SimpleNamespace(config_bytes=raw))
+    monkeypatch.setattr(
+        admitted_stream, "bind_target_config", lambda *_args, **_kwargs: SimpleNamespace(config_bytes=raw)
+    )
     assert relay.load_spec(spec_path, spec_sha, admitted_session=session)[1]["dataset_split"] == "test"
     with pytest.raises(ValueError, match="not bound"):
-        relay.load_spec(spec_path, spec_sha, admitted_session=SimpleNamespace(config_bytes=b"different", rule8_scope=None))
+        relay.load_spec(
+            spec_path, spec_sha, admitted_session=SimpleNamespace(config_bytes=b"different", rule8_scope=None)
+        )
 
 
 def test_relay_signal_runs_cleanup_and_restores_handlers(monkeypatch):
@@ -420,11 +445,13 @@ def test_relay_signal_runs_cleanup_and_restores_handlers(monkeypatch):
 
     events = []
     old = signal.getsignal(signal.SIGTERM)
+
     def interrupted(*args, **kwargs):
         try:
             os.kill(os.getpid(), signal.SIGTERM)
         finally:
             events.append("cleanup")
+
     monkeypatch.setattr(relay, "_run_validation", interrupted)
     with pytest.raises(InterruptedError):
         relay.run_validation("unused", "a" * 64)
@@ -452,28 +479,39 @@ def test_lease_loss_unblocks_local_sender_without_remote_cleanup(tmp_path, monke
     monkeypatch.setattr(relay, "_validation_provenance", lambda *args: None)
     sending = threading.Event()
     lost = threading.Event()
+
     def lease(*args):
         if sending.is_set():
             lost.set()
             raise RuntimeError("lost")
+
     monkeypatch.setattr(relay, "_lease", lease)
     original_popen = subprocess.Popen
     spawned = []
+
     def popen(*args, **kwargs):
-        proc = original_popen([sys.executable, "-c", "import time; time.sleep(60)"],
-                              stdin=subprocess.PIPE, stdout=kwargs["stdout"], stderr=kwargs["stderr"],
-                              start_new_session=True)
+        proc = original_popen(
+            [sys.executable, "-c", "import time; time.sleep(60)"],
+            stdin=subprocess.PIPE,
+            stdout=kwargs["stdout"],
+            stderr=kwargs["stderr"],
+            start_new_session=True,
+        )
         spawned.append(proc)
         return proc
+
     monkeypatch.setattr(relay.subprocess, "Popen", popen)
     cid = "b" * 64
     scope = "/system.slice/docker-" + cid + ".scope"
     monkeypatch.setattr(relay, "_container_cgroup", lambda *_args: scope)
     monkeypatch.setattr(relay.rule8_image, "verify_running_container", lambda *_args, **_kwargs: {})
+
     class Result:
         returncode = 0
+
         def __init__(self, out):
             self.stdout = out
+
     def ssh(_spec, command):
         if lost.is_set():
             pytest.fail("remote call after lease loss")
@@ -482,10 +520,13 @@ def test_lease_loss_unblocks_local_sender_without_remote_cleanup(tmp_path, monke
         if command.startswith("cat /proc/"):
             return Result(f"NSpid:\t{spawned[0].pid}\t1\n".encode())
         pytest.fail("unexpected remote command")
+
     monkeypatch.setattr(relay, "_ssh", ssh)
+
     def send(stream, *_args):
         sending.set()
         stream.write(b"x" * (16 * 1024 * 1024))
+
     monkeypatch.setattr(relay, "_stream_prepared", send)
     with pytest.raises(RuntimeError, match="lease lost"):
         relay.run_validation(path, sha)
@@ -514,27 +555,38 @@ def test_stop_timeout_unblocks_sender_and_records_unproven_drain(tmp_path, monke
     monkeypatch.setattr(relay, "_lease", lambda *args: None)
     if exit_race:
         killpg = os.killpg
+
         def exiting_killpg(pid, signum):
             killpg(pid, signum)
             raise ProcessLookupError("process exited after poll")
+
         monkeypatch.setattr(relay.os, "killpg", exiting_killpg)
     original_popen = subprocess.Popen
     spawned = []
+
     def popen(*args, **kwargs):
-        proc = original_popen([sys.executable, "-c", "import time; time.sleep(60)"],
-                              stdin=subprocess.PIPE, stdout=kwargs["stdout"], stderr=kwargs["stderr"],
-                              start_new_session=True)
+        proc = original_popen(
+            [sys.executable, "-c", "import time; time.sleep(60)"],
+            stdin=subprocess.PIPE,
+            stdout=kwargs["stdout"],
+            stderr=kwargs["stderr"],
+            start_new_session=True,
+        )
         spawned.append(proc)
         return proc
+
     monkeypatch.setattr(relay.subprocess, "Popen", popen)
     cid = "b" * 64
     scope = "/system.slice/docker-" + cid + ".scope"
     monkeypatch.setattr(relay, "_container_cgroup", lambda *_args: scope)
     monkeypatch.setattr(relay.rule8_image, "verify_running_container", lambda *_args, **_kwargs: {})
+
     class Result:
         returncode = 0
+
         def __init__(self, out):
             self.stdout = out
+
     def ssh(_spec, command):
         if command.startswith("sudo -n docker inspect"):
             return Result(json.dumps([{"Id": cid, "State": {"Running": True, "Pid": spawned[0].pid}}]).encode())
@@ -543,11 +595,14 @@ def test_stop_timeout_unblocks_sender_and_records_unproven_drain(tmp_path, monke
         if command.startswith("sudo -n docker stop"):
             raise subprocess.TimeoutExpired(command, 1)
         pytest.fail("unexpected remote command")
+
     monkeypatch.setattr(relay, "_ssh", ssh)
     monkeypatch.setattr(relay, "_drain", lambda *_args: (_ for _ in ()).throw(RuntimeError("not proven")))
+
     def send(stream, *_args):
         threading.Timer(0.1, lambda: os.kill(os.getpid(), signal.SIGTERM)).start()
         stream.write(b"x" * (16 * 1024 * 1024))
+
     monkeypatch.setattr(relay, "_stream_prepared", send)
     with pytest.raises(RuntimeError, match="not proven"):
         relay.run_validation(path, sha)
@@ -558,16 +613,17 @@ def test_stop_timeout_unblocks_sender_and_records_unproven_drain(tmp_path, monke
 
 def test_connection_settings_require_explicit_host_and_machine_identity(monkeypatch):
     from passage_eval.campaign.direct import oci_validation_relay as relay
-    monkeypatch.delenv('PASSAGE_EDGE_SSH_HOST_THOR', raising=False)
-    monkeypatch.delenv('PASSAGE_EDGE_MACHINE_ID_THOR', raising=False)
-    with pytest.raises(ValueError, match='SSH host'):
-        relay._ssh_argv({'target': 'thor', 'known_hosts': '/tmp/known-hosts'}, 'true')
-    with pytest.raises(ValueError, match='machine identity'):
-        relay._machine_id('thor')
-    monkeypatch.setenv('PASSAGE_EDGE_SSH_HOST_THOR', 'edge.example.invalid')
-    monkeypatch.setenv('PASSAGE_EDGE_MACHINE_ID_THOR', 'a' * 32)
-    assert 'edge.example.invalid' in relay._ssh_argv({'target': 'thor', 'known_hosts': '/tmp/known-hosts'}, 'true')
-    assert relay._machine_id('thor') == 'a' * 32
-    monkeypatch.setenv('PASSAGE_EDGE_SSH_HOST_THOR', '-oProxyCommand=bad')
-    with pytest.raises(ValueError, match='SSH host'):
-        relay._ssh_argv({'target': 'thor', 'known_hosts': '/tmp/known-hosts'}, 'true')
+
+    monkeypatch.delenv("PASSAGE_EDGE_SSH_HOST_THOR", raising=False)
+    monkeypatch.delenv("PASSAGE_EDGE_MACHINE_ID_THOR", raising=False)
+    with pytest.raises(ValueError, match="SSH host"):
+        relay._ssh_argv({"target": "thor", "known_hosts": "/tmp/known-hosts"}, "true")
+    with pytest.raises(ValueError, match="machine identity"):
+        relay._machine_id("thor")
+    monkeypatch.setenv("PASSAGE_EDGE_SSH_HOST_THOR", "edge.example.invalid")
+    monkeypatch.setenv("PASSAGE_EDGE_MACHINE_ID_THOR", "a" * 32)
+    assert "edge.example.invalid" in relay._ssh_argv({"target": "thor", "known_hosts": "/tmp/known-hosts"}, "true")
+    assert relay._machine_id("thor") == "a" * 32
+    monkeypatch.setenv("PASSAGE_EDGE_SSH_HOST_THOR", "-oProxyCommand=bad")
+    with pytest.raises(ValueError, match="SSH host"):
+        relay._ssh_argv({"target": "thor", "known_hosts": "/tmp/known-hosts"}, "true")

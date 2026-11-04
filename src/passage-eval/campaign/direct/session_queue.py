@@ -3,6 +3,7 @@
 A cell is never replayed after an ambiguous job. The retained ledger requires a
 new plan and explicit operator decision after any interruption or failure.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -20,14 +21,20 @@ from passage_eval.io import pinned
 
 
 _ADMISSION = {
-    "record": "--record", "evidence_dir": "--evidence-dir", "roster": "--roster",
-    "dataset_root": "--dataset-root", "warmup_npz": "--warmup-npz",
-    "warmup_npz_sha256": "--warmup-npz-sha256", "scope": "--scope", "scope_sha256": "--scope-sha256",
+    "record": "--record",
+    "evidence_dir": "--evidence-dir",
+    "roster": "--roster",
+    "dataset_root": "--dataset-root",
+    "warmup_npz": "--warmup-npz",
+    "warmup_npz_sha256": "--warmup-npz-sha256",
+    "scope": "--scope",
+    "scope_sha256": "--scope-sha256",
 }
 
 
 def _record(path, value):
     import os
+
     raw = pinned.canonical_json(value)
     with Path(path).open("xb") as file:
         file.write(raw)
@@ -43,9 +50,11 @@ def _record(path, value):
 def _adapter(target):
     if target in ("orin", "thor"):
         from passage_eval.campaign.direct import oci_validation_relay as adapter
+
         return "passage_eval.campaign.direct.oci_validation_relay", adapter
     if target == "tiger":
         from passage_eval.campaign.direct import bwrap_validation_relay as adapter
+
         return "passage_eval.campaign.direct.bwrap_validation_relay", adapter
     raise ValueError("unknown target")
 
@@ -58,8 +67,11 @@ def load_queue(path, sha256):
 
 def validate_queue(plan):
     """Apply the same preflight to a proposed in-memory plan before publication."""
-    if (not isinstance(plan, dict) or set(plan) != {"schema", "sessions", "ledger", "cavops"}
-            or plan["schema"] != "passage-direct-session-queue/v1"):
+    if (
+        not isinstance(plan, dict)
+        or set(plan) != {"schema", "sessions", "ledger", "cavops"}
+        or plan["schema"] != "passage-direct-session-queue/v1"
+    ):
         raise ValueError("queue specification differs")
     entries = plan["sessions"]
     wanted = {(t, s, p) for t in ("orin", "thor", "tiger") for s in (1234, 2026, 3407) for p in ("seg", "reg")}
@@ -93,9 +105,11 @@ def validate_queue(plan):
             else:
                 spec, config, *_ = adapter.load_spec(entry["spec"], entry["sha256"], image_cache=cache)
             prepared = pinned.read_pinned_json(Path(spec["prepared_root"]) / "prepared.json", spec["prepared_sha256"])
-            if (prepared.get("index_sha256") != config["index_sha256"]
-                    or prepared.get("warmup_index") != config["warmup_index"]
-                    or prepared.get("count") != 128):
+            if (
+                prepared.get("index_sha256") != config["index_sha256"]
+                or prepared.get("warmup_index") != config["warmup_index"]
+                or prepared.get("count") != 128
+            ):
                 raise ValueError("prepared validation inputs differ from target configuration")
             if entry["target"] != "tiger":
                 adapter._validation_provenance(spec, config, prepared)
@@ -119,8 +133,12 @@ def validate_queue(plan):
             from passage_eval.campaign.direct.rule8_scope import load_rule8_scope
             from passage_eval.protocol.admission import grant_test_admission
 
-            admission_key = (admission["record"], admission["evidence_dir"], admission["scope"],
-                             admission["scope_sha256"])
+            admission_key = (
+                admission["record"],
+                admission["evidence_dir"],
+                admission["scope"],
+                admission["scope_sha256"],
+            )
             if admission_key not in admissions:
                 grant = grant_test_admission(admission["record"], admission["evidence_dir"])
                 scope = load_rule8_scope(admission["scope"], admission["scope_sha256"])
@@ -187,12 +205,33 @@ def _run_target(plan, target, ledger, *, run=subprocess.run):
                 command.extend((flag, entry["admission"][name]))
         fingerprint = hashlib.sha256(pinned.canonical_json({"target": target, "command": command})).hexdigest()
         stem = f"{target}-{position:02d}"
-        _record(ledger / (stem + "-started.json"), {"cell": [target, entry["seed"], entry["procedure"]],
-                                                      "effect_key": key, "effect_fingerprint": fingerprint})
-        argv = [plan["cavops"], "job-run", "--host", holder_host_for(target), "--resource", resource_for(target),
-                "--effect-key", key, "--effect-fingerprint", fingerprint, "--task", "passage-edge-qualification",
-                "--claim", "passage-edge-qualification", "--wait", "--", "/usr/bin/timeout", "--signal=TERM",
-                "--kill-after=15s", "1180s", *command]
+        _record(
+            ledger / (stem + "-started.json"),
+            {"cell": [target, entry["seed"], entry["procedure"]], "effect_key": key, "effect_fingerprint": fingerprint},
+        )
+        argv = [
+            plan["cavops"],
+            "job-run",
+            "--host",
+            holder_host_for(target),
+            "--resource",
+            resource_for(target),
+            "--effect-key",
+            key,
+            "--effect-fingerprint",
+            fingerprint,
+            "--task",
+            "passage-edge-qualification",
+            "--claim",
+            "passage-edge-qualification",
+            "--wait",
+            "--",
+            "/usr/bin/timeout",
+            "--signal=TERM",
+            "--kill-after=15s",
+            "1180s",
+            *command,
+        ]
         try:
             result = run(argv, capture_output=True, text=True, check=False, timeout=1300)
             job = parse_job_id(result.stdout)
@@ -200,17 +239,23 @@ def _run_target(plan, target, ledger, *, run=subprocess.run):
                 raise RuntimeError("job failed; target status must be checked")
             drain = pinned.strict_json_loads((Path(entry["_output"]) / "drain.json").read_bytes(), name="drain")
             start = pinned.strict_json_loads((output_root / "image-start.json").read_bytes(), name="image start")
-            if (start.get("scope") != drain.get("scope") or start.get("target") != target
-                    or start.get("procedure") != entry["procedure"]
-                    or start.get("configuration_sha256") != entry["_config_sha256"]
-                    or start.get("input_index_sha256") != entry["_index_sha256"]):
+            if (
+                start.get("scope") != drain.get("scope")
+                or start.get("target") != target
+                or start.get("procedure") != entry["procedure"]
+                or start.get("configuration_sha256") != entry["_config_sha256"]
+                or start.get("input_index_sha256") != entry["_index_sha256"]
+            ):
                 raise ValueError("drain does not match the observed image and input")
             collected = output_root / "collected"
             receipt_sha = (collected / "target-receipt.sha256").read_text(encoding="ascii").strip()
             receipt = pinned.read_pinned_json(collected / "target-receipt.json", receipt_sha)
-            if (receipt.get("configuration_sha256") != entry["_config_sha256"]
-                    or receipt.get("input_index_sha256") != entry["_index_sha256"]
-                    or hashlib.sha256((collected / "journal.jsonl").read_bytes()).hexdigest() != receipt.get("journal_sha256")):
+            if (
+                receipt.get("configuration_sha256") != entry["_config_sha256"]
+                or receipt.get("input_index_sha256") != entry["_index_sha256"]
+                or hashlib.sha256((collected / "journal.jsonl").read_bytes()).hexdigest()
+                != receipt.get("journal_sha256")
+            ):
                 raise ValueError("target receipt does not match the observed session")
             verify_drain(drain, target=target, procedure=entry["procedure"], job_id=job, scope=drain["scope"])
             leases = run([plan["cavops"], "leases", "--json"], capture_output=True, text=True, check=True, timeout=20)

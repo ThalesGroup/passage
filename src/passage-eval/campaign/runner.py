@@ -197,8 +197,16 @@ def run_validation_edge_relay(request: ValidationEdgeRelayRequest) -> Validation
             if pinned.canonical_json(packaged) != pinned.canonical_json(expected_inputs[sample_id]):
                 raise ValueError(f"{procedure}: package ordinary inputs differ from the trusted validation roster")
         candidate = view.manifest.get("candidate")
-        expected_candidate = frozen_candidate_identity(procedure) if request.seed == 2026 else frozen_candidate_identity(
-            procedure,seed=request.seed,replica_catalog=request.replica_catalog,replica_catalog_sha256=request.replica_catalog_sha256)
+        expected_candidate = (
+            frozen_candidate_identity(procedure)
+            if request.seed == 2026
+            else frozen_candidate_identity(
+                procedure,
+                seed=request.seed,
+                replica_catalog=request.replica_catalog,
+                replica_catalog_sha256=request.replica_catalog_sha256,
+            )
+        )
         expected_binding = {key: expected_candidate[key] for key in ("checkpoint_sha256", "seed")}
         if request.candidates[procedure] != expected_binding:
             raise ValueError(f"{procedure}: request candidate differs from the frozen candidate")

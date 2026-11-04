@@ -5,6 +5,7 @@
 name: CI
 
 on:
+  workflow_call:
   push:
     branches: [main, develop]
   pull_request:
@@ -15,13 +16,13 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   # -----------------------------------------------------------------------
-  # Lint — Ruff check + format. Independent of docs deployment so a lint
-  # failure never blocks GitHub Pages from publishing.
+  # Lint — Ruff check + format. The documentation workflow also calls this
+  # check when publishing GitHub Pages.
   # -----------------------------------------------------------------------
   lint:
     name: Lint
@@ -29,6 +30,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
 
       - name: Set up Python
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
@@ -54,8 +57,8 @@ jobs:
         run: uv run --locked ruff format --check src/ tests/
 
   # -----------------------------------------------------------------------
-  # Test — pytest with coverage. Independent of docs deployment so a test
-  # failure never blocks GitHub Pages from publishing.
+  # Test — pytest with coverage. The documentation workflow requires both
+  # Python versions to pass before publishing GitHub Pages.
   # -----------------------------------------------------------------------
   test:
     name: Test (Python ${{ matrix.python-version }})
@@ -69,6 +72,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
 
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
@@ -78,7 +83,7 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgl1
+          sudo apt-get install -y libgl1 zstd
 
       - name: Install uv
         uses: astral-sh/setup-uv@38f3f104447c67c051c4a08e39b64a148898af3a # v4.2.0

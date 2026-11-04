@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import stat
+import subprocess
 import sys
 import venv
 from pathlib import Path
@@ -24,6 +25,11 @@ def shared_cache():
 
 
 needs_bwrap = pytest.mark.skipif(not BWRAP, reason="unprivileged bwrap unavailable")
+
+
+def interpreter_runtime_roots() -> tuple[Path, ...]:
+    prefix = Path(sys.executable).resolve().parent.parent
+    return () if prefix.is_relative_to("/usr") else (prefix,)
 
 
 def make_tree(root: Path, files: dict[str, str | bytes], executable: tuple[str, ...] = ()) -> Path:
@@ -137,11 +143,28 @@ def test_staged_copy_has_the_digest_of_the_source_and_is_read_only(tmp_path):
         assert hash_tree(staged).sha256 == record.sha256
         assert stat.S_IMODE((staged / "run.sh").stat().st_mode) == 0o500  # executable bit kept
         assert stat.S_IMODE((staged / "pkg" / "impl.py").stat().st_mode) == 0o400
-        with pytest.raises(PermissionError):
-            (staged / "pkg" / "impl.py").write_text("tamper")
-        with pytest.raises(PermissionError):
-            (staged / "new.py").write_text("tamper")
-        area.verify(record)
+        # Root can bypass mode bits in CI. In that case the recheck must catch
+        # an actual write; otherwise the operating system must refuse it.
+        modified = False
+        sealed_file = staged / "pkg" / "impl.py"
+        if os.access(sealed_file, os.W_OK):
+            sealed_file.write_text("tamper")
+            modified = True
+        else:
+            with pytest.raises(PermissionError):
+                sealed_file.write_text("tamper")
+        new_file = staged / "new.py"
+        if os.access(staged, os.W_OK):
+            new_file.write_text("tamper")
+            modified = True
+        else:
+            with pytest.raises(PermissionError):
+                new_file.write_text("tamper")
+        if modified:
+            with pytest.raises(TreeError, match="changed after it was hashed"):
+                area.verify(record)
+        else:
+            area.verify(record)
     assert not Path(record.staged_path).exists()  # close() removes the area
 
 
@@ -274,7 +297,9 @@ def test_layout_reads_pth_files_and_editable_finders_without_running_anything(tm
         ),
         finder_mapping={"demo": str(editable)},
     )
-    layout = sandbox.static_runtime_layout(env / "bin" / "python", trusted_roots=[extra, editable])
+    layout = sandbox.static_runtime_layout(
+        env / "bin" / "python", extra_roots=interpreter_runtime_roots(), trusted_roots=[extra, editable]
+    )
     assert not marker.exists()  # the .pth line was counted, not run
     assert layout.pth_import_lines == 2
     assert layout.venv_root == str(env.resolve()) and "/usr" in layout.roots
@@ -291,7 +316,7 @@ def test_a_location_named_by_the_candidates_environment_is_not_bound_on_its_say_
     secret.mkdir()
     editable.mkdir()
     env = make_venv(tmp_path / "venv", pth_lines=(str(secret),), finder_mapping={"demo": str(editable)})
-    layout = sandbox.static_runtime_layout(env / "bin" / "python")
+    layout = sandbox.static_runtime_layout(env / "bin" / "python", extra_roots=interpreter_runtime_roots())
     assert str(secret.resolve()) not in layout.roots and str(editable.resolve()) not in layout.roots
     assert {path for path, _ in layout.needs_declaration} == {str(secret.resolve()), str(editable.resolve())}
     assert set(layout.pth_roots) == {str(secret.resolve()), str(editable.resolve())}
@@ -301,7 +326,7 @@ def test_a_location_named_by_the_candidates_environment_is_not_bound_on_its_say_
         )
     assert not list(tmp_path.glob("passage-stage-*"))
     # the operator can declare what is meant to be visible, as a runtime tree or as a candidate path
-    declared = sandbox.static_runtime_layout(env / "bin" / "python", extra_roots=[secret])
+    declared = sandbox.static_runtime_layout(env / "bin" / "python", extra_roots=(*interpreter_runtime_roots(), secret))
     bound = build_bound_set(
         declared, isolation="bwrap", declared=[editable], protected=[], staging_base=tmp_path, cache=shared_cache()
     )
@@ -323,9 +348,13 @@ def test_the_home_line_of_pyvenv_cfg_does_not_choose_what_is_bound(tmp_path):
     victim.mkdir(parents=True)
     env = make_venv(tmp_path / "venv")
     config = env / "pyvenv.cfg"
-    config.write_text(config.read_text().replace("home = /usr/bin", f"home = {victim}"))
-    layout = sandbox.static_runtime_layout(env / "bin" / "python")
-    assert layout.base_prefix == "/usr" and str(victim.parent) not in layout.roots
+    config.write_text(
+        "\n".join(f"home = {victim}" if line.startswith("home =") else line for line in config.read_text().splitlines())
+        + "\n"
+    )
+    layout = sandbox.static_runtime_layout(env / "bin" / "python", extra_roots=interpreter_runtime_roots())
+    assert layout.base_prefix == str(Path(sys.executable).resolve().parent.parent)
+    assert str(victim.parent) not in layout.roots
     assert layout.needs_declaration == ()
 
 
@@ -341,8 +370,58 @@ def test_an_interpreter_whose_prefix_is_outside_usr_must_be_declared(tmp_path):
         assert str(real_prefix) in sandbox.static_runtime_layout(prefix / "bin" / "python3", [real_prefix]).roots
 
 
+@needs_bwrap
+def test_system_interpreter_alias_is_created_once_inside_the_sandbox():
+    if not Path("/bin").is_symlink() or not Path("/bin/python3").exists():
+        pytest.skip("this host has no /bin/python3 symlinked interpreter")
+    layout = sandbox.static_runtime_layout("/bin/python3", extra_roots=interpreter_runtime_roots())
+    bound = build_bound_set(layout, isolation="bwrap", declared=[], protected=[], cache=shared_cache())
+    try:
+        command = sandbox.bwrap_command(
+            sandbox.IsolationConfig(level="bwrap"), bound.binds, ["/bin/python3", "-I", "-c", "print('ready')"]
+        )
+        system_aliases = [
+            (command[index + 1], command[index + 2]) for index, token in enumerate(command) if token == "--symlink"
+        ]
+        assert [source for source, target in system_aliases if target == "/bin"] == [str(Path("/bin").resolve())]
+        completed = subprocess.run(command, capture_output=True, text=True, timeout=30)
+        assert completed.returncode == 0, completed.stderr
+        assert completed.stdout.strip() == "ready"
+    finally:
+        bound.close()
+
+
+@needs_bwrap
+def test_declared_interpreter_alias_is_recreated_inside_the_sandbox(tmp_path):
+    real = Path(sys.executable).resolve()
+    prefix = real.parent.parent
+    alias = tmp_path / "python-alias"
+    alias.symlink_to(prefix, target_is_directory=True)
+    launcher = tmp_path / "python"
+    launcher.symlink_to(alias / "bin" / real.name)
+    declared = (prefix,) if not prefix.is_relative_to("/usr") else ()
+    layout = sandbox.static_runtime_layout(launcher, extra_roots=declared)
+    bound = build_bound_set(layout, isolation="bwrap", declared=[], protected=[], cache=shared_cache())
+    try:
+        alias.unlink()
+        alias.symlink_to(tmp_path / "unbound-interpreter", target_is_directory=True)
+        command = sandbox.bwrap_command(
+            sandbox.IsolationConfig(level="bwrap"), bound.binds, [str(launcher), "-I", "-c", "print('ready')"]
+        )
+        completed = subprocess.run(command, capture_output=True, text=True, timeout=30)
+        assert completed.returncode == 0, completed.stderr
+        assert completed.stdout.strip() == "ready"
+        assert {row["target"] for row in bound.manifest()["interpreter_aliases"]} == {str(alias), str(launcher)}
+        record = sandbox.isolation_record(sandbox.IsolationConfig(level="bwrap"), bound.binds, bwrap_version="test")
+        assert {row["target"] for row in record["interpreter_aliases"]} == {str(alias), str(launcher)}
+    finally:
+        bound.close()
+
+
 def test_layout_of_the_running_interpreter_covers_the_evaluator_sources():
-    layout = sandbox.static_runtime_layout(sys.executable, trusted_roots=sandbox.evaluator_roots())
+    layout = sandbox.static_runtime_layout(
+        sys.executable, extra_roots=interpreter_runtime_roots(), trusted_roots=sandbox.evaluator_roots()
+    )
     import passage_eval
 
     source = str(Path(passage_eval.__file__).resolve().parent)
@@ -399,7 +478,9 @@ def evil_environment(tmp_path: Path):
 
 
 def probe_binds(env: Path, layout: sandbox.RuntimeLayout):
-    return [sandbox.Bind(root, root) for root in layout.roots]
+    return [sandbox.Bind(root, root) for root in layout.roots] + [
+        sandbox.Bind(source, target, "runtime", "symlink") for target, source in layout.executable_aliases
+    ]
 
 
 def test_process_level_probe_runs_the_hook_unsandboxed_and_the_manifest_says_so(tmp_path):
@@ -418,7 +499,8 @@ def test_bwrap_probe_confines_the_hook_it_cannot_see_the_dataset_the_home_or_wri
     """C2 regression: the .pth hook of the candidate environment must run inside the worker's sandbox."""
     env, marker, private = evil_environment(tmp_path)
     layout = sandbox.static_runtime_layout(
-        env / "bin" / "python", [Path(__import__("numpy").__file__).resolve().parent.parent]
+        env / "bin" / "python",
+        [Path(__import__("numpy").__file__).resolve().parent.parent, *interpreter_runtime_roots()],
     )
     isolation = sandbox.IsolationConfig(level="bwrap")
     probe = sandbox.probe_interpreter(env / "bin" / "python", isolation=isolation, binds=probe_binds(env, layout))
@@ -442,7 +524,11 @@ def test_a_probe_that_reports_unbound_locations_fails_closed(tmp_path):
     numpy_site = str(Path(__import__("numpy").__file__).resolve().parent.parent)
     python = str(env / "bin" / "python")
     undeclared = SupervisorConfig(
-        worker_python=python, isolation=sandbox.IsolationConfig(level="bwrap"), staging_dir=str(tmp_path)
+        worker_python=python,
+        isolation=sandbox.IsolationConfig(
+            level="bwrap", runtime_binds=tuple(str(p) for p in interpreter_runtime_roots())
+        ),
+        staging_dir=str(tmp_path),
     )
     with pytest.raises(sandbox.SandboxError, match="not bound on its say-so.*" + numpy_site.replace(".", r"\.")):
         inspect_environment(undeclared, ["m:fn"])  # refused before anything ran, hook included
@@ -450,7 +536,9 @@ def test_a_probe_that_reports_unbound_locations_fails_closed(tmp_path):
     config = SupervisorConfig(
         worker_python=python,
         staging_dir=str(tmp_path),
-        isolation=sandbox.IsolationConfig(level="bwrap", runtime_binds=(numpy_site,)),
+        isolation=sandbox.IsolationConfig(
+            level="bwrap", runtime_binds=(numpy_site, *(str(p) for p in interpreter_runtime_roots()))
+        ),
     )
     environment = inspect_environment(config, ["m:fn"])  # declared by the operator: bound
     try:
@@ -475,7 +563,8 @@ def test_the_probe_output_is_bounded_and_a_chatty_hook_cannot_exhaust_memory(tmp
     site = next((env / "lib").glob("python*/site-packages"))
     (site / "zz_flood.pth").write_text("import sys; sys.stdout.write('X' * (4 << 20))\n")
     layout = sandbox.static_runtime_layout(
-        env / "bin" / "python", [Path(__import__("numpy").__file__).resolve().parent.parent]
+        env / "bin" / "python",
+        [Path(__import__("numpy").__file__).resolve().parent.parent, *interpreter_runtime_roots()],
     )
     probe = sandbox.probe_interpreter(
         env / "bin" / "python", isolation=sandbox.IsolationConfig(level="bwrap"), binds=probe_binds(env, layout)
@@ -573,7 +662,9 @@ def test_an_exit_hook_cannot_forge_the_probe_result_by_writing_a_second_message_
     """N3 (re-review): with the result on stdout the LAST marker won, so an atexit hook could relocate the decoder."""
     env, real = forged_environment(tmp_path)
     numpy_site = Path(__import__("numpy").__file__).resolve().parent.parent
-    layout = sandbox.static_runtime_layout(env / "bin" / "python", [numpy_site, real.parent])
+    layout = sandbox.static_runtime_layout(
+        env / "bin" / "python", [numpy_site, real.parent, *interpreter_runtime_roots()]
+    )
     probe = sandbox.probe_interpreter(
         env / "bin" / "python",
         isolation=sandbox.IsolationConfig(level="bwrap"),
@@ -614,7 +705,9 @@ def test_documented_limit_a_start_up_hook_that_writes_first_pre_empts_the_probe_
     """
     env, real = forged_environment(tmp_path, STARTUP_FORGERY)
     numpy_site = Path(__import__("numpy").__file__).resolve().parent.parent
-    layout = sandbox.static_runtime_layout(env / "bin" / "python", [numpy_site, real.parent])
+    layout = sandbox.static_runtime_layout(
+        env / "bin" / "python", [numpy_site, real.parent, *interpreter_runtime_roots()]
+    )
     probe = sandbox.probe_interpreter(
         env / "bin" / "python",
         isolation=sandbox.IsolationConfig(level="bwrap"),
@@ -632,7 +725,7 @@ def test_documented_limit_a_start_up_hook_that_writes_first_pre_empts_the_probe_
 
 
 def layout_for(env: Path, extra=()):
-    return sandbox.static_runtime_layout(env / "bin" / "python", extra)
+    return sandbox.static_runtime_layout(env / "bin" / "python", (*interpreter_runtime_roots(), *extra))
 
 
 def test_bound_set_stages_candidates_and_hashes_the_environment_in_place(tmp_path):
@@ -692,6 +785,7 @@ def test_process_isolation_hashes_candidates_in_place_and_detects_edits(tmp_path
         (record,) = bound.candidate
         assert record.role == "candidate_in_place" and record.staged_path is None and bound.binds == []
         assert bound.binding == "in_place_hash_rechecked"
+        assert "interpreter_aliases" not in bound.manifest()
         (cand / "impl.py").write_text("2\n")
         from passage_eval.supervision.identity import IdentityError
 
