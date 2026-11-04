@@ -3,6 +3,7 @@
 No target connection or test roster access. All eighteen cells are checked before
 writing; a missing or mismatched artifact prevents the entire plan from being made.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -17,8 +18,13 @@ from passage_eval.io import pinned
 
 
 def _ref(value, name):
-    if (not isinstance(value, dict) or set(value) != {"path", "sha256"}
-            or not isinstance(value["path"], str) or not value["path"] or not pinned.is_hex64(value["sha256"])):
+    if (
+        not isinstance(value, dict)
+        or set(value) != {"path", "sha256"}
+        or not isinstance(value["path"], str)
+        or not value["path"]
+        or not pinned.is_hex64(value["sha256"])
+    ):
         raise ValueError(f"{name}: pinned file reference required")
     if _file_digest(value["path"]) != value["sha256"]:
         raise ValueError(f"{name}: file digest differs")
@@ -39,25 +45,42 @@ def _cell(inventory, source, catalog, results_root):
     stage = _json_ref(source["stage"], "staging receipt")
     dispatch = _json_ref(source["stage_dispatch"], "staging dispatch")
     result_ref = _ref(source["stage_result_archive"], "staging result archive")
-    if (dispatch.get("status") != "complete" or dispatch.get("target") != target
-            or dispatch.get("drain") != "SCOPE_STOPPED" or dispatch.get("test_payload_access") is not False
-            or dispatch.get("error") is not None or dispatch.get("result_sha256") != result_ref["sha256"]):
+    if (
+        dispatch.get("status") != "complete"
+        or dispatch.get("target") != target
+        or dispatch.get("drain") != "SCOPE_STOPPED"
+        or dispatch.get("test_payload_access") is not False
+        or dispatch.get("error") is not None
+        or dispatch.get("result_sha256") != result_ref["sha256"]
+    ):
         raise ValueError("staging dispatch is not complete and drained")
     if not isinstance(dispatch.get("job"), str):
         raise ValueError("staging job identity missing")
     parse_job_id(dispatch["job"])
     with tarfile.open(result_ref["path"], "r:*") as archive:
         matches = [m for m in archive.getmembers() if m.name == "results/stage.json" and m.isfile()]
-        if len(matches) != 1 or hashlib.sha256(archive.extractfile(matches[0]).read()).hexdigest() != source["stage"]["sha256"]:
+        if (
+            len(matches) != 1
+            or hashlib.sha256(archive.extractfile(matches[0]).read()).hexdigest() != source["stage"]["sha256"]
+        ):
             raise ValueError("stage receipt differs from the drained result archive")
-    if (stage.get("schema") != "passage-replica256-stage/v1" or stage.get("target") != target
-            or stage.get("test_payload_access") is not False or stage.get("inference_used") is not False
-            or stage.get("vendor_gpu_used") is not False or stage.get("artifact_qualification") != "not_asserted"
-            or not isinstance(stage.get("files"), dict)):
+    if (
+        stage.get("schema") != "passage-replica256-stage/v1"
+        or stage.get("target") != target
+        or stage.get("test_payload_access") is not False
+        or stage.get("inference_used") is not False
+        or stage.get("vendor_gpu_used") is not False
+        or stage.get("artifact_qualification") != "not_asserted"
+        or not isinstance(stage.get("files"), dict)
+    ):
         raise ValueError("staging receipt does not attest the requested validation target")
     config = validate_config(_json_ref(source["configuration"], "target configuration"))
-    if (config["dataset_split"] != "validation" or config["target"] != target
-            or config["seed"] != seed or config["procedure"] != procedure):
+    if (
+        config["dataset_split"] != "validation"
+        or config["target"] != target
+        or config["seed"] != seed
+        or config["procedure"] != procedure
+    ):
         raise ValueError("target configuration is not this validation cell")
     paths, pins = config["artifact_paths"], config["artifact_pins"]
     if not isinstance(paths, dict) or set(paths) != {"bundle", "checkpoint", "engine", "decoder"}:
@@ -69,8 +92,12 @@ def _cell(inventory, source, catalog, results_root):
 
     def staged(path, digest):
         candidate = PurePosixPath(path)
-        if (not candidate.is_absolute() or stage_root not in candidate.parents or ".." in candidate.parts
-                or files.get(str(candidate)) != digest):
+        if (
+            not candidate.is_absolute()
+            or stage_root not in candidate.parents
+            or ".." in candidate.parts
+            or files.get(str(candidate)) != digest
+        ):
             raise ValueError(f"staged file missing or digest differs: {path}")
         return str(candidate)
 
@@ -105,8 +132,12 @@ def _cell(inventory, source, catalog, results_root):
         engine_sha = comp.get("engine_sha256")
         native = inventory["native"]
         expected = native.get("sha256") or (native.get("host_file") or {}).get("sha256")
-        if (engine_sha != expected or engine_sha != pins.get("engine") or config["compiled_sha256"] != compiled["sha256"]
-                or comp.get("source_bundle_sha256") != pins["bundle"]):
+        if (
+            engine_sha != expected
+            or engine_sha != pins.get("engine")
+            or config["compiled_sha256"] != compiled["sha256"]
+            or comp.get("source_bundle_sha256") != pins["bundle"]
+        ):
             raise ValueError("compiled engine or bundle differs from inventory")
         staged(paths["engine"], engine_sha)
         staged(config["compiled_manifest"], compiled["sha256"])
@@ -119,9 +150,11 @@ def _cell(inventory, source, catalog, results_root):
         if procedure == "seg":
             grn = config["grn_evidence"]
             evidence = comp["build_evidence"]
-            hashes = {"rewrite_script": inventory["grn_rewrite"]["script"]["sha256"],
-                      "input_archive": evidence["input_archive_sha256"],
-                      "result_archive": evidence["result_archive_sha256"]}
+            hashes = {
+                "rewrite_script": inventory["grn_rewrite"]["script"]["sha256"],
+                "input_archive": evidence["input_archive_sha256"],
+                "result_archive": evidence["result_archive_sha256"],
+            }
             _ref(inventory["grn_rewrite"]["script"], "rewrite script")
             for key, digest in hashes.items():
                 staged(grn[key], digest)
@@ -136,13 +169,16 @@ def _cell(inventory, source, catalog, results_root):
     if relay.get("target") != target:
         raise ValueError("relay template target differs")
     relay = dict(relay)
-    relay.update(configuration=source["configuration"]["path"], configuration_sha256=source["configuration"]["sha256"],
-                 bundle_manifest_host=bundle_ref["path"],
-                 compiled_manifest_host=compiled["path"] if compiled is not None else None,
-                 target_readonly_mounts=sorted(mounts),
-                 output_root=str(Path(results_root) / f"{target}-{procedure}-{seed}"),
-                 replica_catalog=catalog["path"] if seed != 2026 else None,
-                 replica_catalog_sha256=catalog["sha256"] if seed != 2026 else None)
+    relay.update(
+        configuration=source["configuration"]["path"],
+        configuration_sha256=source["configuration"]["sha256"],
+        bundle_manifest_host=bundle_ref["path"],
+        compiled_manifest_host=compiled["path"] if compiled is not None else None,
+        target_readonly_mounts=sorted(mounts),
+        output_root=str(Path(results_root) / f"{target}-{procedure}-{seed}"),
+        replica_catalog=catalog["path"] if seed != 2026 else None,
+        replica_catalog_sha256=catalog["sha256"] if seed != 2026 else None,
+    )
     argv = list(relay["runner_argv"])
     if argv.count("--config-sha256") != 1 or argv.index("--config-sha256") + 1 >= len(argv):
         raise ValueError("runner configuration argument missing")
@@ -154,11 +190,15 @@ def _cell(inventory, source, catalog, results_root):
 def build(inventory_path, inventory_sha256, inputs_path, inputs_sha256, output):
     inventory = pinned.read_pinned_json(inventory_path, inventory_sha256)
     inputs = pinned.read_pinned_json(inputs_path, inputs_sha256)
-    if (not isinstance(inputs, dict) or set(inputs) != {"schema", "cells", "catalog", "results_root", "ledger", "cavops"}
-            or inputs["schema"] != "passage-validation-spec-inputs/v1"):
+    if (
+        not isinstance(inputs, dict)
+        or set(inputs) != {"schema", "cells", "catalog", "results_root", "ledger", "cavops"}
+        or inputs["schema"] != "passage-validation-spec-inputs/v1"
+    ):
         raise ValueError("spec inputs differ")
     catalog = _ref(inputs["catalog"], "replica catalogue")
     expected = {(t, s, p) for t in ("orin", "thor", "tiger") for s in (1234, 2026, 3407) for p in ("seg", "reg")}
+
     def keyed(rows):
         if not isinstance(rows, list):
             raise ValueError("cell list missing")
@@ -171,6 +211,7 @@ def build(inventory_path, inventory_sha256, inputs_path, inputs_sha256, output):
                 raise ValueError("duplicate or invalid cell")
             result[key] = row
         return result
+
     inventory_cells, sources = keyed(inventory.get("cells")), keyed(inputs["cells"])
     errors, specs = [], {}
     for key in sorted(expected):
@@ -178,8 +219,17 @@ def build(inventory_path, inventory_sha256, inputs_path, inputs_sha256, output):
             if key not in inventory_cells or key not in sources:
                 raise ValueError("inventory or assembly input missing")
             row = sources[key]
-            if set(row) != {"target", "seed", "procedure", "stage", "stage_dispatch", "stage_result_archive",
-                            "configuration", "relay_template", "compiled_manifest"}:
+            if set(row) != {
+                "target",
+                "seed",
+                "procedure",
+                "stage",
+                "stage_dispatch",
+                "stage_result_archive",
+                "configuration",
+                "relay_template",
+                "compiled_manifest",
+            }:
                 raise ValueError("cell assembly inputs differ")
             specs[key] = _cell(inventory_cells[key], row, catalog, inputs["results_root"])
         except (KeyError, OSError, TypeError, ValueError) as exc:
@@ -194,10 +244,22 @@ def build(inventory_path, inventory_sha256, inputs_path, inputs_sha256, output):
         path = out / f"{target}-{procedure}-{seed}.json"
         with path.open("xb") as file:
             file.write(raw)
-        cells.append({"target": target, "seed": seed, "procedure": procedure, "spec": str(path.resolve()),
-                      "sha256": hashlib.sha256(raw).hexdigest(), "admission": None})
-    plan = {"schema": "passage-direct-session-queue/v1", "sessions": cells,
-            "ledger": inputs["ledger"], "cavops": inputs["cavops"]}
+        cells.append(
+            {
+                "target": target,
+                "seed": seed,
+                "procedure": procedure,
+                "spec": str(path.resolve()),
+                "sha256": hashlib.sha256(raw).hexdigest(),
+                "admission": None,
+            }
+        )
+    plan = {
+        "schema": "passage-direct-session-queue/v1",
+        "sessions": cells,
+        "ledger": inputs["ledger"],
+        "cavops": inputs["cavops"],
+    }
     from passage_eval.campaign.direct.session_queue import validate_queue
 
     validate_queue(pinned.strict_json_loads(pinned.canonical_json(plan), name="proposed queue"))

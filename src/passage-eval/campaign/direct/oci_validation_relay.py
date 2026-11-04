@@ -57,7 +57,10 @@ _SPEC_KEYS = {
     "user",
     "replica_catalog",
     "replica_catalog_sha256",
-    "validation_roster", "validation_roster_sha256", "warmup_roster", "warmup_roster_sha256",
+    "validation_roster",
+    "validation_roster_sha256",
+    "warmup_roster",
+    "warmup_roster_sha256",
 }
 
 
@@ -193,7 +196,9 @@ def load_spec(path, sha256, *, image_cache=None, admitted_session=None):
         identity = replica_identity(catalog, config["procedure"], config["seed"])
         if identity["checkpoint_sha256"] != config["artifact_pins"]["checkpoint"]:
             raise ValueError("replica checkpoint differs from catalogue")
-    elif admitted_session is None and (spec["replica_catalog"] is not None or spec["replica_catalog_sha256"] is not None):
+    elif admitted_session is None and (
+        spec["replica_catalog"] is not None or spec["replica_catalog_sha256"] is not None
+    ):
         raise ValueError("2026 validation does not use a replica catalogue")
     if config["procedure"] not in ("seg", "reg"):
         raise ValueError("validation procedure differs")
@@ -228,8 +233,9 @@ def load_spec(path, sha256, *, image_cache=None, admitted_session=None):
     required.append(PurePosixPath(config["compiled_manifest"]))
     required.append(PurePosixPath(config["compiled_manifest"]).parent / engine_name)
     if config["grn_evidence"] is not None:
-        required.extend(PurePosixPath(config["grn_evidence"][key]) for key in
-                        ("rewrite_script", "input_archive", "result_archive"))
+        required.extend(
+            PurePosixPath(config["grn_evidence"][key]) for key in ("rewrite_script", "input_archive", "result_archive")
+        )
     if any(len(root.parts) < 5 or root not in required for root in roots):
         raise ValueError("read-only mount must be an individually declared artifact file")
     if any(path not in roots for path in required):
@@ -377,7 +383,9 @@ def _validation_provenance(spec, config, prepared):
     actual = persistent_transport.read_task_index(io.BytesIO(framed), prepared["index_sha256"])
     if actual != expected or config["warmup_index"] != warm or prepared["warmup_index"] != warm:
         raise ValueError("validation input projection differs from its roster")
-    if any(t["sample_id"] == warm[0]["sample_id"] or t["raw_input_sha256"] == warm[0]["raw_input_sha256"] for t in expected):
+    if any(
+        t["sample_id"] == warm[0]["sample_id"] or t["raw_input_sha256"] == warm[0]["raw_input_sha256"] for t in expected
+    ):
         raise ValueError("validation warmup overlaps measured inputs")
     return prepared
 
@@ -406,8 +414,12 @@ def _verify_archive(data, output, config, config_sha, sdk, count, *, admitted_se
                 os.fsync(stream.fileno())
         receipt = verify_admitted_target_receipt(output, admitted_session)
         audit = inspect_journal(output / "journal.jsonl")
-        if (not audit["complete"] or not audit["runtime_released"]
-                or audit["committed_prefix"] != count or audit["ambiguous_range"] is not None):
+        if (
+            not audit["complete"]
+            or not audit["runtime_released"]
+            or audit["committed_prefix"] != count
+            or audit["ambiguous_range"] is not None
+        ):
             raise ValueError("admitted journal incomplete or release unconfirmed")
         return receipt
     digest = files["target-receipt.sha256"].decode("ascii").strip()
@@ -607,6 +619,7 @@ def _run_validation(spec_path, spec_sha256, *, session_key=None, image_cache=Non
     if not re.fullmatch(r"job:[0-9a-f]{16}", job):
         raise ValueError("CAVIAR job identity missing")
     lease_lost = False
+
     def check_lease():
         nonlocal lease_lost
         if lease_lost:
@@ -722,8 +735,13 @@ def _run_validation(spec_path, spec_sha256, *, session_key=None, image_cache=Non
                         callbacks = {}
                         if admitted_session.rule8_scope is not None:
                             callbacks = {
-                                "image_inspect": lambda: (manifest, inspected, actual_cgroup,
-                                    spec["image_manifest_digest"], runner),
+                                "image_inspect": lambda: (
+                                    manifest,
+                                    inspected,
+                                    actual_cgroup,
+                                    spec["image_manifest_digest"],
+                                    runner,
+                                ),
                                 "process_in_scope": lambda p, c: c == actual_cgroup and _container_cgroup(spec, p) == c,
                                 "image_evidence_path": output / "image-start.json",
                             }
@@ -795,7 +813,9 @@ def _run_validation(spec_path, spec_sha256, *, session_key=None, image_cache=Non
         if "thread" in locals():
             thread.join(timeout=10)
             if thread.is_alive():
-                _record(output / "failure.json", {"job_id": job, "remote_state": "unknown", "reason": "producer_blocked"})
+                _record(
+                    output / "failure.json", {"job_id": job, "remote_state": "unknown", "reason": "producer_blocked"}
+                )
                 raise RuntimeError("lease lost; local producer did not stop") from failure
         _record(output / "failure.json", {"job_id": job, "remote_state": "unknown", "reason": "lease_lost"})
         raise failure
@@ -833,32 +853,37 @@ def _run_validation(spec_path, spec_sha256, *, session_key=None, image_cache=Non
     finished.update(markers)
     _record(output / "image-finish.json", finished)
     drain = {
-            "schema": "passage-direct-session-drain/v1",
-            "job_id": job,
-            "target": spec["target"],
-            "procedure": config["procedure"],
-            "scope": actual_cgroup,
-            "client_scope": scope,
-            "container_slice": slice_name,
-            "actual_container_cgroup": actual_cgroup,
-            "container_stopped": True,
-            "scope_drained": True,
-            "unit_inactive": True,
-            "cgroup_empty": True,
-            "session_processes": [],
-            "handle_evidence": "process_exit_closes_session_descriptors",
-            "runtime_synchronize_close_recorded": True,
-            "driver_context_introspection": False,
-            "gpu_evidence": "native_runtime_reported",
-        }
+        "schema": "passage-direct-session-drain/v1",
+        "job_id": job,
+        "target": spec["target"],
+        "procedure": config["procedure"],
+        "scope": actual_cgroup,
+        "client_scope": scope,
+        "container_slice": slice_name,
+        "actual_container_cgroup": actual_cgroup,
+        "container_stopped": True,
+        "scope_drained": True,
+        "unit_inactive": True,
+        "cgroup_empty": True,
+        "session_processes": [],
+        "handle_evidence": "process_exit_closes_session_descriptors",
+        "runtime_synchronize_close_recorded": True,
+        "driver_context_introspection": False,
+        "gpu_evidence": "native_runtime_reported",
+    }
     _record(output / "drain.json", drain)
     if admitted_session is not None and admitted_session.rule8_scope is not None:
         from passage_eval.campaign.direct.admitted_stream import verify_rule8_completed_session
 
         start_path = output / "image-start.json"
         verify_rule8_completed_session(
-            admitted_session, output / "collected", start_path, _file_digest(start_path),
-            container_inspect=json.loads(final.stdout)[0], drain=drain, job_id=job,
+            admitted_session,
+            output / "collected",
+            start_path,
+            _file_digest(start_path),
+            container_inspect=json.loads(final.stdout)[0],
+            drain=drain,
+            job_id=job,
         )
     return {
         "job_id": job,
@@ -869,8 +894,9 @@ def _run_validation(spec_path, spec_sha256, *, session_key=None, image_cache=Non
     }
 
 
-def run_validation(spec_path, spec_sha256, *, session_key=None, image_cache=None, admitted_session=None,
-                   deadline_monotonic=None):
+def run_validation(
+    spec_path, spec_sha256, *, session_key=None, image_cache=None, admitted_session=None, deadline_monotonic=None
+):
     """Handle termination while the lease is held, allowing bounded stop and drain."""
     if threading.current_thread() is not threading.main_thread():
         raise RuntimeError("relay must run in the main thread to handle termination")
@@ -892,8 +918,9 @@ def run_validation(spec_path, spec_sha256, *, session_key=None, image_cache=None
         signal.signal(signum, on_term)
     signal.setitimer(signal.ITIMER_REAL, remaining)
     try:
-        return _run_validation(spec_path, spec_sha256, session_key=session_key,
-                               image_cache=image_cache, admitted_session=admitted_session)
+        return _run_validation(
+            spec_path, spec_sha256, session_key=session_key, image_cache=image_cache, admitted_session=admitted_session
+        )
     finally:
         signal.setitimer(signal.ITIMER_REAL, 0)
         for signum, handler in old_handlers.items():
@@ -921,8 +948,14 @@ def main():
     parser.add_argument("--scope")
     parser.add_argument("--scope-sha256")
     args = parser.parse_args()
-    admission_args = (args.record, args.evidence_dir, args.roster, args.dataset_root, args.warmup_npz,
-                      args.warmup_npz_sha256)
+    admission_args = (
+        args.record,
+        args.evidence_dir,
+        args.roster,
+        args.dataset_root,
+        args.warmup_npz,
+        args.warmup_npz_sha256,
+    )
     if any(admission_args):
         if not args.spec or not all(admission_args) or bool(args.scope) != bool(args.scope_sha256):
             parser.error("admitted mode needs spec, record, evidence, roster, dataset and pinned warmup")
@@ -932,26 +965,40 @@ def main():
         from passage_eval.protocol.contracts import BudgetSpec
 
         spec = pinned.read_pinned_json(_validation_host_path(args.spec), args.sha256)
-        config = validate_config(pinned.read_pinned_json(_validation_host_path(spec["configuration"]),
-                                                         spec["configuration_sha256"]))
+        config = validate_config(
+            pinned.read_pinned_json(_validation_host_path(spec["configuration"]), spec["configuration_sha256"])
+        )
         budget = BudgetSpec(**config["budget"])
-        warm_roster = validate_roster(pinned.read_pinned_json(_validation_host_path(spec["warmup_roster"]),
-                                                             spec["warmup_roster_sha256"]))
+        warm_roster = validate_roster(
+            pinned.read_pinned_json(_validation_host_path(spec["warmup_roster"]), spec["warmup_roster_sha256"])
+        )
         frame = io.BytesIO()
-        persistent_transport.write_array_frame(frame, "warmup", 0, _validation_host_path(args.warmup_npz),
-                                               args.warmup_npz_sha256)
+        persistent_transport.write_array_frame(
+            frame, "warmup", 0, _validation_host_path(args.warmup_npz), args.warmup_npz_sha256
+        )
         frame.seek(0)
         warmup = persistent_transport.read_warmup(frame, budget, config["warmup_index"])[0]
         scope = load_rule8_scope(args.scope, args.scope_sha256) if args.scope else None
-        session = prepare_admitted_session(args.record, args.evidence_dir, args.roster, args.dataset_root,
-                                           budget, warmup, warm_roster, rule8_scope=scope)
+        session = prepare_admitted_session(
+            args.record,
+            args.evidence_dir,
+            args.roster,
+            args.dataset_root,
+            budget,
+            warmup,
+            warm_roster,
+            rule8_scope=scope,
+        )
         session = bind_target_config(session, config, compiled_host_path=spec["compiled_manifest_host"])
         result = run_validation(args.spec, args.sha256, admitted_session=session, deadline_monotonic=deadline)
     else:
         if args.scope or args.scope_sha256:
             parser.error("scope requires admitted mode")
-        result = (run_validation(args.spec, args.sha256, deadline_monotonic=deadline)
-                  if args.spec else run_validation_queue(args.queue, args.sha256))
+        result = (
+            run_validation(args.spec, args.sha256, deadline_monotonic=deadline)
+            if args.spec
+            else run_validation_queue(args.queue, args.sha256)
+        )
     print(json.dumps(result, sort_keys=True), flush=True)
 
 

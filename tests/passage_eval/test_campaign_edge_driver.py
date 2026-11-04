@@ -140,9 +140,7 @@ def test_sealed_entrypoint_runs_with_active_interpreter_in_isolated_mode(tmp_pat
     from passage_eval.campaign.edge.driver import sealed_package_argv
 
     argv = sealed_package_argv("thor", _invocation(tmp_path))
-    result = subprocess.run(
-        [*argv[:6], "--help"], capture_output=True, text=True, timeout=30, check=False
-    )
+    result = subprocess.run([*argv[:6], "--help"], capture_output=True, text=True, timeout=30, check=False)
     assert result.returncode == 0, result.stderr
     assert "sealed-package" in result.stdout
 
@@ -243,9 +241,10 @@ def test_release_rejects_forged_or_resource_mismatched_attempts_even_with_idle_e
 
 def test_driver_uses_configured_lease_command_and_working_directory(tmp_path):
     from passage_eval.campaign.edge.driver import EdgeJobDriver
+
     coordinator = FakeCavops([_success()])
-    EdgeJobDriver(run=coordinator, caviar_root=tmp_path, lease_command='/opt/lease/bin/client').run_package(
-        'thor', _invocation(tmp_path)
+    EdgeJobDriver(run=coordinator, caviar_root=tmp_path, lease_command="/opt/lease/bin/client").run_package(
+        "thor", _invocation(tmp_path)
     )
-    assert coordinator.calls[0][0][0] == '/opt/lease/bin/client'
+    assert coordinator.calls[0][0][0] == "/opt/lease/bin/client"
     assert coordinator.calls[0][1] == tmp_path

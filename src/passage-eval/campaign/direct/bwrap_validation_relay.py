@@ -206,15 +206,24 @@ def load_spec(path, digest, session=None, *, image_cache=None):
     ):
         raise ValueError("rootfs exceptions differ")
     signature = (_image_signature(spec["image_archive"]), _image_signature(spec["rootfs_export"]))
-    cache_key = ("bwrap-comparison", str(Path(spec["image_archive"]).absolute()), spec["image_archive_sha256"],
-                 str(Path(spec["rootfs_export"]).absolute()), spec["rootfs_export_sha256"],
-                 spec["image_manifest_digest"], tuple(exceptions))
+    cache_key = (
+        "bwrap-comparison",
+        str(Path(spec["image_archive"]).absolute()),
+        spec["image_archive_sha256"],
+        str(Path(spec["rootfs_export"]).absolute()),
+        spec["rootfs_export_sha256"],
+        spec["image_manifest_digest"],
+        tuple(exceptions),
+    )
     cached = image_cache.get(cache_key) if image_cache is not None else None
     if cached is not None and cached[0] == signature:
         comparison = cached[1]
     else:
         comparison = bwrap_lineage.compare(
-            spec["image_archive"], spec["image_manifest_digest"][7:], spec["rootfs_export"], allowed_differences=exceptions
+            spec["image_archive"],
+            spec["image_manifest_digest"][7:],
+            spec["rootfs_export"],
+            allowed_differences=exceptions,
         )
         if signature != (_image_signature(spec["image_archive"]), _image_signature(spec["rootfs_export"])):
             raise ValueError("image or rootfs changed during comparison")

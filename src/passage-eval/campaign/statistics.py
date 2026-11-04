@@ -324,8 +324,8 @@ def _sealing(
             result["qualification_profile"] = profile
         elif profile == RULE8_NATIVE_PROFILE:
             evidence = record.get("evidence")
-            catalogue = evidence.get("replica_catalog") if isinstance(evidence,Mapping) else None
-            catalog_digest = catalogue.get("sha256") if isinstance(catalogue,Mapping) else None
+            catalogue = evidence.get("replica_catalog") if isinstance(evidence, Mapping) else None
+            catalog_digest = catalogue.get("sha256") if isinstance(catalogue, Mapping) else None
             if not pinned.is_hex64(catalog_digest):
                 reasons.append(f"seed {seed}: the complete replica catalogue has no file digest")
             elif replica_catalog_sha256 is None:

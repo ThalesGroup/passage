@@ -2199,11 +2199,11 @@ def build_runner(
 
 
 def _view_manifest(view: environment_mod.RoleBinds, level: str, *, pinned: bool) -> dict[str, Any]:
-    return {
+    manifest = {
         "pinned": pinned,
         "narrowed_to_pinned_tree": view.narrowed and pinned,
         "pinned_tree": view.tree,
-        "read_only_binds": [bind.target for bind in view.binds],
+        "read_only_binds": [bind.target for bind in view.binds if bind.kind == "mount"],
         "import_paths": list(view.import_paths),
         "enforced_by": (
             "bwrap_mount_namespace" if level == "bwrap" else "not_enforced_process_isolation_shares_the_file_system"
@@ -2218,6 +2218,10 @@ def _view_manifest(view: environment_mod.RoleBinds, level: str, *, pinned: bool)
             else "no mount namespace: sys.path is narrowed but the file system is shared"
         ),
     }
+    aliases = [bind for bind in view.binds if bind.kind == "symlink"]
+    if aliases:
+        manifest["interpreter_aliases"] = [{"target": bind.target, "source": bind.source} for bind in aliases]
+    return manifest
 
 
 @dataclass(frozen=True)

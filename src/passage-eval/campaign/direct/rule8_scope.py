@@ -42,13 +42,19 @@ class Rule8Scope:
             from passage_eval.protocol.admission import decision_problem
 
             for device, value in analyses.items():
-                if (not isinstance(value, dict) or value.get("target") != device
-                        or decision_problem("confirmatory_analysis", value, {}, profile=RULE8_NATIVE_PROFILE)):
+                if (
+                    not isinstance(value, dict)
+                    or value.get("target") != device
+                    or decision_problem("confirmatory_analysis", value, {}, profile=RULE8_NATIVE_PROFILE)
+                ):
                     raise ValueError("global Rule8 target analysis differs")
             chosen = record.get("protocol", {}).get("decisions", {}).get("confirmatory_analysis", {}).get("value")
             chosen_target = chosen.get("target") if isinstance(chosen, dict) else None
-            if (not isinstance(chosen_target, str) or chosen_target not in analyses
-                    or (target is not None and target != chosen_target)):
+            if (
+                not isinstance(chosen_target, str)
+                or chosen_target not in analyses
+                or (target is not None and target != chosen_target)
+            ):
                 raise ValueError("record target differs from global Rule8 analysis")
             analysis = analyses[chosen_target]
         else:

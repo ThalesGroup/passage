@@ -1,4 +1,5 @@
 """Synthetic dispatch checks, without target access or temporary cleanup."""
+
 import hashlib
 import json
 import subprocess
@@ -12,9 +13,23 @@ from passage_eval.campaign.direct import session_queue as queue
 
 
 def _plan(tmp_path):
-    cells = [{"target": t, "seed": s, "procedure": p, "spec": str(tmp_path / f"{t}-{s}-{p}.json"),
-              "sha256": "a" * 64, "admission": None, "_module": "synthetic", "_output": str(tmp_path / f"out-{t}-{s}-{p}"), "_config_sha256": "b" * 64, "_index_sha256": "c" * 64}
-             for t in ("orin", "thor", "tiger") for s in (1234, 2026, 3407) for p in ("seg", "reg")]
+    cells = [
+        {
+            "target": t,
+            "seed": s,
+            "procedure": p,
+            "spec": str(tmp_path / f"{t}-{s}-{p}.json"),
+            "sha256": "a" * 64,
+            "admission": None,
+            "_module": "synthetic",
+            "_output": str(tmp_path / f"out-{t}-{s}-{p}"),
+            "_config_sha256": "b" * 64,
+            "_index_sha256": "c" * 64,
+        }
+        for t in ("orin", "thor", "tiger")
+        for s in (1234, 2026, 3407)
+        for p in ("seg", "reg")
+    ]
     return {"cavops": "/bin/cavops", "sessions": cells}
 
 
@@ -22,9 +37,12 @@ def _plan(tmp_path):
 def test_one_job_per_cell_and_drained_before_next(tmp_path, lease_busy):
     plan = _plan(tmp_path)
     calls = []
+
     def run(argv, **_kwargs):
         if argv[1] == "leases":
-            return SimpleNamespace(stdout=json.dumps([{"resource": "device:edge-orin"}] if lease_busy else []), returncode=0)
+            return SimpleNamespace(
+                stdout=json.dumps([{"resource": "device:edge-orin"}] if lease_busy else []), returncode=0
+            )
         index = len(calls)
         entry = [e for e in plan["sessions"] if e["target"] == "orin"][index]
         if index:
@@ -33,24 +51,49 @@ def test_one_job_per_cell_and_drained_before_next(tmp_path, lease_busy):
         out = Path(entry["_output"])
         out.mkdir()
         scope = f"/scope/{index}"
-        drain = {"schema": "passage-direct-session-drain/v1", "target": "orin", "procedure": entry["procedure"],
-                 "job_id": job, "scope": scope, "unit_inactive": True, "cgroup_empty": True,
-                 "session_processes": [], "handle_evidence": "process_exit_closes_session_descriptors",
-                 "runtime_synchronize_close_recorded": True, "driver_context_introspection": False}
+        drain = {
+            "schema": "passage-direct-session-drain/v1",
+            "target": "orin",
+            "procedure": entry["procedure"],
+            "job_id": job,
+            "scope": scope,
+            "unit_inactive": True,
+            "cgroup_empty": True,
+            "session_processes": [],
+            "handle_evidence": "process_exit_closes_session_descriptors",
+            "runtime_synchronize_close_recorded": True,
+            "driver_context_introspection": False,
+        }
         (out / "drain.json").write_text(json.dumps(drain))
-        (out / "image-start.json").write_text(json.dumps({"scope": scope, "target": "orin", "procedure": entry["procedure"],
-                                                          "configuration_sha256": "b" * 64, "input_index_sha256": "c" * 64}))
+        (out / "image-start.json").write_text(
+            json.dumps(
+                {
+                    "scope": scope,
+                    "target": "orin",
+                    "procedure": entry["procedure"],
+                    "configuration_sha256": "b" * 64,
+                    "input_index_sha256": "c" * 64,
+                }
+            )
+        )
         import hashlib
+
         collected = out / "collected"
         collected.mkdir()
         journal = b"synthetic"
         (collected / "journal.jsonl").write_bytes(journal)
-        receipt = json.dumps({"configuration_sha256": "b" * 64, "input_index_sha256": "c" * 64,
-                              "journal_sha256": hashlib.sha256(journal).hexdigest()}).encode()
+        receipt = json.dumps(
+            {
+                "configuration_sha256": "b" * 64,
+                "input_index_sha256": "c" * 64,
+                "journal_sha256": hashlib.sha256(journal).hexdigest(),
+            }
+        ).encode()
         (collected / "target-receipt.json").write_bytes(receipt)
         (collected / "target-receipt.sha256").write_text(hashlib.sha256(receipt).hexdigest())
         calls.append(argv)
         return SimpleNamespace(stdout=job, returncode=0)
+
     if lease_busy:
         with pytest.raises(RuntimeError, match="lease not released"):
             queue._run_target(plan, "orin", tmp_path, run=run)
@@ -62,18 +105,22 @@ def test_one_job_per_cell_and_drained_before_next(tmp_path, lease_busy):
     keys = [a[a.index("--effect-key") + 1] for a in calls]
     assert len(set(keys)) == 6
     assert all(a[a.index("--resource") + 1] == "device:edge-orin" for a in calls)
-    assert all(a[a.index("--") + 1:a.index("--") + 5] ==
-               ["/usr/bin/timeout", "--signal=TERM", "--kill-after=15s", "1180s"] for a in calls)
+    assert all(
+        a[a.index("--") + 1 : a.index("--") + 5] == ["/usr/bin/timeout", "--signal=TERM", "--kill-after=15s", "1180s"]
+        for a in calls
+    )
     pos = calls[0].index("/usr/bin/timeout")
-    subprocess.run(calls[0][pos:pos + 4] + ["/bin/true"], check=True, timeout=2)
+    subprocess.run(calls[0][pos : pos + 4] + ["/bin/true"], check=True, timeout=2)
 
 
 def test_failed_or_ambiguous_job_stops_target_without_replay(tmp_path):
     plan = _plan(tmp_path)
     calls = []
+
     def run(argv, **_kwargs):
         calls.append(argv)
         raise subprocess.TimeoutExpired(argv, 1300)
+
     with pytest.raises(subprocess.TimeoutExpired):
         queue._run_target(plan, "thor", tmp_path, run=run)
     assert len(calls) == 1
@@ -91,9 +138,11 @@ def test_three_targets_run_concurrently(tmp_path, monkeypatch):
     monkeypatch.setattr(queue, "load_queue", lambda *_args: plan)
     barrier = threading.Barrier(3, timeout=3)
     seen = []
+
     def run_target(_plan, target, _ledger):
         seen.append(target)
         barrier.wait()
+
     monkeypatch.setattr(queue, "_run_target", run_target)
     queue.run_queue("unused", "a" * 64)
     assert set(seen) == {"orin", "thor", "tiger"}
@@ -114,35 +163,57 @@ def test_plan_rejects_changed_pairing_before_any_launch(tmp_path, monkeypatch):
         e["admission"] = dict(admission)
         e["admission"]["record"] = f"{e['target']}-{e['seed']}"
         confpath = e["spec"] + ".config"
-        specs[e["spec"]] = {"configuration": confpath, "configuration_sha256": "b" * 64,
-                             "output_root": e["spec"] + ".out", "image_manifest_digest": "sha256:" + "f" * 64,
-                             "runner_argv": ["python", "--config-sha256", "b" * 64]}
-        configs[confpath] = {"dataset_split": "test", "target": e["target"], "seed": e["seed"],
-                             "procedure": e["procedure"], "index_sha256": "c" * 64,
-                             "warmup_index": [{"sample_id": "warm"}]}
+        specs[e["spec"]] = {
+            "configuration": confpath,
+            "configuration_sha256": "b" * 64,
+            "output_root": e["spec"] + ".out",
+            "image_manifest_digest": "sha256:" + "f" * 64,
+            "runner_argv": ["python", "--config-sha256", "b" * 64],
+        }
+        configs[confpath] = {
+            "dataset_split": "test",
+            "target": e["target"],
+            "seed": e["seed"],
+            "procedure": e["procedure"],
+            "index_sha256": "c" * 64,
+            "warmup_index": [{"sample_id": "warm"}],
+        }
     plan.update(schema="passage-direct-session-queue/v1", ledger=str(tmp_path / "ledger"))
+
     def read(path, _sha):
         return plan if path == "plan" else specs[path] if path in specs else configs[path]
+
     def adapter(target):
         if target != "tiger":
             return "synthetic", None
+
         def inspect(path, _sha):
             spec = specs[path]
             return spec, configs[spec["configuration"]]
+
         return "synthetic-tiger", SimpleNamespace(inspect_spec=inspect)
+
     monkeypatch.setattr(queue.pinned, "read_pinned_json", read)
     monkeypatch.setattr(queue, "_adapter", adapter)
     monkeypatch.setattr(queue, "validate_config", lambda config: config)
     from passage_eval.campaign.direct import rule8_scope
     from passage_eval.protocol import admission as admission_module
-    monkeypatch.setattr(admission_module, "grant_test_admission", lambda record, _evidence:
-                        SimpleNamespace(name=record, record_sha256=hashlib.sha256(record.encode()).hexdigest()))
+
+    monkeypatch.setattr(
+        admission_module,
+        "grant_test_admission",
+        lambda record, _evidence: SimpleNamespace(
+            name=record, record_sha256=hashlib.sha256(record.encode()).hexdigest()
+        ),
+    )
+
     class Scope:
         def check_record(self, grant, *, target):
             device, seed = grant.name.split("-")[:2]
             if device != target:
                 raise ValueError("record target differs")
             return {"protocol": {"decisions": {"seeds": {"value": [int(seed)]}}}}
+
     monkeypatch.setattr(rule8_scope, "load_rule8_scope", lambda *_args: Scope())
     checked = queue.load_queue("plan", "a" * 64)
     assert len(checked["sessions"]) == 18
@@ -195,30 +266,49 @@ def test_validation_rejects_prepared_index_before_dispatch(tmp_path, monkeypatch
         for key in ("_module", "_output", "_config_sha256", "_index_sha256"):
             e.pop(key)
         cp, rp = e["spec"] + ".config", e["spec"] + ".prepared"
-        specs[e["spec"]] = {"configuration": cp, "configuration_sha256": "b" * 64,
-                            "output_root": e["spec"] + ".out", "image_manifest_digest": "sha256:" + "f" * 64,
-                            "runner_argv": ["python", "--config-sha256", "b" * 64],
-                            "prepared_root": rp, "prepared_sha256": "d" * 64,
-                            "replica_catalog_sha256": "e" * 64}
-        configs[cp] = {"target": e["target"], "seed": e["seed"], "procedure": e["procedure"],
-                       "index_sha256": "c" * 64, "warmup_index": [{"sample_id": "warm"}]}
-        prepared[str(Path(rp) / "prepared.json")] = {"count": 128, "index_sha256": "c" * 64,
-                                                      "warmup_index": [{"sample_id": "warm"}]}
+        specs[e["spec"]] = {
+            "configuration": cp,
+            "configuration_sha256": "b" * 64,
+            "output_root": e["spec"] + ".out",
+            "image_manifest_digest": "sha256:" + "f" * 64,
+            "runner_argv": ["python", "--config-sha256", "b" * 64],
+            "prepared_root": rp,
+            "prepared_sha256": "d" * 64,
+            "replica_catalog_sha256": "e" * 64,
+        }
+        configs[cp] = {
+            "target": e["target"],
+            "seed": e["seed"],
+            "procedure": e["procedure"],
+            "index_sha256": "c" * 64,
+            "warmup_index": [{"sample_id": "warm"}],
+        }
+        prepared[str(Path(rp) / "prepared.json")] = {
+            "count": 128,
+            "index_sha256": "c" * 64,
+            "warmup_index": [{"sample_id": "warm"}],
+        }
     plan.update(schema="passage-direct-session-queue/v1", ledger=str(tmp_path / "ledger"))
+
     def read(path, _sha):
         path = str(path)
         return plan if path == "plan" else prepared[path]
+
     def adapter(target):
         def load(path, _sha, **_kwargs):
             if target == "tiger":
                 tiger_full.append(path)
             spec = specs[path]
             return spec, configs[spec["configuration"]], None, None
+
         def inspect(path, _sha):
             spec, config, *_ = load(path, _sha)
             return spec, config
-        return "synthetic", SimpleNamespace(load_spec=load, inspect_spec=inspect,
-                                             _validation_provenance=lambda *_args: None)
+
+        return "synthetic", SimpleNamespace(
+            load_spec=load, inspect_spec=inspect, _validation_provenance=lambda *_args: None
+        )
+
     monkeypatch.setattr(queue.pinned, "read_pinned_json", read)
     monkeypatch.setattr(queue, "_adapter", adapter)
     last = plan["sessions"][-1]["spec"]

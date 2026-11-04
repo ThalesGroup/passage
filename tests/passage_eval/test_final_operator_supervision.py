@@ -46,7 +46,13 @@ def runner(predictor, decoder, isolation, *, module="final_operator_adapters", *
     pin = treehash.hash_tree(
         package, role="decoder_entry", symlinks="refuse", strict=True, exclude_dirs=treehash.CANDIDATE_EXCLUDES
     ).sha256
-    iso = sandbox.IsolationConfig(level=isolation, env_set={"NUMBA_CACHE_DIR": "/tmp/passage-final-worker-cache"})
+    prefix = Path(sys.executable).resolve().parent.parent
+    runtime_binds = (str(prefix),) if isolation == "bwrap" and not prefix.is_relative_to("/usr") else ()
+    iso = sandbox.IsolationConfig(
+        level=isolation,
+        runtime_binds=runtime_binds,
+        env_set={"NUMBA_CACHE_DIR": "/tmp/passage-final-worker-cache"},
+    )
     config = SupervisorConfig(
         worker_python=sys.executable,
         isolation=iso,

@@ -236,8 +236,9 @@ def load_hold_out_mask(mask_path: str | Path | None = None) -> np.ndarray:
         if pixels.shape[:2] != (181, 361):
             raise ValueError("expected 181x361 pixels")
         if pixels.ndim == 3:
-            if not (np.array_equal(pixels[:, :, 0], pixels[:, :, 1]) and
-                    np.array_equal(pixels[:, :, 0], pixels[:, :, 2])):
+            if not (
+                np.array_equal(pixels[:, :, 0], pixels[:, :, 1]) and np.array_equal(pixels[:, :, 0], pixels[:, :, 2])
+            ):
                 raise ValueError("RGB channels must agree")
             pixels = pixels[:, :, 0]
         binary_mask = (pixels > 0).astype(np.uint8)
@@ -2382,7 +2383,9 @@ def run_generate(
                     )
         else:
             logger.info(f"Running with {pool_size} CPUs")
-            with multiprocessing.Pool(pool_size, initializer=_initialize_hold_out_worker, initargs=(hold_out_mask,)) as pool:
+            with multiprocessing.Pool(
+                pool_size, initializer=_initialize_hold_out_worker, initargs=(hold_out_mask,)
+            ) as pool:
                 for idx, success, msg, duration in tqdm(
                     pool.imap_unordered(_generate_sample_wrapper, args_list),
                     total=samples_to_generate,

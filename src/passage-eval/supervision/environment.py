@@ -81,6 +81,7 @@ class BoundSet:
     stage: StageArea | None
     candidate: list[TreeRecord] = field(default_factory=list)
     environment: list[TreeRecord] = field(default_factory=list)
+    interpreter_aliases: list[sandbox.Bind] = field(default_factory=list)
     view: PathView = field(default_factory=PathView)
     os_layer: dict[str, Any] = field(default_factory=dict)
 
@@ -97,6 +98,7 @@ class BoundSet:
             )
             for record in self.candidate
         ]
+        binds += self.interpreter_aliases
         return binds
 
     def candidate_roots(self) -> list[Path]:
@@ -161,12 +163,18 @@ class BoundSet:
         return "staged_read_only_copy" if self.isolation == "bwrap" else "in_place_hash_rechecked"
 
     def manifest(self) -> dict[str, Any]:
-        return {
+        manifest = {
             "binding": self.binding,
             "candidate": [record.to_manifest() for record in sorted(self.candidate, key=lambda r: r.path)],
             "environment": [record.to_manifest() for record in sorted(self.environment, key=lambda r: r.path)],
             "os_layer": dict(self.os_layer),
         }
+        if self.interpreter_aliases:
+            manifest["interpreter_aliases"] = [
+                {"target": bind.target, "source": bind.source}
+                for bind in sorted(self.interpreter_aliases, key=lambda b: b.target)
+            ]
+        return manifest
 
     def recheck(self) -> None:
         """Fail closed if any bound byte differs from what was hashed (called before every artifact)."""
@@ -201,6 +209,7 @@ class BoundSet:
             self,
             candidate=list(self.candidate),
             environment=list(self.environment),
+            interpreter_aliases=list(self.interpreter_aliases),
             view=PathView(list(self.view.mapping)),
             os_layer=dict(self.os_layer),
         )
@@ -317,6 +326,24 @@ def build_bound_set(
             )
             bound.environment.append(record)
         if isolation == "bwrap":
+            mounted = [Path(record.path) for record in [*bound.environment, *bound.candidate]]
+            reserved = [Path(path) for path in ("/usr", "/proc", "/dev", "/tmp", sandbox.SANDBOX_HOME)]
+            for target_text, source_text in layout.executable_aliases:
+                target, source = Path(target_text), Path(source_text)
+                if not any(_inside(source, Path(record.path)) for record in bound.environment):
+                    raise sandbox.SandboxError(f"interpreter alias target is not in a hashed runtime tree: {source}")
+                if any(target == path or target in path.parents or path in target.parents for path in mounted):
+                    raise sandbox.SandboxError(f"interpreter alias overlaps a mounted tree: {target}")
+                if any(target == path or target in path.parents for path in reserved) or any(
+                    path in target.parents for path in reserved if path != Path("/tmp")
+                ):
+                    raise sandbox.SandboxError(f"interpreter alias overlaps a reserved sandbox path: {target}")
+                if any(
+                    target == Path(path) or target in Path(path).parents or Path(path) in target.parents
+                    for path in protected
+                ):
+                    raise sandbox.SandboxError(f"interpreter alias overlaps a protected path: {target}")
+                bound.interpreter_aliases.append(sandbox.Bind(str(source), str(target), "runtime", "symlink"))
             usr = next((r for r in bound.environment if r.path == "/usr"), None)
             bound.os_layer = {
                 "path": "/usr",

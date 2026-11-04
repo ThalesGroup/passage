@@ -64,8 +64,11 @@ def scope_and_grant(monkeypatch, root, *, record_catalog="a" * 64):
             return {"measured": "sealed-reference"}
 
         def reference_policy(self):
-            return {"reference_policy": "independent_analytic_reference", "reference_cohort_id": "synthetic",
-                    "reference_max_expansions": 9}
+            return {
+                "reference_policy": "independent_analytic_reference",
+                "reference_cohort_id": "synthetic",
+                "reference_max_expansions": 9,
+            }
 
     monkeypatch.setattr(rule8_scope, "AdmissionGrant", Grant)
     return rule8_scope.load_rule8_scope(plan_path, plan_sha), Grant()
@@ -294,30 +297,52 @@ def test_rule8_bind_uses_compiled_sdk_without_new_attestation_but_stream_stays_c
     from passage_eval.protocol import admission
 
     scene = SimpleNamespace(sample_id="measured")
-    roster = {"tasks": [{"sample_id": "measured", "input_identity": {"x": 1}}], "roster_sha256": "r",
-              "dataset": {"commit": "revision"}, "dataset_root_identity": {"sha256": "root"},
-              "cell": {"task_variant": "fixture"}}
+    roster = {
+        "tasks": [{"sample_id": "measured", "input_identity": {"x": 1}}],
+        "roster_sha256": "r",
+        "dataset": {"commit": "revision"},
+        "dataset_root_identity": {"sha256": "root"},
+        "cell": {"task_variant": "fixture"},
+    }
     monkeypatch.setattr(roster_io, "load_roster", lambda *args, **kwargs: roster)
     monkeypatch.setattr(roster_io, "request_input_identity", lambda request: {"x": 1})
     monkeypatch.setattr(scoring.PlanRequest, "from_scene", lambda scene, budget: measured)
+
     def projection(value):
         if value.get("roster_sha256") == "e" * 64:
             return {"tasks": [{"sample_id": "warm", "content_identity_sha256": "w"}]}
         return {"tasks": [{"sample_id": "measured", "content_identity_sha256": "m"}]}
+
     monkeypatch.setattr(admission, "native_input_projection", projection)
     artifact = SimpleNamespace(manifest={})
     monkeypatch.setattr(scoring, "host_score_direct", lambda *args, **kwargs: ({}, {}, artifact))
     scoring.score_rule8_completed_session(
-        bound, target_root, evidence, start_sha, [scene], {"measured": {"reference_id": "sealed-reference"}}, container_inspect=stopped, drain=drain,
-        job_id="job:0123456789abcdef", reference_cohort_id="synthetic",
+        bound,
+        target_root,
+        evidence,
+        start_sha,
+        [scene],
+        {"measured": {"reference_id": "sealed-reference"}},
+        container_inspect=stopped,
+        drain=drain,
+        job_id="job:0123456789abcdef",
+        reference_cohort_id="synthetic",
     )
     assert artifact.manifest["rule8_session_evidence"]["runner_pid"] == 42
     assert artifact.manifest["native_execution"]["container_digest"] == image_digest
     bad = {**stopped, "RestartCount": 1}
     with pytest.raises(ValueError):
         scoring.score_rule8_completed_session(
-            bound, target_root, evidence, start_sha, [scene], {"measured": {"reference_id": "sealed-reference"}}, container_inspect=bad, drain=drain,
-            job_id="job:0123456789abcdef", reference_cohort_id="synthetic",
+            bound,
+            target_root,
+            evidence,
+            start_sha,
+            [scene],
+            {"measured": {"reference_id": "sealed-reference"}},
+            container_inspect=bad,
+            drain=drain,
+            job_id="job:0123456789abcdef",
+            reference_cohort_id="synthetic",
         )
 
 
@@ -336,8 +361,11 @@ def test_v2_one_scope_binds_nine_target_seed_records(monkeypatch, tmp_path):
     record = json.loads(grant.record_path.read_bytes())
     analysis = record["protocol"]["decisions"]["confirmatory_analysis"]["value"]
     families = {target: {**analysis, "target": target} for target in ("orin", "thor", "tiger")}
-    plan = {"schema": "passage-direct-rule8-global-scope/v2", "replica_catalog_sha256": "a" * 64,
-            "confirmatory_analyses": families}
+    plan = {
+        "schema": "passage-direct-rule8-global-scope/v2",
+        "replica_catalog_sha256": "a" * 64,
+        "confirmatory_analyses": families,
+    }
     raw = json.dumps(plan, sort_keys=True).encode()
     path = tmp_path / "scope-v2.json"
     path.write_bytes(raw)
@@ -364,8 +392,11 @@ def test_v2_rejects_missing_or_substituted_analysis_before_roster(monkeypatch, t
     analysis = record["protocol"]["decisions"]["confirmatory_analysis"]["value"]
     families = {target: {**analysis, "target": target} for target in ("orin", "thor", "tiger")}
     families["tiger"]["seeds"] = [1234, 2026]
-    plan = {"schema": "passage-direct-rule8-global-scope/v2", "replica_catalog_sha256": "a" * 64,
-            "confirmatory_analyses": families}
+    plan = {
+        "schema": "passage-direct-rule8-global-scope/v2",
+        "replica_catalog_sha256": "a" * 64,
+        "confirmatory_analyses": families,
+    }
     raw = json.dumps(plan).encode()
     path = tmp_path / "substituted-scope.json"
     path.write_bytes(raw)
@@ -373,5 +404,6 @@ def test_v2_rejects_missing_or_substituted_analysis_before_roster(monkeypatch, t
     monkeypatch.setattr(admitted_stream, "grant_test_admission", lambda *a: grant)
     monkeypatch.setattr(admitted_stream.roster_io, "load_roster", lambda *a, **k: pytest.fail("roster opened"))
     with pytest.raises(ValueError, match="target analysis differs"):
-        admitted_stream.prepare_admitted_session("record", "evidence", "roster", "dataset", None, None, None,
-                                                 rule8_scope=scope)
+        admitted_stream.prepare_admitted_session(
+            "record", "evidence", "roster", "dataset", None, None, None, rule8_scope=scope
+        )
