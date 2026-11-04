@@ -81,6 +81,19 @@ def _write_json(path: Path, value: Any) -> None:
     write_staged_bytes(path, (json.dumps(value, indent=2, sort_keys=True, default=str) + "\n").encode())
 
 
+def _retain_unwritten_artifacts(previous: Path, current: Path) -> None:
+    """Preserve ancillary files without replacing outputs or following directory links."""
+    for source in previous.iterdir():
+        destination = current / source.name
+        if not destination.exists() and not destination.is_symlink():
+            if source.is_dir() and not source.is_symlink():
+                shutil.copytree(source, destination, symlinks=True)
+            else:
+                shutil.copy2(source, destination, follow_symlinks=False)
+        elif source.is_dir() and not source.is_symlink() and destination.is_dir() and not destination.is_symlink():
+            _retain_unwritten_artifacts(source, destination)
+
+
 def _separate_roots(source: Path, staging: Path) -> None:
     if source == staging or source in staging.parents or staging in source.parents:
         raise ValueError("Source and publication staging must be separate trees")
@@ -819,10 +832,11 @@ def prepare_snapshot_notebooks(
                 write_staged_bytes(destination, nbformat.writes(notebook).encode())
             entries.append(entry)
             continue
+        if artifact_root.resolve() != artifact_root:
+            raise ValueError(f"Notebook artifact directory must not be a symlink: {artifact_root}")
         artifact_root.mkdir(parents=True, exist_ok=True)
         receipt_path = artifact_root / "_export_receipt.json"
         start = time.monotonic()
-        started_ns = time.time_ns()
         with tempfile.TemporaryDirectory(prefix="notebook-execution-", dir=staging) as directory:
             input_path, output_path = Path(directory) / "source.ipynb", Path(directory) / "executed.ipynb"
             nbformat.write(notebook, input_path)
@@ -832,7 +846,10 @@ def prepare_snapshot_notebooks(
             if destination.is_file():
                 shutil.copyfile(destination, backup_notebook)
             try:
-                receipt_path.unlink(missing_ok=True)
+                # Presence proves creation by this attempt; filesystem timestamps
+                # may be coarse or use a different clock from time.time_ns().
+                shutil.rmtree(artifact_root)
+                artifact_root.mkdir()
                 run(
                     input_path,
                     output_path,
@@ -845,7 +862,7 @@ def prepare_snapshot_notebooks(
                 evidence = _execution_evidence(output_path)
                 for required in required_files:
                     required_path = staging / required
-                    if not required_path.is_file() or required_path.stat().st_mtime_ns < started_ns:
+                    if not required_path.is_file() or artifact_root not in required_path.resolve().parents:
                         raise ValueError(f"Missing fresh required output: {required}")
                 collected = json.loads(receipt_path.read_text())
                 reported_figures = collected.get("report", {}).get("figures", [])
@@ -860,8 +877,6 @@ def prepare_snapshot_notebooks(
                         figure_path = artifact_root / figure_path
                     if artifact_root not in figure_path.resolve().parents or not figure_path.is_file():
                         raise ValueError(f"Missing or external declared figure: {figure}")
-                    if figure_path.stat().st_mtime_ns < started_ns:
-                        raise ValueError(f"Stale declared figure: {figure}")
                     entry["required_outputs"].append(figure_path.relative_to(staging).as_posix())
                 executed_notebook = nbformat.read(output_path, as_version=4)
                 published_notebook, parameter_edits = _portable_notebook(executed_notebook, params, relative, revision)
@@ -909,9 +924,15 @@ def prepare_snapshot_notebooks(
                 entry["artifacts"] = {
                     p.relative_to(staging).as_posix(): _hash(p) for p in sorted(artifact_root.rglob("*")) if p.is_file()
                 }
+                # Retain user files only after validation and inventory, so an old
+                # file cannot satisfy a required output or acquire a fresh receipt.
+                _retain_unwritten_artifacts(backup_root, artifact_root)
             except BaseException as exc:
                 # Restore the complete reviewed artifact bundle if any attempt fails.
-                shutil.rmtree(artifact_root)
+                if artifact_root.is_dir() and not artifact_root.is_symlink():
+                    shutil.rmtree(artifact_root)
+                else:
+                    artifact_root.unlink(missing_ok=True)
                 os.replace(backup_root, artifact_root)
                 if backup_notebook.is_file():
                     write_staged_bytes(destination, backup_notebook.read_bytes())

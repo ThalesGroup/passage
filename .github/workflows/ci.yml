@@ -80,6 +80,48 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
+      - name: Isolate unused hosted vcpkg ONNX Runtime recipes
+        shell: bash
+        run: |
+          # Verified tests scan every name in /usr. Preserve unused runner recipes
+          # outside all worker runtime trees; keep the runtime prohibition intact.
+          vcpkg=/usr/local/share/vcpkg
+          for parent in "$vcpkg" "$vcpkg/ports" "$vcpkg/versions" "$vcpkg/versions/o-"; do
+            test ! -L "$parent"
+          done
+          for recipe in onnxruntime onnxruntime-gpu; do
+            path="$vcpkg/ports/$recipe"
+            if [ -e "$path" ] || [ -L "$path" ]; then
+              test ! -L "$path"
+              test -d "$path"
+              for marker in portfile.cmake vcpkg.json; do
+                test ! -L "$path/$marker"
+                test -f "$path/$marker"
+              done
+            fi
+          done
+          metadata="$vcpkg/versions/o-/onnxruntime-gpu.json"
+          if [ -e "$metadata" ] || [ -L "$metadata" ]; then
+            test ! -L "$metadata"
+            test -f "$metadata"
+          fi
+          archive=$(mktemp -d "$RUNNER_TEMP/passage-vcpkg-recipes.XXXXXX")
+          python - "$archive" "$GITHUB_WORKSPACE" <<'PY'
+          import sys
+          from pathlib import Path
+
+          archive = Path(sys.argv[1]).resolve()
+          roots = [Path("/usr"), Path(sys.argv[2]).resolve(), Path(sys.prefix).resolve(), Path(sys.base_prefix).resolve()]
+          if any(archive.is_relative_to(root) for root in roots):
+              raise SystemExit("vcpkg recipe archive must be outside worker runtime trees")
+          PY
+          for recipe in ports/onnxruntime ports/onnxruntime-gpu versions/o-/onnxruntime-gpu.json; do
+            if [ -e "$vcpkg/$recipe" ]; then
+              mkdir -p "$archive/$(dirname "$recipe")"
+              sudo mv -- "$vcpkg/$recipe" "$archive/$recipe"
+            fi
+          done
+
       - name: Install system dependencies
         run: |
           sudo apt-get update
