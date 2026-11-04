@@ -28,8 +28,10 @@ test:
       - PYTHON_VERSION: ["3.11", "3.12"]
   script:
     - apt-get update -qq && apt-get install -y --no-install-recommends libgl1 zstd
+    - export UV_PYTHON="$PYTHON_VERSION"
     - uv sync --locked --group dev
     - uv run --locked python --version
+    - uv run --locked python -c 'import os, sys; assert sys.version_info[:2] == tuple(map(int, os.environ["PYTHON_VERSION"].split(".")))'
     - uv run --locked pytest --cov --cov-report=xml:coverage.xml --cov-report=term-missing -x -v
   artifacts:
     when: always
