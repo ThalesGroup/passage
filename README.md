@@ -2,30 +2,30 @@
   <img src="assets/banner.png" alt="PASSAGE banner: real terrain with planned routes" width="100%"/>
 </p>
 
-<h1 align="center">🌍 PASSAGE: real-terrain benchmark for constrained path planning</h1>
+<h1 align="center">PASSAGE: real-terrain benchmark for constrained path planning</h1>
 
 <p align="center">
   <strong>Real terrain, exact answers: 4.4 million scenes and 26.4 million reference routes for trustworthy pathfinding and surrogate modelling.</strong>
 </p>
 
 <p align="center">
-  <a href="#-citation"><img src="https://img.shields.io/badge/NeurIPS%202026-Evaluations%20%26%20Datasets-6f42c1" alt="NeurIPS 2026, Track on Evaluations and Datasets"></a>
-  <a href="https://huggingface.co/datasets/thalesgroup/passage"><img src="https://img.shields.io/badge/%F0%9F%A4%97%20dataset-v1.0-yellow" alt="Hugging Face dataset, version 1.0"></a>
+  <a href="#citation"><img src="https://img.shields.io/badge/NeurIPS%202026-Evaluations%20%26%20Datasets-6f42c1" alt="NeurIPS 2026, Track on Evaluations and Datasets"></a>
+  <a href="https://huggingface.co/datasets/thalesgroup/passage"><img src="https://img.shields.io/badge/dataset-v1.0-yellow" alt="Hugging Face dataset, version 1.0"></a>
   <a href="https://www.python.org/"><img src="https://img.shields.io/badge/python-%E2%89%A53.11-3776AB?logo=python&logoColor=white" alt="Python 3.11 or later"></a>
   <a href="DATASET_LICENSE.md"><img src="https://img.shields.io/badge/dataset%20terms-AW3D30%20%2B%20MIT%20code-orange?logo=opensourceinitiative&logoColor=white" alt="Dataset terms: AW3D30 data, MIT code"></a>
 </p>
 
 <p align="center">
-  <a href="docs/index.md">📖 Documentation</a> •
-  <a href="https://huggingface.co/datasets/thalesgroup/passage">🤗 Dataset</a> •
-  <a href="https://huggingface.co/datasets/thalesgroup/passage/viewer">🔎 Viewer</a> •
-  <a href="#-harness-an-existing-algorithm">🧪 Evaluate</a> •
-  <a href="#-citation">📝 Cite</a>
+  <a href="docs/index.md">Documentation</a> •
+  <a href="https://huggingface.co/datasets/thalesgroup/passage">Dataset</a> •
+  <a href="https://huggingface.co/datasets/thalesgroup/passage/viewer">Viewer</a> •
+  <a href="#harness-an-existing-algorithm">Evaluate</a> •
+  <a href="#citation">Cite</a>
 </p>
 
 ---
 
-## 📌 Executive summary
+## Executive summary
 
 PASSAGE is a dataset and benchmark for constrained path planning on real
 terrain: each scene is a square crop of the JAXA ALOS World 3D–30 m (AW3D30)
@@ -47,7 +47,7 @@ executed notebooks are pinned to [`v1.0`](https://huggingface.co/datasets/thales
 
 ---
 
-## 🔭 At a glance
+## At a glance
 
 - **Real terrain:** JAXA AW3D30 digital surface model, routed as 30 m cells.
 - **Seven resolutions:** 64×64 to 4096×4096; 4.4 million scenes and six routes per scene.
@@ -64,7 +64,7 @@ to inspect the input channels and costs.*
 
 ---
 
-## 🚀 Quick start
+## Quick start
 
 **Explore a scene.** Install `datasets`, `pillow`, `zstandard` and `numpy`, then load a small preview:
 
@@ -86,7 +86,7 @@ route = np.asarray(row["path_astar_energy_obstacles"])
 ```
 
 Core configurations are large; use `streaming=True` to read them incrementally.
-See the [dataset quick start](https://huggingface.co/datasets/thalesgroup/passage#🚀-quick-start)
+See the [dataset quick start](https://huggingface.co/datasets/thalesgroup/passage#quick-start)
 for streaming and training targets.
 
 **Use the code.** Install [uv](https://docs.astral.sh/uv/getting-started/installation/), then:
@@ -104,7 +104,7 @@ calibration, generation and export. [USAGE.md](USAGE.md) lists the commands.
 
 ---
 
-## 🧪 Harness an existing algorithm
+## Harness an existing algorithm
 
 Wrap your classical planner, graph method, policy or vision model with
 `plan(request) -> PlanResult`: receive terrain, obstacles and endpoints, and
@@ -136,7 +136,7 @@ and [evaluation protocol](docs/benchmark/protocol.md) for context.
 
 ---
 
-## 📓 Explore further
+## Explore further
 
 - [Executed dataset notebooks](https://huggingface.co/datasets/thalesgroup/passage/tree/v1.0/notebooks): load scenes, compare objectives, inspect obstacles and reproduce dataset analyses.
 - [Benchmark documentation](docs/benchmark/index.md): evaluator walkthrough, six metrics, comparison reports and results.
@@ -149,7 +149,7 @@ weather or airspace, and does not certify operational planning.
 
 ---
 
-## 📜 Licence and attribution
+## Licence and attribution
 
 The generator, evaluator and notebooks use the [MIT licence](LICENSE).
 The terrain-derived dataset follows [JAXA AW3D30 terms](DATASET_LICENSE.md),
@@ -160,7 +160,7 @@ to JAXA for commercial use. The dataset is neither MIT-licensed nor public domai
 
 ---
 
-## 📝 Citation
+## Citation
 
 PASSAGE is accepted as a poster at NeurIPS 2026, Track on Evaluations and
 Datasets. Cite the paper and state the dataset version used:
@@ -179,11 +179,11 @@ Datasets. Cite the paper and state the dataset version used:
 are in the companion GitLab repository. Proceedings details will be added when
 published. Machine-readable citation: [CITATION.cff](CITATION.cff). Cite the AW3D30
 source reference listed in the
-[dataset card](https://huggingface.co/datasets/thalesgroup/passage#📜-licence-and-attribution) too.
+[dataset card](https://huggingface.co/datasets/thalesgroup/passage#licence-and-attribution) too.
 
 ---
 
-## 👥 Authors and contact
+## Authors and contact
 
 Geoffrey Delhomme, François Trap and Fateh Kaakai (Thales).
 Questions and contributions: [issues](https://github.com/ThalesGroup/passage/issues),
