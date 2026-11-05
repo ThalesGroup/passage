@@ -129,7 +129,7 @@ def test_seed_checkpoint_factories_and_timing_provenance(tmp_path, metre_scene, 
             "torch",
             SimpleNamespace(
                 manual_seed=lambda seed: seeded.append(seed),
-                cuda=SimpleNamespace(is_available=lambda: False),
+                cuda=SimpleNamespace(is_initialized=lambda: False),
             ),
         )
         return SeededPlanner
