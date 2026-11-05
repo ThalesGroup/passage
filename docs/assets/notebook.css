@@ -1,0 +1,68 @@
+/* MIT License
+ * Copyright (c) 2026 THALES
+ */
+
+:root {
+  color-scheme: light;
+  color: #18253b;
+  background: #fff;
+  font: 1rem/1.55 system-ui, sans-serif;
+}
+
+body {
+  max-width: 70rem;
+  margin: 0 auto;
+  padding: 1rem clamp(1rem, 4vw, 2.5rem);
+}
+
+a {
+  color: #204ba5;
+}
+
+code,
+pre {
+  font-family: ui-monospace, monospace;
+}
+
+pre {
+  overflow: auto;
+  padding: 0.85rem 1rem;
+  border: 1px solid #e1e7f0;
+  border-radius: 0.4rem;
+  background: #f6f8fb;
+}
+
+img,
+svg {
+  max-inline-size: 100%;
+  block-size: auto;
+}
+
+.rendered_html,
+.output_area {
+  overflow: auto;
+}
+
+.anchor-link {
+  margin-inline-start: 0.35em;
+  font-size: 0.8em;
+}
+
+.provenance {
+  padding: 0.65rem 1rem;
+  border-inline-start: 0.2rem solid #204ba5;
+  background: #f6f8fb;
+  overflow-wrap: anywhere;
+}
+
+td,
+th {
+  padding: 0.25rem 0.5rem;
+}
+
+footer {
+  margin-block-start: 2rem;
+  padding-block-start: 0.75rem;
+  border-block-start: 1px solid #e1e7f0;
+  font-size: 0.85rem;
+}

@@ -36,9 +36,8 @@ return a ``BenchmarkRecord`` with the same fields used by
     mean_latency_ms, p50_ms, p95_ms, p99_ms, throughput_sps,
     peak_gpu_mem_mib, params_M, n_warmup, n_timed.
 
-The CUDA path is used iff ``torch`` is importable AND a CUDA device is
-visible. CPU fallback is always available so that the package is usable
-without a GPU.
+Benchmarks use the CPU by default. A CUDA benchmark requires a compatible
+PyTorch installation and an explicit ``device="cuda"`` or ``device="cuda:N"``.
 """
 
 from __future__ import annotations
@@ -80,23 +79,19 @@ class BenchmarkRecord:
         return asdict(self)
 
 
-def _is_cuda_available() -> bool:
-    return _TORCH_AVAILABLE and torch.cuda.is_available()
+def _sync(device: str) -> None:
+    if device.partition(":")[0] == "cuda":
+        torch.cuda.synchronize(device)
 
 
-def _sync() -> None:
-    if _is_cuda_available():
-        torch.cuda.synchronize()
+def _reset_peak_memory(device: str) -> None:
+    if device.partition(":")[0] == "cuda":
+        torch.cuda.reset_peak_memory_stats(device)
 
 
-def _reset_peak_memory() -> None:
-    if _is_cuda_available():
-        torch.cuda.reset_peak_memory_stats()
-
-
-def _peak_gpu_mib() -> float:
-    if _is_cuda_available():
-        return float(torch.cuda.max_memory_allocated() / 2**20)
+def _peak_gpu_mib(device: str) -> float:
+    if device.partition(":")[0] == "cuda":
+        return float(torch.cuda.max_memory_allocated(device) / 2**20)
     return 0.0
 
 
@@ -130,16 +125,16 @@ def _run_timing_loop(
     device: str,
     params_M: float | None,
 ) -> BenchmarkRecord:
-    _reset_peak_memory()
+    _reset_peak_memory(device)
     try:
         for _ in range(n_warmup):
             iter_fn()
-        _sync()
+        _sync(device)
         per_iter_ms = np.empty(n_timed, dtype=np.float64)
         for k in range(n_timed):
             t0 = time.perf_counter()
             iter_fn()
-            _sync()
+            _sync(device)
             per_iter_ms[k] = (time.perf_counter() - t0) * 1000.0
     except Exception as e:  # pragma: no cover - exercised in integration tests
         return BenchmarkRecord(
@@ -152,7 +147,7 @@ def _run_timing_loop(
             p95_ms=float("nan"),
             p99_ms=float("nan"),
             throughput_sps=float("nan"),
-            peak_gpu_mem_mib=_peak_gpu_mib(),
+            peak_gpu_mem_mib=_peak_gpu_mib(device),
             params_M=params_M,
             determinism_flag=determinism_flag,
             device=device,
@@ -170,7 +165,7 @@ def _run_timing_loop(
         p95_ms=round(_percentile(per_iter_ms, 95.0), 3),
         p99_ms=round(_percentile(per_iter_ms, 99.0), 3),
         throughput_sps=round(throughput, 3),
-        peak_gpu_mem_mib=round(_peak_gpu_mib(), 1),
+        peak_gpu_mem_mib=round(_peak_gpu_mib(device), 1),
         params_M=params_M,
         determinism_flag=determinism_flag,
         device=device,
@@ -200,10 +195,14 @@ def benchmark_forward(
         present.
     input_shape
         Shape of one synthetic input batch (e.g. ``(1, 3, 256, 256)``).
+    device
+        PyTorch device. Defaults to CPU. Select CUDA explicitly to use it.
     dtype
         ``"fp32"`` (default), ``"fp16"`` or ``"bf16"``.
     """
     if not _TORCH_AVAILABLE:
+        if device and device.partition(":")[0] != "cpu":
+            raise RuntimeError("accelerator benchmarks require PyTorch")
         # No torch: degrade to plain timing of model(np.zeros(...)).
         input_array = np.zeros(input_shape, dtype=np.float32)
 
@@ -221,7 +220,7 @@ def benchmark_forward(
             params_M=None,
         )
 
-    dev = torch.device(device or ("cuda" if torch.cuda.is_available() else "cpu"))
+    dev = torch.device(device or "cpu")
     network = getattr(model, "network", model)
     network = network.to(dev).eval()
     torch_dtype = {"fp32": torch.float32, "fp16": torch.float16, "bf16": torch.bfloat16}.get(dtype, torch.float32)
@@ -244,7 +243,7 @@ def benchmark_forward(
         params_M=_params_in_millions(model),
     )
     gc.collect()
-    if _is_cuda_available():
+    if str(dev).partition(":")[0] == "cuda":
         torch.cuda.empty_cache()
     return rec
 
@@ -286,7 +285,7 @@ def benchmark_decoder(
         p95_ms=round(_percentile(per_sample_ms, 95.0), 3),
         p99_ms=round(_percentile(per_sample_ms, 99.0), 3),
         throughput_sps=round(1000.0 / mean_ms, 3) if mean_ms > 0 else float("nan"),
-        peak_gpu_mem_mib=_peak_gpu_mib(),
+        peak_gpu_mem_mib=0.0,
         params_M=None,
         determinism_flag=determinism_flag,
         device="cpu",
@@ -309,15 +308,20 @@ def benchmark_end_to_end(
     Each ``inputs[i]`` is fed to ``model`` and the output to
     ``decoder_fn``. End-to-end time per sample = forward + decode. Use
     this to populate the ``Lat. (ms)`` column of the headline table.
+    Select a PyTorch device explicitly to benchmark an accelerator.
     """
     n = len(inputs)
     if n == 0:
         raise ValueError("benchmark_end_to_end requires at least one input.")
+    device_name = "cpu"
     if _TORCH_AVAILABLE:
-        dev = torch.device(device or ("cuda" if torch.cuda.is_available() else "cpu"))
+        dev = torch.device(device or "cpu")
+        device_name = str(dev)
         network = getattr(model, "network", model)
         network = network.to(dev).eval()
     else:
+        if device and device.partition(":")[0] != "cpu":
+            raise RuntimeError("accelerator benchmarks require PyTorch")
         network = model
 
     def _forward(x: Any) -> Any:
@@ -330,14 +334,14 @@ def benchmark_end_to_end(
     for _ in range(n_warmup):
         for x in inputs[: min(n, 5)]:
             decoder_fn(_forward(x))
-    _sync()
-    _reset_peak_memory()
+    _sync(device_name)
+    _reset_peak_memory(device_name)
     per_sample_ms = np.empty(n, dtype=np.float64)
     for k, x in enumerate(inputs):
         t0 = time.perf_counter()
         out = _forward(x)
         decoder_fn(out)
-        _sync()
+        _sync(device_name)
         per_sample_ms[k] = (time.perf_counter() - t0) * 1000.0
     mean_ms = float(per_sample_ms.mean())
     return BenchmarkRecord(
@@ -350,9 +354,9 @@ def benchmark_end_to_end(
         p95_ms=round(_percentile(per_sample_ms, 95.0), 3),
         p99_ms=round(_percentile(per_sample_ms, 99.0), 3),
         throughput_sps=round(1000.0 / mean_ms, 3) if mean_ms > 0 else float("nan"),
-        peak_gpu_mem_mib=round(_peak_gpu_mib(), 1),
+        peak_gpu_mem_mib=round(_peak_gpu_mib(device_name), 1),
         params_M=_params_in_millions(model),
         determinism_flag=determinism_flag,
-        device=str(getattr(network, "device", "cpu")) if _TORCH_AVAILABLE else "cpu",
+        device=device_name,
         error=None,
     )
