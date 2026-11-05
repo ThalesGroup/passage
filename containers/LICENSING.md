@@ -1,12 +1,9 @@
 # Edge base recipes: licence review limits
 
-| Author | Date | Version |
-| --- | --- | --- |
-| Geoffrey Delhomme | 2026-11-04 | 0.2 — public source notes |
 
 ## 1. Scope
 
-These notes identify licence information observed during local preparation. They do not determine whether an image or any of its components may be redistributed. The public source files contain text recipes and locks, not model weights, wheels, Debian archives, OCI images or historical build contexts. The operator must review the actual inputs and obtain any missing rights and notices before distribution.
+These notes identify licence information observed during local preparation. They do not determine whether an image or any of its components may be redistributed. The public source files contain text recipes and locks, not model weights, wheels, Debian archives, OCI images or historical build contexts. The operator obtains the inputs separately, reviews the applicable terms and builds locally. PASSAGE does not distribute prebuilt images.
 
 The standard PASSAGE install supports CPU evaluation. CUDA, TensorRT and
 the other edge SDKs are separate operator-supplied inputs for explicitly
@@ -30,11 +27,11 @@ Retain and review the licence texts and notices for the exact versions actually 
 
 The Jetson SDK recipe describes a locally constructed image using Ubuntu and NVIDIA packages. The package lock is included; the package archives and full signed indexes are not. Independently verify vendor signing-key identities and review the licences and redistribution conditions for each selected package and component.
 
-The Tiger developer image and its bundled components require their own licence and notice review, as do the target GPU drivers. A derived image or exported root filesystem containing candidate weights must remain private until the applicable model, weight, architecture and SDK rights are resolved.
+The Tiger developer image and its bundled components require their own licence and notice review, as do the target GPU drivers. A derived image or exported root filesystem is built and used locally; it is not distributed by PASSAGE.
 
-## 5. Before distribution
+## 5. Source and input review
 
 Identify approved source revisions and owners, obtain the applicable permissions, and retain the required third-party licence texts and notices for each item distributed. Source rights, target execution, OCI identity and admission are separate questions; none follows merely from the recipes or package hashes.
 
-For an OCI image, review its base and every layer. A file copied in one
+For a locally built OCI image, review its base and every layer. A file copied in one
 layer still forms part of the image if a later layer removes it.

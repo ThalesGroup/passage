@@ -5,10 +5,6 @@ icon: material/format-list-numbered
 
 # Evaluation protocol
 
-| Author | Date | Version |
-|---|---|---|
-| Geoffrey Delhomme | 2026-10-24 | 1.1 |
-| Geoffrey Delhomme | 2026-11-03 | 1.2 — warm-up units, supervised timing profiles, proposed latency censoring rule, sealed roster blocks |
 
 The evaluator implements the paper's terrain task and decoded-path metrics.
 This page defines the executable contract, reference costs, path metrics,

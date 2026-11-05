@@ -99,7 +99,7 @@ interpret the results.
     ---
 
     Four notebooks: an evaluator walkthrough, the paper results, the classical
-    baselines and the results format. Re-run with `make docs-prepare`.
+    baselines and the results format. Open the sources to view or run them.
 
     [:octicons-arrow-right-24: Open the notebook track](notebooks/index.md)
 

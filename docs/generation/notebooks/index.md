@@ -5,9 +5,9 @@ icon: material/notebook-multiple
 
 # Dataset / solver notebooks
 
-Demo and analysis notebooks for the data-generation side. `make docs-prepare` executes the light ones; `make docs-prepare-all` also executes those that need a local dataset copy. A notebook that could not run shows its last stored outputs under a warning.
+Demo and analysis notebooks for the data-generation side. Open each notebook source to view or run it locally.
 
-[Notebook export licenses](../../licenses/notebook-exports.md)
+[Notebook rendering and licenses](../../licenses/notebook-exports.md)
 
 <div class="grid cards" markdown>
 
