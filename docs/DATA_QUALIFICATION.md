@@ -60,7 +60,7 @@ rules. Preserve `release-receipts/calibration.json`, `resolved-config.yaml`,
 
 ## 4. Generate every requested scene transactionally
 
-Use the verified [sequential recipe](../README.md#-sequential-full-dataset-generation-and-structural-analysis)
+Use the [release-generation guide](guide/export.md#all-in-one-passage-regenerate)
 from the repository root. The real CLI supports inspection with
 `uv run --frozen passage regenerate --dry-run` and isolated pilots with `--pilot`.
 Keep pilots separately identified; their counts cannot establish full completeness.
