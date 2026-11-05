@@ -9,29 +9,29 @@ Copy the template below, replace bracketed fields, and remove unused sections.
   <img src="[banner-path-or-url]" alt="[Project and visual description]" width="100%"/>
 </p>
 
-<h1 align="center">🌍 [Project name]: [one-line purpose]</h1>
+<h1 align="center">[Project name]: [one-line purpose]</h1>
 
 <p align="center">
   <strong>[What a reader can do with this release, in one sentence.]</strong>
 </p>
 
 <p align="center">
-  <a href="[dataset-url]">🤗 Dataset</a> •
-  <a href="[code-url]">💻 Code</a> •
-  <a href="[guide-url]">📖 Guide</a> •
-  <a href="#-citation">📝 Cite</a>
+  <a href="[dataset-url]">Dataset</a> •
+  <a href="[code-url]">Code</a> •
+  <a href="[guide-url]">Guide</a> •
+  <a href="#citation">Cite</a>
 </p>
 
 ---
 
-## 📌 Overview
+## Overview
 
 [Describe the task, supplied artifacts and intended use in a short paragraph.
 State the data/model revision, supported inputs and outputs, and any access requirements.]
 
 ---
 
-## 🚀 Quick start
+## Quick start
 
 [Give the shortest working installation and inference or evaluation example.
 Name any required input file and link to its format.]
@@ -45,7 +45,7 @@ Name any required input file and link to its format.]
 
 ---
 
-## 🧪 Method and variants
+## Method and variants
 
 [Explain how the method produces its output, including decoding and fallback.
 Link to the complete method and evaluation protocol.]
@@ -58,21 +58,21 @@ checks distinct from benchmark scores; link to the evidence rather than duplicat
 
 ---
 
-## 📜 Licence and attribution
+## Licence and attribution
 
 [Identify code, weights and data terms separately. Link to LICENSE and NOTICE
 files, preserve upstream credits, and state material usage limitations.]
 
 ---
 
-## 📝 Citation
+## Citation
 
 [Include the verified citation, a real paper or source link, and the release
 version. Say when a source requires access. Do not invent a DOI or publication URL.]
 
 ---
 
-## 👥 Authors and contact
+## Authors and contact
 
 [Author names, issue tracker and contact.]
 ````
