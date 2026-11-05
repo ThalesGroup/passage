@@ -20,6 +20,7 @@ exclude_docs: |
   /benchmark/test-admission.md
   /benchmark/campaign.md
   /overrides/
+  /superpowers/
 
 repo_url: "https://github.com/ThalesGroup/passage"
 repo_name: "ThalesGroup/passage"
