@@ -32,8 +32,8 @@ theme:
   name: material
   custom_dir: docs/overrides
   language: en
-  logo: assets/logo.svg
-  favicon: assets/favicon.svg
+  logo: assets/app-icon.png
+  favicon: assets/favicon.png
 
   icon:
     repo: fontawesome/brands/github
