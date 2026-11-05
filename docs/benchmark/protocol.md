@@ -209,9 +209,10 @@ or v3); by default `compare` accepts that mix and lists the differing
 `compare --require-identical-limits` refuses it. Do not read a latency contrast
 between different boundaries as a like-for-like measurement.
 On an accelerator, the timer must stop only after the device work has
-finished. The CLI synchronizes CUDA work when the planner uses PyTorch; a
-planner on another runtime must finish its device work before `plan` returns.
-An accelerator label does not select a device or measure latency. A Python
+finished. Configure the accelerator in the planner itself. The CLI synchronizes
+an already initialized PyTorch CUDA context. A planner using another runtime
+must finish its device work before `plan` returns. The accelerator label
+records the device in the result metadata. A Python
 planner cannot be stopped in the middle of a call: the runner waits for it to
 return and records a late result as a timeout (see
 [Evaluate your planner](contributing-a-method.md)).

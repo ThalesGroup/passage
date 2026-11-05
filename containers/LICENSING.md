@@ -8,6 +8,10 @@
 
 These notes identify licence information observed during local preparation. They do not determine whether an image or any of its components may be redistributed. The public source files contain text recipes and locks, not model weights, wheels, Debian archives, OCI images or historical build contexts. The operator must review the actual inputs and obtain any missing rights and notices before distribution.
 
+The standard PASSAGE install supports CPU evaluation. CUDA, TensorRT and
+the other edge SDKs are separate operator-supplied inputs for explicitly
+configured accelerator execution. PASSAGE distributes no prebuilt edge images.
+
 ## 2. First-party material
 
 The PASSAGE source includes a THALES MIT licence. The separate inference source needed by the container builder is not currently public; access, an approved revision and its distribution rights remain to be resolved. A licence observed in a local checkout does not establish that the checkout or every file in it is authorized for public release.
@@ -31,3 +35,6 @@ The Tiger developer image and its bundled components require their own licence a
 ## 5. Before distribution
 
 Identify approved source revisions and owners, obtain the applicable permissions, and retain the required third-party licence texts and notices for each item distributed. Source rights, target execution, OCI identity and admission are separate questions; none follows merely from the recipes or package hashes.
+
+For an OCI image, review its base and every layer. A file copied in one
+layer still forms part of the image if a later layer removes it.

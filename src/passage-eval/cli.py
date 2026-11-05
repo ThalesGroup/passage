@@ -169,9 +169,9 @@ n_samples: 1024                               # deterministic subsample cap
 seeds: [1234, 2026, 3407]                     # MUST stay aligned with DEFAULT_SEEDS
 
 # --- deployment metadata (purely for leaderboard provenance) ----------------
-edge_accelerator: Thor-GPU                    # h100 / Thor-GPU / Orin-GPU / Orin-NPU / Tiger-iGPU / null
+edge_accelerator: null                        # metadata; set only for a configured accelerator
 batch_size: 1
-dtype: fp16
+dtype: fp32
 measure_latency: true
 latency_warmup: 5
 latency_repeats: null                         # one complete warm repeat by default
@@ -854,9 +854,9 @@ def cmd_bench(spec: BenchSpec) -> Path:
 
 
 def _sync_runtime() -> None:
-    """Complete queued CUDA work when a candidate imported PyTorch."""
+    """Complete queued work when a candidate has initialized PyTorch CUDA."""
     runtime = sys.modules.get("torch")
-    if runtime is not None and runtime.cuda.is_available():
+    if runtime is not None and runtime.cuda.is_initialized():
         runtime.cuda.synchronize()
 
 

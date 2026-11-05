@@ -50,6 +50,8 @@ import re
 import shutil
 import sys
 from dataclasses import dataclass, field
+from hashlib import sha256
+from html import escape
 from pathlib import Path
 from typing import Sequence
 
@@ -82,6 +84,7 @@ class NotebookSpec:
     required: bool = False                 #: if True, abort on cell error
     execute_by_default: bool = True        #: opt-in default for `make docs-prepare`
     extras: dict[str, str] = field(default_factory=dict)
+    render_math: bool = False
 
     @property
     def slug(self) -> str:
@@ -188,6 +191,7 @@ GENERATION_NOTEBOOKS: Sequence[NotebookSpec] = (
         section="generation",
         title="The three routing objectives",
         nav_label="The three objectives",
+        render_math=True,
         intro=(
             "What the `elevation`, `slope_uphill` and `energy` objectives "
             "reward on one scene, their elevation profiles, and the extra "
@@ -260,14 +264,49 @@ def _execute(spec: NotebookSpec) -> tuple[nbformat.NotebookNode, bool, str]:
     return nb, True, "executed"
 
 
-def _export_html(nb: nbformat.NotebookNode, out_path: Path) -> None:
-    exporter = HTMLExporter()
-    exporter.template_name = "lab"
-    exporter.exclude_input_prompt = True
-    exporter.exclude_output_prompt = True
+def _export_html(nb: nbformat.NotebookNode, spec: NotebookSpec, *, source_only: bool) -> None:
+    exporter = HTMLExporter(
+        template_name="basic",
+        exclude_input_prompt=True,
+        exclude_output_prompt=True,
+    )
     body, _resources = exporter.from_notebook_node(nb)
+    math_scripts = ""
+    if spec.render_math:
+        math_scripts = """
+<script defer src="../../javascripts/notebook-mathjax.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.7/latest.js?config=TeX-AMS_CHTML-full,Safe"></script>"""
+    provenance = ""
+    if source_only:
+        source = escape(spec.source.relative_to(REPO_ROOT).as_posix())
+        digest = sha256(spec.source.read_bytes()).hexdigest()
+        no_outputs = ""
+        if not any(cell.get("outputs") for cell in nb.cells):
+            no_outputs = "The source contains no stored outputs. "
+        provenance = (
+            f'<aside class="provenance"><strong>Rendering provenance.</strong> '
+            f'This page was rendered from <code>{source}</code> without executing code. '
+            f'{no_outputs}Source SHA-256 <code>{digest}</code>.</aside>\n'
+        )
+    document = f"""<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{escape(spec.title)}</title>
+<link rel="stylesheet" href="../../assets/notebook.css">{math_scripts}
+</head>
+<body>
+<main>
+{provenance}{body.strip()}
+</main>
+<footer><a href="../../licenses/nbconvert-7.17.2.txt">nbconvert license</a></footer>
+</body>
+</html>
+"""
+    out_path = spec.html_out()
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(body, encoding="utf-8")
+    out_path.write_text(document, encoding="utf-8")
 
 
 # ---------------------------------------------------------------------------
@@ -350,6 +389,8 @@ icon: material/notebook-multiple
 
 {summary}
 
+[Notebook export licenses](../../licenses/notebook-exports.md)
+
 <div class="grid cards" markdown>
 
 {cards}
@@ -401,7 +442,7 @@ def main(argv: list[str] | None = None) -> int:
             # Execute in memory only: committed sources stay output-free.
             nb, executed, message = _execute(spec)
 
-        _export_html(nb, spec.html_out())
+        _export_html(nb, spec, source_only=args.no_execute)
         spec.wrapper_out().parent.mkdir(parents=True, exist_ok=True)
         spec.wrapper_out().write_text(_wrapper_md(spec, executed=executed, message=message),
                                         encoding="utf-8")

@@ -7,6 +7,8 @@ icon: material/notebook-multiple
 
 Four notebooks cover the `passage-eval` side: an evaluator walkthrough, the paper results, the classical baselines and the results format. `make docs-prepare` executes them and exports standalone HTML files embedded below; a notebook that needs a local dataset copy is rendered unexecuted and flagged.
 
+[Notebook export licenses](../../licenses/notebook-exports.md)
+
 <div class="grid cards" markdown>
 
 - :material-notebook-outline: **Evaluator walkthrough**
