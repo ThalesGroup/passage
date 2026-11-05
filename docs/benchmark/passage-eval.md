@@ -32,8 +32,10 @@ uv sync --frozen            # installs passage and passage_eval
 uv run --frozen python -c "import passage_eval; print(passage_eval.__version__)"  # 1.0.0
 ```
 
-Add `--extra torch` to `uv sync` (or `pip install -e ".[torch]"`) to time
-PyTorch planners on a GPU. The evaluator tests live in `tests/passage_eval`;
+PyTorch planners need a separately installed
+[runtime](../guide/installation.md#optional-pytorch-and-edge-runtimes).
+The Python timing helpers use CPU by default. Pass `device="cuda:0"` to
+select a compatible GPU explicitly. The evaluator tests live in `tests/passage_eval`;
 run them with `uv run --frozen pytest tests/passage_eval -q` (`uv sync`
 installs the `dev` group, which holds pytest, by default).
 

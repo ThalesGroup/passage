@@ -45,9 +45,8 @@ uv sync --frozen
 uv sync --frozen --group dev
 ```
 
-Each `uv sync` installs exactly what that command names, so combine options in
-one call, for example `uv sync --frozen --group dev --extra torch` for the
-development tools plus PyTorch.
+The standard installation supports CPU evaluation and does not install PyTorch,
+CUDA, TensorRT, or NVIDIA packages.
 
 Run the tools with `uv run passage …`, or activate the environment
 (`source .venv/bin/activate`) and call `passage` directly. This guide uses the
@@ -92,9 +91,6 @@ source .venv/bin/activate
 # Install in editable mode (passage and passage-eval)
 pip install -e .
 
-# (Optional) Add PyTorch, used by passage-eval for GPU timing
-pip install -e ".[torch]"
-
 # (Optional) Add the test and lint tools (pip 25.1 or later)
 pip install --group dev
 ```
@@ -102,6 +98,19 @@ pip install --group dev
 The development tools are a dependency group, not an extra, so
 `pip install -e ".[dev]"` does not install them. `pip` resolves versions on its
 own; use `uv sync --frozen` to reproduce the locked environment.
+
+## Optional PyTorch and edge runtimes
+
+If your planner needs PyTorch on CPU, choose **CPU** in the
+[PyTorch installation selector](https://pytorch.org/get-started/locally/) and
+install that build in the planner's environment. The optional `torch` extra
+can pull NVIDIA packages on Linux and should only be selected in an environment
+where those dependencies are wanted.
+
+For accelerator execution, obtain compatible vendor drivers and SDKs under
+their own terms and configure the planner or benchmark for the target device.
+PASSAGE provides text recipes and dependency locks for edge reconstruction.
+The operator obtains the build inputs and builds the image locally.
 
 ---
 

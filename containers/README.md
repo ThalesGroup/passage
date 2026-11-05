@@ -6,7 +6,13 @@
 
 ## 1. Scope and status
 
-These files describe a draft common runtime image for Thor, Orin and Tiger. They contain text recipes, package locks and context verification tools. They do not include model weights, candidate engines, wheel archives, Debian packages, OCI images or historical build contexts. An image build alone does not qualify the persistent 256 evaluation or establish a leaderboard result.
+PASSAGE ships text recipes, package locks and context verification tools for
+local builds. The release omits prebuilt images, SDK binaries, wheel archives,
+Debian packages, candidate engines, weights and historical build contexts.
+Thor and Orin require an explicit NVIDIA runtime selection. Tiger requires an
+explicit OpenVINO runtime selection. The operator obtains those dependencies
+from their providers under the applicable terms. An image build alone does not
+qualify the persistent 256 evaluation or establish a leaderboard result.
 
 **A complete public rebuild is not currently available.** The context builder also needs a separate inference source tree, which is not public at this time. The operator must obtain permission to access and use that source, pin an approved revision and review it. Publication and rights for that source remain open. The files here do not authorize distribution of that source, an SDK, an image or candidate weights.
 
