@@ -5,9 +5,6 @@ icon: material/flag-checkered
 
 # First entries
 
-| Author | Date | Version |
-|---|---|---|
-| Geoffrey Delhomme | 2026-10-20 | 1.0 |
 
 No learned-model result on PASSAGE v1.0
 ([`thalesgroup/passage`](https://huggingface.co/datasets/thalesgroup/passage))

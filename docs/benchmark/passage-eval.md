@@ -5,9 +5,6 @@ icon: material/package-variant-closed
 
 # `passage-eval` package
 
-| Author | Date | Version |
-|---|---|---|
-| Geoffrey Delhomme | 2026-10-24 | 1.1 |
 
 `passage_eval` loads released scenes, scores decoded paths under their analytic
 terrain task, and preserves the evidence needed for statistical comparison. It

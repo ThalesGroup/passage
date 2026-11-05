@@ -1,10 +1,5 @@
 # Data qualification trace
 
-Table 1. Document revision.
-
-| Author | Date | Version |
-|---|---|---|
-| Geoffrey Delhomme | 2026-10-21 | 1.1 |
 
 ## 1. Purpose and scope
 

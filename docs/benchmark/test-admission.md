@@ -5,14 +5,6 @@ icon: material/gate
 
 # Test admission gate `passage-test-admission/v1`
 
-**Table 1 — Document revision.**
-
-| Author | Date | Version |
-|---|---|---|
-| Geoffrey Delhomme | 2026-11-03 | 0.1 — gate, record and evidence schemas, guard wiring, draft sealing record template; not independently reviewed |
-| Geoffrey Delhomme | 2026-11-03 | 0.2 — after review: rehearsal aggregates bound to procedure, plan, limits and every seed; clean harness tree; committed `final-candidates.json` and hard-coded decoder digest; sealed dataset revision, root, cell and population; required bundle files; edge latency claims in the report |
-| Geoffrey Delhomme | 2026-11-03 | 0.3 — G2 records campaign-session rehearsal evidence; G4 seals roster S, its block rule, unplaced cap and preparation scope; `batching` seals the dynamic admission window |
-| Geoffrey Delhomme | 2026-11-04 | 0.4 — direct persistent native admission, separate replica identities and a strict Rule 8 preparation profile |
 
 ## 1. Executive summary
 
@@ -200,7 +192,7 @@ summary: one persistent process does not create independent sessions for a boots
 
 ## 2. The six gates
 
-**Table 2 — Gates of `passage-test-admission/v1`.** Every gate must be `GREEN` before the test split is opened.
+**Table 1 — Gates of `passage-test-admission/v1`.** Every gate must be `GREEN` before the test split is opened.
 
 | Gate | Title | What is checked |
 |---|---|---|
@@ -220,11 +212,11 @@ summary: one persistent process does not create independent sessions for a boots
 
 ## 3. The record
 
-A record is one JSON object with exactly the keys of Table 3; an unknown or missing key turns every gate `RED`
+A record is one JSON object with exactly the keys of Table 2; an unknown or missing key turns every gate `RED`
 (`record_structure_invalid`). Paths are relative to the evidence directory (default: the record's directory);
 absolute paths, `..` and symbolic links are refused. A file reference is exactly `{"path", "sha256"}`.
 
-**Table 3 — Keys of a `passage-test-admission/v1` record.**
+**Table 2 — Keys of a `passage-test-admission/v1` record.**
 
 | Key | Content |
 |---|---|
@@ -242,7 +234,7 @@ the approver approves the new record.
 
 ## 4. Evidence files
 
-**Table 4 — Evidence schemas.**
+**Table 3 — Evidence schemas.**
 
 | Schema | Produced by | Main fields |
 |---|---|---|
@@ -288,7 +280,7 @@ report. It re-hashes its record, every evidence file it pinned, `final-candidate
 `final_decoders.py` before each use, so an edit after the check is refused. Commands take `--allow-test-split`, `--test-admission-record FILE` and `--test-admission-evidence-dir DIR`;
 the flag without a record, or a record without the flag, is refused.
 
-**Table 5 — Entry points that refuse the test split before any file of the split is opened.**
+**Table 4 — Entry points that refuse the test split before any file of the split is opened.**
 
 | Entry point | Additional binding |
 |---|---|
@@ -321,11 +313,11 @@ reader's command with `--allow-test-split`, the record and `--test-preparation-a
    (`PREPARATION_ARTEFACT_REASONS`: the five reference files and the two warm-up files) and, while the roster builder
    has not inventoried it yet, the `population` decision left `required` with a null value. Every other decision must
    be sealed and approved, G2, G3 and G6 `GREEN`; an artefact that is referenced but broken refuses the preparation.
-2. A separate `passage-test-preparation-approval/v1` file of the author (Table 7) names the SHA-256 of the record file,
+2. A separate `passage-test-preparation-approval/v1` file of the author (Table 5) names the SHA-256 of the record file,
    the readers it allows, the approver, a statement and a window that contains the present time.
 3. The window is at most `PREPARATION_MAX_WINDOW` (72 hours, a harness bound) long.
 
-**Table 7 — Keys of a `passage-test-preparation-approval/v1` file.**
+**Table 5 — Keys of a `passage-test-preparation-approval/v1` file.**
 
 | Key | Content |
 |---|---|

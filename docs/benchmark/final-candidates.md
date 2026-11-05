@@ -5,9 +5,6 @@ icon: material/pin
 
 # Final dense-vision candidates
 
-| Author | Date | Version |
-|---|---|---|
-| Geoffrey Delhomme | 2026-11-02 | 1.0 — frozen definition |
 
 ## 1. Summary
 
