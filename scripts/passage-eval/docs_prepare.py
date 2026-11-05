@@ -1,74 +1,18 @@
-"""Execute documentation-relevant notebooks and export them to HTML.
+"""Prepare notebook source-link pages without executing notebooks.
 
-Run from the repo root via ``make docs-prepare``. Idempotent.
-
-Two notebook tracks are produced:
-
-* ``benchmark`` — passage-eval notebooks at
-  ``notebooks/passage-eval/{01..03}.ipynb``. The paper-results and
-  leaderboard reports read released result files only and are always
-  executed. The walkthrough needs a local dataset copy; without one it is
-  rendered unexecuted and flagged.
-
-* ``generation`` — top-level dataset / solver demos at
-  ``notebooks/{demo,obstacles,costmodel,solve,astar_inference_timing}.ipynb``.
-  Executed on a best-effort basis: a notebook that needs data the
-  current checkout doesn't have falls back to the existing outputs and
-  is rendered with a "could not execute" admonition wrapper. The docs
-  build never fails on a missing-data notebook.
-
-Layout produced:
-
-    docs/
-    ├── gen/
-    │   └── notebooks/
-    │       ├── 01_astar_walkthrough.html
-    │       ├── 02_paper_results.html
-    │       ├── 03_leaderboard.html
-    │       ├── demo.html
-    │       ├── obstacles.html
-    │       ├── costmodel.html
-    │       ├── solve.html
-    │       └── astar_inference_timing.html
-    ├── benchmark/notebooks/
-    │   ├── index.md
-    │   ├── 01-astar-walkthrough.md
-    │   ├── 02-paper-results.md
-    │   └── 03-leaderboard.md
-    └── generation/notebooks/
-        ├── demo.md
-        ├── obstacles.md
-        ├── costmodel.md
-        ├── solve.md
-        └── astar_inference_timing.md
+Run from the repo root via ``make docs-prepare``. The generated pages link
+to the notebook sources; they do not embed or export notebook HTML.
 """
 
 from __future__ import annotations
 
 import argparse
-import re
-import shutil
 import sys
-from dataclasses import dataclass, field
-from hashlib import sha256
-from html import escape
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Sequence
 
-import nbformat
-from nbclient import NotebookClient
-from nbclient.exceptions import CellExecutionError
-from nbconvert.exporters import HTMLExporter
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
-
-_ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
-def _strip_ansi(s: str) -> str:
-    return _ANSI.sub("", s)
-
-
-HTML_OUT = REPO_ROOT / "docs" / "gen" / "notebooks"
-
 
 @dataclass(frozen=True)
 class NotebookSpec:
@@ -80,18 +24,10 @@ class NotebookSpec:
     title: str
     intro: str
     nav_label: str
-    timeout_s: int = 300
-    required: bool = False                 #: if True, abort on cell error
-    execute_by_default: bool = True        #: opt-in default for `make docs-prepare`
-    extras: dict[str, str] = field(default_factory=dict)
-    render_math: bool = False
 
     @property
     def slug(self) -> str:
         return self.stem.replace("_", "-").lower()
-
-    def html_out(self) -> Path:
-        return HTML_OUT / f"{self.stem}.html"
 
     def wrapper_out(self) -> Path:
         return REPO_ROOT / "docs" / self.section / "notebooks" / f"{self.slug}.md"
@@ -113,7 +49,7 @@ BENCHMARK_NOTEBOOKS: Sequence[NotebookSpec] = (
             "planner on one released task, reads each of the six primary "
             "metrics, then scores both on a small validation sample. It needs "
             "the local dataset copy declared by `dataset_path`; without it, "
-            "the page shows the notebook unexecuted."
+            "the notebook needs to be run after fetching the data."
         ),
     ),
     NotebookSpec(
@@ -127,7 +63,6 @@ BENCHMARK_NOTEBOOKS: Sequence[NotebookSpec] = (
             "under `src/passage-eval/results/paper-results/`. "
             "These are not leaderboard entries."
         ),
-        required=True,
     ),
     NotebookSpec(
         stem="02_score_released_baselines",
@@ -170,7 +105,6 @@ GENERATION_NOTEBOOKS: Sequence[NotebookSpec] = (
             "one released scene, decode its tensor, draw a reference route "
             "and turn it into a segmentation target."
         ),
-        execute_by_default=False,
     ),
     NotebookSpec(
         stem="obstacles",
@@ -183,7 +117,6 @@ GENERATION_NOTEBOOKS: Sequence[NotebookSpec] = (
             "against its target, and the detour that obstacles force on the "
             "optimal route over a whole validation split."
         ),
-        execute_by_default=False,
     ),
     NotebookSpec(
         stem="costmodel",
@@ -191,13 +124,11 @@ GENERATION_NOTEBOOKS: Sequence[NotebookSpec] = (
         section="generation",
         title="The three routing objectives",
         nav_label="The three objectives",
-        render_math=True,
         intro=(
             "What the `elevation`, `slope_uphill` and `energy` objectives "
             "reward on one scene, their elevation profiles, and the extra "
             "cost of a route optimised for the wrong objective."
         ),
-        execute_by_default=False,
     ),
     NotebookSpec(
         stem="solve",
@@ -210,7 +141,6 @@ GENERATION_NOTEBOOKS: Sequence[NotebookSpec] = (
             "compares costs and routes, shows why the search budget matters, "
             "and repeats the check on a sample of validation scenes."
         ),
-        execute_by_default=False,
     ),
     NotebookSpec(
         stem="astar_inference_timing",
@@ -223,7 +153,6 @@ GENERATION_NOTEBOOKS: Sequence[NotebookSpec] = (
             "practices that make a timing meaningful: warm-up, repetitions, "
             "percentiles and a stated machine."
         ),
-        execute_by_default=False,
     ),
 )
 
@@ -232,93 +161,14 @@ ALL_NOTEBOOKS = (*BENCHMARK_NOTEBOOKS, *GENERATION_NOTEBOOKS)
 
 
 # ---------------------------------------------------------------------------
-# Notebook execution + HTML export
-# ---------------------------------------------------------------------------
-
-
-def _execute(spec: NotebookSpec) -> tuple[nbformat.NotebookNode, bool, str]:
-    """Best-effort execute. Returns (nb, executed, message).
-
-    `executed=False` means we caught an exception and are falling back
-    to the existing notebook contents.
-    """
-    nb = nbformat.read(spec.source, as_version=4)
-    client = NotebookClient(
-        nb,
-        timeout=spec.timeout_s,
-        kernel_name="python3",
-        resources={"metadata": {"path": str(spec.source.parent)}},
-    )
-    try:
-        client.execute()
-    except CellExecutionError as exc:
-        if spec.required:
-            raise
-        clean = _strip_ansi(str(exc).splitlines()[-1])
-        return nb, False, f"cell error: {clean[:120]}"
-    except Exception as exc:                                   # noqa: BLE001
-        if spec.required:
-            raise
-        clean = _strip_ansi(str(exc).splitlines()[0] if str(exc) else "")
-        return nb, False, f"runtime error: {type(exc).__name__}: {clean[:120]}"
-    return nb, True, "executed"
-
-
-def _export_html(nb: nbformat.NotebookNode, spec: NotebookSpec, *, source_only: bool) -> None:
-    exporter = HTMLExporter(
-        template_name="basic",
-        exclude_input_prompt=True,
-        exclude_output_prompt=True,
-    )
-    body, _resources = exporter.from_notebook_node(nb)
-    math_scripts = ""
-    if spec.render_math:
-        math_scripts = """
-<script defer src="../../javascripts/notebook-mathjax.js"></script>
-<script defer src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.7/latest.js?config=TeX-AMS_CHTML-full,Safe"></script>"""
-    provenance = ""
-    if source_only:
-        source = escape(spec.source.relative_to(REPO_ROOT).as_posix())
-        digest = sha256(spec.source.read_bytes()).hexdigest()
-        no_outputs = ""
-        if not any(cell.get("outputs") for cell in nb.cells):
-            no_outputs = "The source contains no stored outputs. "
-        provenance = (
-            f'<aside class="provenance"><strong>Rendering provenance.</strong> '
-            f'This page was rendered from <code>{source}</code> without executing code. '
-            f'{no_outputs}Source SHA-256 <code>{digest}</code>.</aside>\n'
-        )
-    document = f"""<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{escape(spec.title)}</title>
-<link rel="stylesheet" href="../../assets/notebook.css">{math_scripts}
-</head>
-<body>
-<main>
-{provenance}{body.strip()}
-</main>
-<footer><a href="../../licenses/nbconvert-7.17.2.txt">nbconvert license</a></footer>
-</body>
-</html>
-"""
-    out_path = spec.html_out()
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(document, encoding="utf-8")
-
-
-# ---------------------------------------------------------------------------
 # Markdown wrappers
 # ---------------------------------------------------------------------------
 
 
-def _wrapper_md(spec: NotebookSpec, *, executed: bool, message: str) -> str:
-    rel_html = f"../../../gen/notebooks/{spec.stem}.html"
-    rel_source = f"notebooks/{spec.source.parent.name}/{spec.source.name}" if spec.source.parent.name != "notebooks" else f"notebooks/{spec.source.name}"
-    rerun = "make docs-prepare" if spec.execute_by_default else "make docs-prepare-all"
-    body = f"""---
+def _wrapper_md(spec: NotebookSpec) -> str:
+    rel_source = spec.source.relative_to(REPO_ROOT).as_posix()
+    source_url = f"https://github.com/ThalesGroup/passage/blob/main/{rel_source}"
+    return f"""---
 title: "{spec.title}"
 hide:
   - toc
@@ -328,30 +178,8 @@ hide:
 
 {spec.intro}
 
-!!! info "Source notebook"
-
-    `{rel_source}` — re-execute with `{rerun}` after editing.
+[Open the source notebook]({source_url})
 """
-    if not executed:
-        body += f"""
-!!! warning "This notebook was rendered without executing"
-
-    `{rerun}` could not execute the source notebook on this
-    checkout ({message}). The HTML below shows the most recent stored
-    outputs, which may be stale or empty. Re-run the notebook locally
-    after fetching the data it needs (for example `make download && make
-    calibrate`) to refresh.
-"""
-    body += f"""
-<iframe
-    src="{rel_html}"
-    width="100%"
-    height="1100"
-    style="border:1px solid #eee; border-radius:6px; background:white;"
-    loading="lazy">
-</iframe>
-"""
-    return body
 
 
 def _index_md(specs: Sequence[NotebookSpec], section: str) -> str:
@@ -370,15 +198,11 @@ def _index_md(specs: Sequence[NotebookSpec], section: str) -> str:
     summary = (
         "Four notebooks cover the `passage-eval` side: an evaluator "
         "walkthrough, the paper results, the classical baselines and the "
-        "results format. `make docs-prepare` executes them and exports "
-        "standalone HTML files embedded below; a notebook that needs a "
-        "local dataset copy is rendered unexecuted and flagged."
+        "results format. Open each notebook source to view or run it locally."
         if section == "benchmark"
         else
         "Demo and analysis notebooks for the data-generation side. "
-        "`make docs-prepare` executes the light ones; `make docs-prepare-all` "
-        "also executes those that need a local dataset copy. A notebook "
-        "that could not run shows its last stored outputs under a warning."
+        "Open each notebook source to view or run it locally."
     )
     return f"""---
 title: "Notebooks"
@@ -389,7 +213,7 @@ icon: material/notebook-multiple
 
 {summary}
 
-[Notebook export licenses](../../licenses/notebook-exports.md)
+[Notebook rendering and licenses](../../licenses/notebook-exports.md)
 
 <div class="grid cards" markdown>
 
@@ -407,18 +231,14 @@ icon: material/notebook-multiple
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="docs-prepare")
     parser.add_argument("--no-execute", action="store_true",
-                          help="skip in-place execution; convert as-is")
+                        help="accepted for compatibility; notebooks are not executed")
     parser.add_argument("--all", action="store_true",
-                          help="force execute every notebook (overrides each\n"
-                               "spec's execute_by_default flag)")
+                        help="accepted for compatibility; notebooks are not executed")
     parser.add_argument("--clean", action="store_true",
-                          help="remove docs/gen/notebooks/ before regenerating")
+                        help="accepted for compatibility; local exports are not removed")
     parser.add_argument("--only", choices=["benchmark", "generation"],
                           default=None, help="only process one track")
     args = parser.parse_args(argv)
-
-    if args.clean and HTML_OUT.exists():
-        shutil.rmtree(HTML_OUT)
 
     specs = [s for s in ALL_NOTEBOOKS if args.only in (None, s.section)]
     by_section: dict[str, list[NotebookSpec]] = {}
@@ -432,23 +252,10 @@ def main(argv: list[str] | None = None) -> int:
             summary.append(f"  · {spec.stem:<32} SKIP (missing source)")
             continue
 
-        should_execute = (not args.no_execute) and (args.all or spec.execute_by_default)
-        if not should_execute:
-            nb = nbformat.read(spec.source, as_version=4)
-            why = "--no-execute" if args.no_execute else "opt-in (run with --all or `make docs-prepare-all`)"
-            executed, message = False, f"execution skipped ({why})"
-        else:
-            print(f"[docs-prepare] executing {spec.source.name} ...")
-            # Execute in memory only: committed sources stay output-free.
-            nb, executed, message = _execute(spec)
-
-        _export_html(nb, spec, source_only=args.no_execute)
         spec.wrapper_out().parent.mkdir(parents=True, exist_ok=True)
-        spec.wrapper_out().write_text(_wrapper_md(spec, executed=executed, message=message),
-                                        encoding="utf-8")
-        tag = "OK " if executed else "WARN"
-        summary.append(f"  · {spec.stem:<32} {tag} ({message})")
-        print(f"[docs-prepare] {tag} {spec.stem}: {message}")
+        spec.wrapper_out().write_text(_wrapper_md(spec), encoding="utf-8")
+        summary.append(f"  · {spec.stem:<32} OK (source linked)")
+        print(f"[docs-prepare] OK {spec.stem}: source linked")
 
     # Index pages per section.
     for section, section_specs in by_section.items():

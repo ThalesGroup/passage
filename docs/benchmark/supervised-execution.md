@@ -5,16 +5,6 @@ icon: material/shield-lock-outline
 
 # Supervised execution
 
-**Table 1 — Document revision.**
-
-| Author | Date | Version |
-|---|---|---|
-| Geoffrey Delhomme | 2026-11-01 | 0.1 — draft; not yet security-reviewed |
-| Geoffrey Delhomme | 2026-11-02 | 0.2 — fixes for the findings of an adversarial review (identity, sandboxed probe, timing boundary v3, purpose, roster, field contract, bounded text); not independently re-reviewed |
-| Geoffrey Delhomme | 2026-11-02 | 0.3 — fixes for the findings of an independent re-review (roster scorer, pinned workers, planner pin, probe channel, environment pin, device binds, staged-copy and bytecode checks, ONNX Runtime scan); not independently re-reviewed |
-| Geoffrey Delhomme | 2026-11-03 | 0.4 — timing profiles (boundary v4 without validation and recost, boundary v5 with a re-warm after each mid-pass restart), request limits in the procedure identity, batch sizing bound, strict comparison, censoring-aware latency; preparation tools for a sealed population (roster v2 with bound block rule and footprint requirement, sealed blocks in roster scores and comparisons, reference admission inventory, warm-up roster, paired order, section 3.F); the v5 restart policy, the censoring rule and the admission category table are proposals, not sealed; not independently re-reviewed |
-| Geoffrey Delhomme | 2026-11-03 | 0.5 — test admission gate `passage-test-admission/v1` wired into every guarded entry point, including the evaluated roster of `run`; campaign tooling `passage_eval.campaign` (section 6.L); not independently reviewed |
-| Geoffrey Delhomme | 2026-11-03 | 0.6 — phased roster preparation and campaign session mode: sealed blocks and references, warm requests only, dynamic admission, session receipts, and measured prefixes in `score-roster` |
 
 ## 1. Executive summary
 
@@ -143,7 +133,7 @@ what the supervisor writes: the same files as `run_requests`, without references
 the dataset location. **F1-data** is the dataset, reachable only by the scorer. **F1-stage** and
 **F1-score** are the scorer-side steps of section 6.
 
-**Table 2 — Modules of `passage_eval.supervision`.**
+**Table 1 — Modules of `passage_eval.supervision`.**
 
 | Module | Role |
 |---|---|
@@ -168,7 +158,7 @@ Both policies are recorded in the manifest. Each message is built field by field
 object is serialised wholesale, and the finished message is checked against the allowed field set
 before it is sent.
 
-**Table 3 — Candidate-facing policies.**
+**Table 2 — Candidate-facing policies.**
 
 | Policy | Fields | Deliberately absent |
 |---|---|---|
@@ -477,7 +467,7 @@ N² for the roster's resolution, so the exact search cannot be exhausted; one li
 the policy, the run spec and the scorer, since it enters every reference identity. Every task gets a record with its
 status, reasons, reference identity (for an admitted task), second-implementation check and category:
 
-**Table 4 — Categories of the reference admission inventory.**
+**Table 3 — Categories of the reference admission inventory.**
 
 | Category | Meaning | Effect |
 |---|---|---|
@@ -562,7 +552,7 @@ downgraded silently, and is recorded in the manifest as `supervision.isolation`,
 `effective_level` (what the worker attestation is consistent with), `candidate_code_confined` and a plain
 statement. The record lists what was applied and what was not.
 
-**Table 5 — What each level provides.**
+**Table 4 — What each level provides.**
 
 | Property | `process` | `bwrap` |
 |---|---|---|
@@ -737,7 +727,7 @@ record carries the identifier, and the manifest repeats it in `timing_boundary`.
 per-request definition of version 2 and adds a **pass policy**, which closes the way the review inflated warm
 latency into a cache lookup.
 
-**Table 6 — Per-request timing fields.**
+**Table 5 — Per-request timing fields.**
 
 | Field | Definition | Authority |
 |---|---|---|
@@ -827,7 +817,7 @@ one would claim more than the evidence supports.
 
 ### 5.F. Difference from the earlier boundaries
 
-**Table 7 — Boundary v1, v2 and v3.**
+**Table 6 — Boundary v1, v2 and v3.**
 
 | Aspect | v1 `request_copy_through_validation_recost_completion` | v2 `passage-timing-boundary/v2-supervised-ipc` | v3 `passage-timing-boundary/v3-supervised-ipc-fresh-pass` |
 |---|---|---|---|
@@ -857,7 +847,7 @@ own validation and recost, with the budget. The option `--timing-profile` of `ru
 (`passage_eval.execution.timing`). A profile fixes, together, the artifact schema, the boundary in every record, the
 field compared with the budget and scored as latency, and the restart policy.
 
-**Table 8 — Timing profiles.**
+**Table 7 — Timing profiles.**
 
 | Profile | Schema | Boundary | Budget and latency field | After a mid-pass restart |
 |---|---|---|---|---|
@@ -1049,7 +1039,7 @@ step into a private directory and needs no spec.
 
 ### 6.E. What the public run directory contains
 
-Per request: status, route hash, recost, legality, the timing fields of Table 6, work counters and
+Per request: status, route hash, recost, legality, the timing fields of Table 5, work counters and
 diagnostics as reported by the candidate (bounded, section 3.E), the wire policies used, `completion_mode` and
 `counters_source`. In the manifest: the procedure and its id (which includes the isolation level, boundary,
 purpose, policies and the candidate identity with its bound trees), `reference_identity` (a hash), the
@@ -1162,7 +1152,7 @@ A launcher that runs a roster in batches gives each batch a lease or a timeout. 
 the supervisor is still within its own limits, an admissible but slow candidate produces a killed, ambiguous batch.
 `passage_eval.protocol.batching` computes the worst-case wall time of one supervised run from its settings.
 `check_batch_plan` refuses a plan that exceeds the bound, and `largest_batch_size` returns the largest batch that fits. A campaign no longer sizes its batches with this bound: its sessions admit requests dynamically
-(section 6.M) and its plan is checked by `admission_sizing` (`docs/benchmark/campaign.md`, Table 5).
+(section 6.M) and its plan is checked by `admission_sizing` (`docs/benchmark/campaign.md`, Table 4).
 
 The bound counts each executed request at `wall_time_ms + deadline_grace_ms` plus the kill wait and a declared
 per-request overhead. It counts each worker start at `startup_timeout_s` plus the kill wait, for the planned starts of

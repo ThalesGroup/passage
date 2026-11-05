@@ -1,18 +1,20 @@
 # PASSAGE edge base images: reconstruction notes
 
-| Author | Date | Version |
-| --- | --- | --- |
-| Geoffrey Delhomme | 2026-11-04 | 0.2 — public source notes |
-
 ## 1. Scope and status
 
-PASSAGE ships text recipes, package locks and context verification tools for
-local builds. The release omits prebuilt images, SDK binaries, wheel archives,
-Debian packages, candidate engines, weights and historical build contexts.
-Thor and Orin require an explicit NVIDIA runtime selection. Tiger requires an
-explicit OpenVINO runtime selection. The operator obtains those dependencies
-from their providers under the applicable terms. An image build alone does not
-qualify the persistent 256 evaluation or establish a leaderboard result.
+PASSAGE supplies text recipes, package locks and context verification tools for
+local builds; it does not distribute prebuilt PASSAGE images. The operator
+obtains the necessary dependencies from their providers and builds the image
+locally under the applicable terms. SDK binaries, wheel archives, Debian
+packages, candidate engines, weights and historical build contexts are not
+included in these recipes.
+
+CPU evaluation does not require an accelerator SDK. CUDA and TensorRT are
+optional, separately obtained and configured by the operator for NVIDIA
+targets; Tiger edge execution needs a separately obtained OpenVINO runtime.
+See the [evaluation guide](../docs/benchmark/contributing-a-method.md) for a
+local CPU example. Building an image does not qualify a run or create a
+leaderboard result, and no image needs to be published to use the Space.
 
 **A complete public rebuild is not currently available.** The context builder also needs a separate inference source tree, which is not public at this time. The operator must obtain permission to access and use that source, pin an approved revision and review it. Publication and rights for that source remain open. The files here do not authorize distribution of that source, an SDK, an image or candidate weights.
 
@@ -61,7 +63,24 @@ python3 containers/base/build_context.py --profile "$PROFILE" --base-image "$BAS
 
 Record the printed manifest hash independently. Review all copied files and verify the context with `python3 containers/base/verify_context.py "$CONTEXT" --expected-manifest-sha256 "$MANIFEST_SHA256"` before building. The manifest binds context file bytes; it does not prove that an image was executed or that its output is correct. The Dockerfile leaves the default user as root: an operator must select a non-root UID and GID and independently establish device access, isolation and lease controls.
 
-A local tag, image ID or configuration digest is not a registry manifest digest. If a digest-addressed image is needed, obtain the actual registry manifest digest from an authorized registry, verify its bytes, platform and configuration, and use that reference. Do not publish SDK components or weights until their distribution rights are resolved.
+After verifying the context, set `PLATFORM` for the selected `PROFILE`:
+`linux/arm64` for Thor and Orin, or `linux/amd64` for Tiger. Check that the
+base image is available locally, then build:
+
+```sh
+docker image inspect "$BASE_IMAGE" >/dev/null
+docker build --pull=false --network=none --platform "$PLATFORM" \
+  --build-arg "BASE_IMAGE=$BASE_IMAGE" --build-arg "TARGET_PROFILE=$PROFILE" \
+  --tag local/passage-edge:reviewed "$CONTEXT"
+docker image inspect local/passage-edge:reviewed --format '{{.Id}}'
+```
+
+Keep the image local. Record the context manifest hash, inputs and local image
+ID with the run. A local tag or image ID is not an OCI manifest digest. The
+strict historical admission profile has additional OCI identity and execution
+evidence requirements; a fully local procedure satisfying them has not yet
+been demonstrated. See [test admission](../docs/benchmark/test-admission.md).
+Do not distribute the image, SDK components or model weights through it.
 
 ## 5. Target execution and qualification
 

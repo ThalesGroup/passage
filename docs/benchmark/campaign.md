@@ -5,13 +5,6 @@ icon: material/playlist-check
 
 # Campaign tooling `passage_eval.campaign`
 
-**Table 1 — Document revision.**
-
-| Author | Date | Version |
-|---|---|---|
-| Geoffrey Delhomme | 2026-11-03 | 0.1 — versioned partition, sealed plan, batch runner and aggregator, migrated from the preparation tooling; not independently reviewed |
-| Geoffrey Delhomme | 2026-11-03 | 0.2 — after review: admitted plans repeat the record's candidate identities, executed checkpoint or bundle bound to the plan, one frozen training seed, per-seed aggregates |
-| Geoffrey Delhomme | 2026-11-03 | 0.3 — warm-only campaign sessions, dynamic request admission within lease windows, sealed roster preparation, and a validation rehearsal receipt; values remain subject to the admission record |
 
 ## 1. Executive summary
 
@@ -56,7 +49,7 @@ python -I -m passage_eval.campaign rehearsal-receipt --plan plan.json --plan-sha
   --aggregate seg=rehearsal/seg.json --aggregate reg=rehearsal/reg.json --output rehearsal/receipt.json
 ```
 
-**Table 2 — Campaign steps.**
+**Table 1 — Campaign steps.**
 
 | Step | Module | What it does |
 |---|---|---|
@@ -71,22 +64,22 @@ python -I -m passage_eval.campaign rehearsal-receipt --plan plan.json --plan-sha
 `read_plan(path, sha256)` refuses a plan whose bytes differ from the pin and any unknown or missing key at any level.
 It reads only control files and lists no directory.
 
-**Table 3 — What the plan seals.**
+**Table 2 — What the plan seals.**
 
 | Key | Content and checks |
 |---|---|
-| `split`, `admission` | `validation`, or `test` with `--allow-test-split` and an all-`GREEN` admission record (`record`, `record_sha256`, `evidence_dir`); an admitted plan must repeat the record's sealed decisions, rosters and harness, use the `verified-candidate-run` purpose and pin the record's digest in `protocol_record_sha256`; Table 4 lists the candidate identities it repeats |
+| `split`, `admission` | `validation`, or `test` with `--allow-test-split` and an all-`GREEN` admission record (`record`, `record_sha256`, `evidence_dir`); an admitted plan must repeat the record's sealed decisions, rosters and harness, use the `verified-candidate-run` purpose and pin the record's digest in `protocol_record_sha256`; Table 3 lists the candidate identities it repeats |
 | `target`, `edge_transport_evidence` | `host`; an edge target raises `EdgeTransportNotQualified` unless an admission record with a `GREEN` G3 for that target is named, and the runner still refuses it: no remote transport is implemented |
 | `rosters`, `reference` | admissible roster (file and `roster_sha256`), source roster digest, reference admission chain (file and `chain_sha256`); the chain must name the admissible roster, the source and the plan's reference policy, cohort and search limit, and its counts must equal the admissible roster's derivation |
 | `partition` | directory, manifest digest and batch size; re-derived from the admissible roster |
 | `budget`, `timing` | complete budget; a re-warm timing profile and its boundary identifier; `deadline_grace_ms`, `hard_timeout_ms`, `startup_timeout_s`, `max_restarts` (at least the lot size, so that the restart cap never decides the status of a task), worker `rlimits` |
 | `warmup`, `order` | validation warm-up roster built against the admissible roster on the same pinned root, its salt and `k` (each warm pass replays the `k` inputs); paired order `per_batch` with its schedule seed and procedures |
-| `batching` | the window `lease_or_timeout_ms`; the measured overheads `fixed_overhead_ms`, `per_seed_overhead_ms`, `per_request_overhead_ms` and `persistence_ms`; the observed warm request time of every procedure `observed_request_ms`; `safety_margin` (at least 3). Table 5 gives the two checks that replace the worst-case refusal |
+| `batching` | the window `lease_or_timeout_ms`; the measured overheads `fixed_overhead_ms`, `per_seed_overhead_ms`, `per_request_overhead_ms` and `persistence_ms`; the observed warm request time of every procedure `observed_request_ms`; `safety_margin` (at least 3). Table 4 gives the two checks that replace the worst-case refusal |
 | `procedures` | for `astar`, `seg`, `reg`: pinned spec (cell, seeds, budget, reference policy, latency settings and split equal to the plan), mode, frozen decoder entry for Seg and Reg, decoder, planner, environment and split procedure pins, checkpoint (equal to `final-candidates.json` as committed at the plan's harness commit) and bundle digests |
 | `harness`, `aggregation`, `seeds` | interpreters, commit and source hash (the running harness must have both, and every scored manifest must record the source hash); censoring rule identifier and minimum warm requests; one training seed per plan (one campaign per seed), which must be the training seed of the frozen checkpoint (2026) when Seg or Reg runs |
 | `infrastructure_relaunch_policy`, `purpose`, `protocol_record_sha256` | the author's relaunch policy, recorded with each relaunch; run purpose; digest of the protocol record followed |
 
-**Table 4 — Candidate identities that an admitted test plan repeats from its record (gate G6).**
+**Table 3 — Candidate identities that an admitted test plan repeats from its record (gate G6).**
 
 | Procedure | Plan field | Must equal |
 |---|---|---|
@@ -96,7 +89,7 @@ It reads only control files and lists no directory.
 | `astar` | spec `inference` | a harness planner entry of `admission.CANONICAL_PLANNER_ENTRIES` (the package of the frozen decoders) |
 | `astar` | `planner_allow_sha256` | exactly `[decoder_tree_sha256]` of the record, the tree of that package |
 
-**Table 5 — Dynamic admission checks of a plan (`protocol.batching.admission_sizing`).**
+**Table 4 — Dynamic admission checks of a plan (`protocol.batching.admission_sizing`).**
 
 | Check | Rule | Why |
 |---|---|---|
@@ -145,7 +138,7 @@ per seed is required; a cold series is refused.
 A completed unit is re-verified and skipped on the next run; `run --stop-after-batches N` pauses cleanly after N lots,
 which is how a rehearsal exercises a resume without any relaunch.
 
-**Table 6 — R7 relaunch rule as implemented (`campaign.runner`).**
+**Table 5 — R7 relaunch rule as implemented (`campaign.runner`).**
 
 | Event | Classification | Decision |
 |---|---|---|
