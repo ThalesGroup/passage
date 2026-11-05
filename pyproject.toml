@@ -31,9 +31,7 @@ docs = [
   "mkdocs-minify-plugin>=0.8",
   "mkdocs-glightbox>=0.4",
   "pymdown-extensions>=11.0.1",
-  # `make docs-prepare` executes the benchmark notebooks and exports them
-  # to standalone HTML under docs/gen/. The renderer + executor pair below
-  # keeps the docs build step fully reproducible from a clean checkout.
+  # Notebook tools are available for users who run or render notebooks locally.
   "nbclient>=0.10.4",
   "nbconvert>=7.17.2",
   "ipykernel>=7.0.0",

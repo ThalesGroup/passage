@@ -71,12 +71,10 @@ lint:
 	uv run ruff format --check src tests
 
 docs-prepare:
-	uv run --locked --group docs python scripts/passage-eval/docs_prepare.py --clean
+	uv run --locked --group docs python scripts/passage-eval/docs_prepare.py
 	uv run --locked --group docs python scripts/passage-eval/render_plotly_leaderboard.py
 
-docs-prepare-all:
-	uv run --locked --group docs python scripts/passage-eval/docs_prepare.py --clean --all
-	uv run --locked --group docs python scripts/passage-eval/render_plotly_leaderboard.py
+docs-prepare-all: docs-prepare
 
 docs-build: docs-prepare
 	uv run --locked --all-groups mkdocs build --strict --site-dir $(DOCS_STRICT_DIR)

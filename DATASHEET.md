@@ -1,10 +1,5 @@
 # PASSAGE Datasheet
 
-*Table 1. Document revision.*
-
-| Author | Date | Version | Status |
-| --- | --- | --- | --- |
-| Geoffrey Delhomme | 2026-10-24 | 1.0 | Published; dataset and publication metadata verified |
 
 This datasheet follows the questions of *Datasheets for Datasets*. It describes
 PASSAGE v1.0 (Hub tag `v1.0`), published at
@@ -59,7 +54,7 @@ preview rows (64 per split and resolution); they repeat admitted scenes and do
 not enlarge the training population. The data occupy about 1.27 TB of Parquet
 in 5,997 shards.
 
-*Table 2. Core scenes per resolution and split.*
+*Table 1. Core scenes per resolution and split.*
 
 | Resolution | train | calibration | validation | test | Total | Preview rows per split |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |

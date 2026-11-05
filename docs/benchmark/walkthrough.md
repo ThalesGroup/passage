@@ -5,9 +5,6 @@ icon: material/rocket-launch
 
 # Paired statistics
 
-| Author | Date | Version |
-|---|---|---|
-| Geoffrey Delhomme | 2026-10-24 | 1.1 |
 
 This page compares two planners on the six primary decoded-path metrics. Each
 planner has three trained checkpoints (seeds 1234, 2026 and 3407), scored on the

@@ -5,9 +5,6 @@ icon: material/account-plus-outline
 
 # Evaluate your planner
 
-| Author | Date | Version |
-|---|---|---|
-| Geoffrey Delhomme | 2026-10-20 | 1.0 |
 
 The evaluator measures the complete procedure that emits a route, then scores that
 same persisted route against an independently qualified reference. This guide

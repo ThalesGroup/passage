@@ -13,6 +13,7 @@ site_url: !ENV [SITE_URL, "https://thalesgroup.github.io/passage/"]
 # - fragments that include-markdown reads from disk into other pages;
 # - the theme overrides (Jinja templates, read through `theme.custom_dir`).
 exclude_docs: |
+  /gen/notebooks/
   /DATA_QUALIFICATION.md
   /TRAJECTORY_STYLE.md
   /_partials/

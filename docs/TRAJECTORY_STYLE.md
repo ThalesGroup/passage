@@ -1,8 +1,5 @@
 # Style commun des trajectoires PASSAGE
 
-| Auteur | Date | Version |
-|---|---|---|
-| Geoffrey Delhomme | 2026-10-17 | 1.0 |
 
 ## 1. Lire une figure
 
