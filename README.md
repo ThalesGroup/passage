@@ -17,7 +17,7 @@
 </p>
 
 <p align="center">
-  <a href="docs/index.md">Documentation</a> •
+  <a href="https://thalesgroup.github.io/passage/">Documentation</a> •
   <a href="https://huggingface.co/datasets/thalesgroup/passage/viewer">Viewer</a> •
   <a href="#harness-an-existing-algorithm">Evaluate</a> •
   <a href="#citation">Cite</a>
@@ -99,7 +99,7 @@ uv run --frozen passage --help
 uv run --frozen passage-eval --help
 ```
 
-The [generator guide](docs/guide/index.md) covers source-tile download,
+The [generator guide](https://thalesgroup.github.io/passage/guide/) covers source-tile download,
 calibration, generation and export. [USAGE.md](USAGE.md) lists the commands.
 
 ---
@@ -119,7 +119,7 @@ uv run --frozen passage-eval run --spec outputs/my-method.yaml --output outputs/
 uv run --frozen passage-eval score --run outputs/eval/run
 ```
 
-Follow [Evaluate your planner](docs/benchmark/contributing-a-method.md) for a
+Follow [Evaluate your planner](https://thalesgroup.github.io/passage/benchmark/contributing-a-method/) for a
 runnable CPU example, adapter, specification and matched comparison report.
 Freeze choices on calibration before test. The evaluator keeps reference labels
 outside the planner and scores the routes it timed; failed requests stay in the results.
@@ -131,16 +131,16 @@ outside the planner and scores the routes it timed; failed requests stay in the 
 
 Both model repositories currently require authorized Hugging Face access. Their
 READMEs describe the 256×256 exports, inference commands and native-runtime
-requirements. See the [candidate definitions](docs/benchmark/final-candidates.md)
-and [evaluation protocol](docs/benchmark/protocol.md) for context.
+requirements. See the [candidate definitions](https://thalesgroup.github.io/passage/benchmark/final-candidates/)
+and [evaluation protocol](https://thalesgroup.github.io/passage/benchmark/protocol/) for context.
 
 ---
 
 ## Explore further
 
 - [Executed dataset notebooks](https://huggingface.co/datasets/thalesgroup/passage/tree/v1.0/notebooks): load scenes, compare objectives, inspect obstacles and reproduce dataset analyses.
-- [Benchmark documentation](docs/benchmark/index.md): evaluator walkthrough, six metrics, comparison reports and results.
-- [Generation and analysis](docs/generation/index.md): sampling, cost models, solvers and [notebooks](docs/generation/notebooks/index.md).
+- [Benchmark documentation](https://thalesgroup.github.io/passage/benchmark/): evaluator walkthrough, six metrics, comparison reports and results.
+- [Generation and analysis](https://thalesgroup.github.io/passage/generation/): sampling, cost models, solvers and [notebooks](https://thalesgroup.github.io/passage/generation/notebooks/).
 - [Datasheet](DATASHEET.md) and [Croissant metadata](croissant.json): intended uses, limitations and machine-readable metadata.
 
 PASSAGE is a research benchmark of static terrain grids and procedural
