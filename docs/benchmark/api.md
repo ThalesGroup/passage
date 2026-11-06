@@ -9,8 +9,8 @@ Auto-generated documentation for every public symbol exported by the
 [`passage-eval`](https://github.com/ThalesGroup/passage/tree/main/src/passage-eval)
 sub-package. The narrative usage guide lives at the
 [`passage-eval` package page](passage-eval.md); the formal protocol
-sits at [Evaluation protocol](protocol.md); the paper's paired statistics
-are at [Paired statistics](walkthrough.md). This page is the
+sits at [Evaluation protocol](protocol.md); the confirmatory paired analysis API
+is described at [Paired statistics](walkthrough.md). This page is the
 canonical docstring view.
 
 ---
@@ -71,8 +71,8 @@ labels stay evaluator-owned. See
 ## Timing profiles, latency censoring and batch bounds
 
 The censoring rule and the re-warm profile are proposals, not sealed rules. The
-developer guide `docs/benchmark/supervised-execution.md` (sections 5.G to 5.I,
-6.I and 6.J) explains them, including the separate report of validation and
+developer guide `docs/benchmark/supervised-execution.md` in the source
+checkout (sections 5.G to 5.I, 6.I and 6.J) explains them, including the separate report of validation and
 recost time and the request limits that strict comparison requires; the [evaluation protocol](protocol.md) states the
 proposed censoring rule.
 

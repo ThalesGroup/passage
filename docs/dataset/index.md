@@ -4,12 +4,13 @@ description: PASSAGE v1.0 on the Hugging Face Hub — contents, loading, graph a
 icon: simple/huggingface
 ---
 
-# 🤗 Dataset card
+# Dataset card
 
-This page reproduces the [dataset card](https://huggingface.co/datasets/thalesgroup/passage) of **PASSAGE v1.0** on the
-Hugging Face Hub. Links to files point to the dataset repository on the Hub.
+This guide describes **PASSAGE v1.0**. The data, frozen
+[dataset card](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/README.md)
+and release files are on the Hugging Face Hub.
 
-## 📌 Executive summary
+## Executive summary
 
 PASSAGE is a dataset and benchmark for constrained path planning on real
 terrain: each scene is a square crop of the JAXA ALOS World 3D–30 m (AW3D30)
@@ -17,14 +18,14 @@ digital surface model with a start cell, a goal cell and procedural obstacles.
 Each scene has six route variants: three cost objectives (`elevation`,
 `slope_uphill`, `energy`), each on free terrain and with the obstacles blocked.
 Each variant carries an exact minimum-cost reference route for the stated
-graph (eight-connected, 30 m cells); start and goal cells that the obstacles
-disconnect are rejected by the generator. PASSAGE v1.0 holds 4,400,000 core
-scenes at seven resolutions, from 64×64 to 4096×4096 cells, and 26,400,000
-route variants, all exact routes. Its test split is a geographic hold-out
+eight-connected graph, with 30 m cardinal steps by convention. The generator
+rejects start and goal pairs that the obstacles disconnect. PASSAGE v1.0
+contains 4,400,000 core scenes at seven resolutions, from 64×64 to 4096×4096,
+and 26,400,000 reference routes. Its test split is a geographic hold-out
 (South America), and the MIT-licensed generator and the `passage-eval`
 evaluator are in the [code repository](https://github.com/ThalesGroup/passage).
 
-> **🧾 Release receipt.** The
+> **Release receipt.** The
 > [publication facts](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/release-receipts/publication-facts.json) record
 > 4,400,000 core scenes, 26,400,000 objective/obstacle variants and 1,792
 > preview rows; preview rows repeat core scenes and add no training
@@ -35,7 +36,8 @@ evaluator are in the [code repository](https://github.com/ThalesGroup/passage).
 
 The guarantees below concern the computed reference labels. Model scores
 require their own declared data, decoder and evaluation conditions.
-**How to read this card.** [At a glance](#at-a-glance) and the
+
+**How to read this guide.** [At a glance](#at-a-glance) and the
 [Quick start](#quick-start) get you to a loaded scene in a few lines. The
 next three sections describe the files, what a row holds, and the cost model
 and label guarantees behind each route.
@@ -48,7 +50,7 @@ licence terms, maintenance and the citation.
 
 ---
 
-## 🔭 At a glance
+## At a glance
 
 *Table 1. PASSAGE v1.0 at a glance.*
 
@@ -77,7 +79,7 @@ blocked (dashed blue routes). Rendered by the executed
 
 ---
 
-## 🚀 Quick start
+## Quick start
 
 Install `datasets`, `pillow`, `zstandard` and `numpy` (for example
 `pip install datasets pillow zstandard numpy`). The examples use the
@@ -135,7 +137,7 @@ to see a loaded scene step by step, open [`notebooks/demo.ipynb`](https://huggin
 
 ---
 
-## 📁 Files and configurations
+## Files and configurations
 
 ```text
 <N>x<N>/<split>/data-*.parquet           core scenes, no images (7 configurations)
@@ -150,7 +152,8 @@ assets/                                  card images
 
 `<N>` is 64, 128, 256, 512, 1024, 2048 or 4096, and `<split>` is `train`,
 `calibration`, `validation` or `test`. Each folder is one Hub configuration;
-the default configuration is `1024x1024_samples`.
+the default Hub configuration is `1024x1024_samples`, a data preview. The
+paper's full benchmark comparison uses `256x256`.
 
 *Table 2. Scenes per configuration and split. The nominal side assumes 30 m
 cells; actual ground spacing varies with latitude.*
@@ -166,17 +169,20 @@ cells; actual ground spacing varies with latitude.*
 | 4096×4096 | 122.88 km | 45,000 | 1,000 | 2,000 | 2,000 | 50,000 | 64 |
 | **All** | | 3,960,000 | 88,000 | 176,000 | 176,000 | 4,400,000 | 1,792 rows in total |
 
-> **📏 Evaluation protocol.** Fix a method's free settings (thresholds, steps,
-> schedules) on the `calibration` split and freeze them before the single test
-> pass, as the paper's protocol requires.
+!!! note "Validation and calibration"
 
-> **🔁 Preview rows are not extra data.** Preview rows are the lowest admitted
-> scene IDs of each split. They repeat scenes of the core configurations, so
-> do not add them to a training set.
+    Use `validation` (`valid` in the paper) for model and recipe selection,
+    and `calibration` (`calib` in the paper) for decoder settings. Freeze the
+    procedure before evaluation on `test`.
+
+!!! note "Preview rows repeat core scenes"
+
+    Preview rows have the lowest admitted scene IDs of each split. Exclude
+    them when counting independent scenes or building a training set.
 
 ---
 
-## 🧱 Columns
+## Columns
 
 *Table 3. Parquet columns. Exact Arrow types are in the `dataset_info` block of
 the [Hub dataset card](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/README.md).*
@@ -198,7 +204,7 @@ the [Hub dataset card](https://huggingface.co/datasets/thalesgroup/passage/blob/
 
 ---
 
-## 🧮 Graph and label contract
+## Graph and label contract
 
 The routing graph is eight-connected, and obstacle cells are blocked. A step
 from cell \(u\) to cell \(v\) has length \(d_{uv} = 30\) m when it is
@@ -241,7 +247,7 @@ The release receipts record six exact routes per scene at every resolution:
 6,000,000 at each resolution from 64×64 to 512×512, 1,500,000 at
 1024×1024, 600,000 at 2048×2048 and 300,000 at 4096×4096.
 
-> **🧭 See it on one task.** [`notebooks/costmodel.ipynb`](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/notebooks/costmodel.ipynb)
+> **See it on one task.** [`notebooks/costmodel.ipynb`](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/notebooks/costmodel.ipynb)
 > and [`notebooks/paper/cost_model_path_divergence.ipynb`](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/notebooks/paper/cost_model_path_divergence.ipynb)
 > show how the three objectives change the route on the same terrain.
 
@@ -290,7 +296,7 @@ The release receipts record six exact routes per scene at every resolution:
 
 ---
 
-## 📏 Evaluating a planner
+## Evaluating a planner
 
 The `passage-eval` evaluator in the code repository scores a planner with the
 six primary metrics of the paper. The planner receives terrain, obstacles and
@@ -328,28 +334,37 @@ $$
 | `cost_regret_p90` | 90th percentile of the same regrets | lower |
 | `path_assd` | Mean ASSD over valid routes (connected and obstacle-free) | lower |
 | `path_hausdorff_p95` | Mean 95th-percentile Hausdorff distance over valid routes, in cells | lower |
-| `success_rate` | Share of tasks whose route has at least two cells, is 8-connected and joins start to goal | higher |
+| `success_rate` | For path scoring, share of tasks whose route has at least two cells, is 8-connected and joins start to goal; for complete requests, share with terminal status `ok` | higher |
 | `obstacle_violation_rate` | Share of tasks whose route crosses an obstacle cell | lower |
 
 Report the six values together; no composite score replaces them. A
-different route can have zero regret, because tied optima exist. Report
-results per resolution, objective and obstacle condition, and time the whole
-procedure, decoding and fallbacks included. The
+different route can have zero regret, because tied optima exist. A complete
+request is `ok` only if it returns a legal route within the declared budget.
+Report results per resolution, objective and obstacle condition. The paper
+times the whole procedure from raw arrays in memory to the returned route,
+including decoding and fallbacks; independent host scoring is separate.
+See the [evaluation protocol](../benchmark/protocol.md) for local runner
+boundaries and [paper results](../benchmark/candidates.md) for the full
+40,000-scene 256×256 comparison. The
 [`passage-eval` notebooks](https://huggingface.co/datasets/thalesgroup/passage/tree/v1.0/notebooks/passage-eval)
 show the evaluator on released tasks.
 
 ---
 
-## 🌎 Geography and splits
+## Geography and splits
 
-Every AW3D30 source tile belongs to exactly one split. Tiles inside the
-[hold-out mask](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/assets/hold_out_mask.png) (South America) go to `test`. The
-other tiles go to `train`, `calibration` or `validation` by seeded 5°×5° blocks.
-A crop is admitted only if all its source tiles, plus a one-tile guard ring,
-belong to its split, so the source-cell windows of different splits are
-disjoint. Source windows, including neighbouring tiles and wrapped longitude,
-are kept in each scene receipt. Missing tiles, nodata and incomplete windows
-are rejected, not padded.
+The [South America hold-out mask](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/assets/hold_out_mask.png)
+reserves 1,988 grid cells for `test`. Outside the mask, source tiles are
+assigned to `train`, `calibration` or `validation` by seeded 5°×5° blocks.
+A crop is admitted only if its source tiles and one-tile guard ring belong
+to its split. Each scene receipt records its source windows, including
+neighboring tiles and wrapped longitude. Missing source tiles, nodata and
+incomplete windows are rejected.
+
+Across the seven resolutions, the paper reports 1,682 AW3D30 tiles used by
+test crops (7.0% of the 23,993-tile source inventory) and 20,091 distinct
+tiles used by the other splits, with no overlap. These are source-tile counts;
+the 90/2/4/4 ratios describe scenes.
 
 <details markdown="1">
 <summary><strong>Frozen split policy (JSON)</strong></summary>
@@ -374,7 +389,7 @@ are rejected, not padded.
 
 ---
 
-## 🏭 How the scenes were made
+## How the scenes were made
 
 1. **Source.** The local inventory matches all 23,993 tiles of JAXA's official
    AW3D30 list (checked on 11 October 2026). Tiles are normalised to 3600×3600
@@ -401,7 +416,7 @@ Normalisation `nearest-angular-center-v1`, tie policy
 policy `one-distinct-pair-per-accepted-crop-disconnected-endpoints-rejected` are
 recorded in [publication-facts.json](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/release-receipts/publication-facts.json).
 
-> **🧾 Where the claims come from.** The scientific claims of this card derive
+> **Where the claims come from.** The scientific claims of this card derive
 > from [release verification](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/release-receipts/release-verification.json),
 > [generation provenance](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/release-receipts/generation-provenance.json),
 > [publication facts](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/release-receipts/publication-facts.json) and
@@ -411,7 +426,7 @@ recorded in [publication-facts.json](https://huggingface.co/datasets/thalesgroup
 > calibration files, producer source archive, executed notebooks and one
 > Parquet scene receipt; [privacy-redactions.json](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/release-receipts/privacy-redactions.json)
 > lists every changed file with its original and published SHA-256. The
-> release tag binds the dataset files, this card and the executed notebooks
+> release tag binds the dataset files, the Hub dataset card and the executed notebooks
 > (see [Notebooks](#notebooks)). You do not need the receipts to use the data.
 
 The images in `assets/` are illustrations; for the released data, inspect the
@@ -420,7 +435,7 @@ The images in `assets/` are illustrations; for the released data, inspect the
 
 ---
 
-## 📓 Notebooks
+## Notebooks
 
 The repository ships executed notebooks. Each one states the question it
 answers, explains every step, and ends with a summary computed from its own
@@ -460,7 +475,7 @@ the producer execution evidence; the artifact manifest binds the published noteb
 | [`notebooks/passage-eval/02_score_released_baselines.ipynb`](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/notebooks/passage-eval/02_score_released_baselines.ipynb) | Classical baselines (A\*, greedy, random walk) on the validation split |
 | [`notebooks/passage-eval/03_leaderboard.ipynb`](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/notebooks/passage-eval/03_leaderboard.ipynb) | Recording results in the `passage-eval` format |
 
-> **▶️ Rerunning a notebook.** The notebooks run in the frozen environment of
+> **Rerunning a notebook.** The notebooks run in the frozen environment of
 > the [code repository](https://github.com/ThalesGroup/passage)
 > (`uv run --frozen jupyter lab`). Each has one parameters cell: set
 > `dataset_path` to a local copy of the dataset, or to `None` to read from the
@@ -469,7 +484,7 @@ the producer execution evidence; the artifact manifest binds the published noteb
 
 ---
 
-## 🎯 Intended uses and limitations
+## Intended uses and limitations
 
 Use PASSAGE to benchmark classical planners (for example Dijkstra and A\*)
 and learned planners against exact reference routes, to train routing surrogates
@@ -477,7 +492,7 @@ and learned planners against exact reference routes, to train routing surrogates
 planners), and to study resolution scaling, geographic transfer and transfer
 between cost models.
 
-> **🚧 Limitations.**
+> **Limitations.**
 >
 > - Elevation comes from a digital surface model: it includes canopy and
 >   buildings and may contain sensor artefacts.
@@ -493,7 +508,7 @@ between cost models.
 > - PASSAGE is a research benchmark. Do not use it for operational flight
 >   planning or other safety-of-life decisions; it does not certify deployment.
 
-> **🔒 Personal and sensitive information.** None. The data hold public
+> **Personal and sensitive information.** None. The data hold public
 > elevation data, procedural obstacles and markers, and computed routes. They
 > contain no people, personal data or biometric data.
 
@@ -502,7 +517,7 @@ See the [datasheet](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.
 
 ---
 
-## 📜 Licence and attribution
+## Licence and attribution
 
 - Code (generator, evaluator, notebooks): [MIT](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/LICENSE).
 - Data: derived from JAXA AW3D30 and subject to the
@@ -524,7 +539,7 @@ See the [datasheet](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.
 
 ---
 
-## 🔄 Maintenance and versions
+## Maintenance and versions
 
 - **Maintainers.** Thales open-source and critical-AI research contributors,
   reachable at oss@thalesgroup.com. Hugging Face hosts the data.
@@ -539,7 +554,7 @@ See the [datasheet](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.
 
 ---
 
-## 📝 Citation
+## Citation
 
 PASSAGE is accepted as a poster at the 40th Conference on Neural Information
 Processing Systems (NeurIPS 2026), Track on Evaluations and Datasets. Please
@@ -555,16 +570,12 @@ cite the paper and name the dataset version you used (PASSAGE v1.0):
 }
 ```
 
-The NeurIPS 2026 proceedings are not published yet. This entry will be
-completed with the proceedings details (volume, pages and paper URL) once
-they are available; the title, authors, venue and year will not change.
-
 Machine-readable metadata: [CITATION.cff](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/CITATION.cff) and
 [croissant.json](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/croissant.json) (Croissant 1.1 with Responsible AI fields).
 
 ---
 
-## 👥 Authors and contact
+## Authors and contact
 
 Geoffrey Delhomme, François Trap and Fateh Kaakai (Thales). Ask questions or
 report issues in the

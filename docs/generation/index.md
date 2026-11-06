@@ -62,27 +62,27 @@ Each scene yields six route variants, each an exact optimal route, never an appr
 <div class="feature-grid" markdown>
 
 <div class="feature-card" markdown>
-### [:material-dice-multiple: Sampling Procedure](sampling.md)
+### [Sampling Procedure](sampling.md)
 How each scene is drawn: center tile, start cell, crop, goal and normalization, plus the geographic split rules (test-only South America hold-out, 5°×5° blocks, one-tile guard ring).
 </div>
 
 <div class="feature-card" markdown>
-### [:material-scale-balance: Cost Models](cost-models.md)
+### [Cost Models](cost-models.md)
 Five crop-relative step-cost functions. PASSAGE v1.0 uses three of them: `elevation`, `slope_uphill` and `energy`.
 </div>
 
 <div class="feature-card" markdown>
-### [:material-shape: Obstacle Generation](obstacles.md)
+### [Obstacle Generation](obstacles.md)
 Superellipse obstacles with random shape, size and rotation, covering up to 30 % of the crop. Obstacle cells are blocked.
 </div>
 
 <div class="feature-card" markdown>
-### [:material-graph: Solvers & Heuristics](solvers.md)
+### [Solvers & Heuristics](solvers.md)
 The exact float64 A\* reference solver that labels v1.0, and three alternative backends (NetworkX, pathfinding, Numba grid) not used by the release.
 </div>
 
 <div class="feature-card" markdown>
-### [:material-notebook: Interactive Notebooks](notebooks/index.md)
+### [Interactive Notebooks](notebooks/index.md)
 Explore released scenes in Jupyter notebooks: the three objectives, obstacle masks and detours, and exact re-solves of the stored labels.
 </div>
 

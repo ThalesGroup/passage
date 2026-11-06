@@ -8,7 +8,7 @@ hide:
   - toc
 tagline: "Real terrain, exact reference routes: 4.4 million scenes and 26.4 million route variants for constrained path planning and surrogate modelling."
 pins:
-  - k: "🤗 Dataset"
+  - k: "Dataset"
     v: "thalesgroup/passage · v1.0"
     link: "https://huggingface.co/datasets/thalesgroup/passage"
   - k: "Data terms"
@@ -21,7 +21,7 @@ pins:
     v: "Parquet · 1.27 TB"
   - k: "Metadata"
     v: "Croissant 1.1 + RAI"
-    link: "https://github.com/ThalesGroup/passage/blob/main/croissant.json"
+    link: "https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/croissant.json"
   - k: "Python"
     v: "≥ 3.11"
 stats:
@@ -47,7 +47,7 @@ stats:
     suffix: " m"
 ---
 
-## :mountain_snow: Why PASSAGE
+## <span aria-hidden="true">:material-terrain:</span> Why PASSAGE
 
 <p class="pg-lede">Constrained path planning on real terrain underlies routing for
 search-and-rescue, robotics and airborne advisory systems, where rescue-helicopter
@@ -70,7 +70,7 @@ the generator and the `passage-eval` evaluator are publicly released (code under
 MIT, data under the JAXA terms), so that classical planners, learned surrogates,
 graph networks and reinforcement learning can be scored on the same tasks.
 
-## :compass: From terrain to benchmark
+## <span aria-hidden="true">:material-compass-outline:</span> From terrain to benchmark
 
 <div class="pipeline-steps" markdown>
 
@@ -124,7 +124,7 @@ Publish the prepared tree to a Hugging Face dataset repository that you name.
 
 </div>
 
-## :package: PASSAGE v1.0 at a glance
+## <span aria-hidden="true">:material-package-variant-closed:</span> PASSAGE v1.0 at a glance
 
 | Item | Value |
 | --- | --- |
@@ -136,17 +136,17 @@ Publish the prepared tree to a Hugging Face dataset repository that you name.
 | Preview rows | 1,792 (64 per split and resolution), with rendered images |
 | Size | about 1.27 TB of Parquet (5,997 shards); 1.31 TB with receipts and notebooks |
 | Intended tasks | Classical planning, path-mask segmentation, cost-to-go regression, graph and reinforcement-learning planners |
-| Licence | Code: MIT. Data: JAXA AW3D30 terms, see [`DATASET_LICENSE.md`](https://github.com/ThalesGroup/passage/blob/main/DATASET_LICENSE.md) |
+| Licence | Code: MIT. Data: JAXA AW3D30 terms, see [`DATASET_LICENSE.md`](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/DATASET_LICENSE.md) |
 | Paper | *PASSAGE: A Real-Terrain Benchmark for Trustworthy Constrained Path Planning*, NeurIPS 2026, Track on Evaluations and Datasets |
 
 Illustrative validation previews are optional and are not included in every source distribution.
 
-## :sparkles: What you get
+## <span aria-hidden="true">:material-star-outline:</span> What you get
 
 <div class="feature-grid pg-cols-4" markdown>
 
 <div class="feature-card" markdown>
-<span class="feature-icon">🌐</span>
+<span class="feature-icon" aria-hidden="true">:material-grid:</span>
 
 ### Seven grid sizes
 
@@ -154,7 +154,7 @@ From 64 × 64 to 4096 × 4096 cells: about 1.9 km to 123 km across at the nomina
 </div>
 
 <div class="feature-card" markdown>
-<span class="feature-icon">🏔️</span>
+<span class="feature-icon" aria-hidden="true">:material-terrain:</span>
 
 ### Real elevation
 
@@ -162,7 +162,7 @@ Every scene is a crop of AW3D30, JAXA's global digital surface model at a nomina
 </div>
 
 <div class="feature-card" markdown>
-<span class="feature-icon">🔷</span>
+<span class="feature-icon" aria-hidden="true">:material-diamond-outline:</span>
 
 ### Procedural obstacles
 
@@ -170,7 +170,7 @@ Super-ellipses of varied shape, size and rotation, up to 30 % of a crop, never o
 </div>
 
 <div class="feature-card" markdown>
-<span class="feature-icon">⚡</span>
+<span class="feature-icon" aria-hidden="true">:material-flash-outline:</span>
 
 ### Three cost objectives
 
@@ -178,7 +178,7 @@ Super-ellipses of varied shape, size and rotation, up to 30 % of a crop, never o
 </div>
 
 <div class="feature-card" markdown>
-<span class="feature-icon">🧮</span>
+<span class="feature-icon" aria-hidden="true">:material-calculator:</span>
 
 ### Exact references
 
@@ -186,7 +186,7 @@ A Numba-compiled float64 grid A\* labels every variant with an exact optimum; th
 </div>
 
 <div class="feature-card" markdown>
-<span class="feature-icon">🧭</span>
+<span class="feature-icon" aria-hidden="true">:material-compass-outline:</span>
 
 ### Bounded domain
 
@@ -194,7 +194,7 @@ The scene parameters form an operational design domain, a term the paper borrows
 </div>
 
 <div class="feature-card" markdown>
-<span class="feature-icon">✅</span>
+<span class="feature-icon" aria-hidden="true">:material-check-circle-outline:</span>
 
 ### Tested
 
@@ -202,7 +202,7 @@ The scene parameters form an operational design domain, a term the paper borrows
 </div>
 
 <div class="feature-card" markdown>
-<span class="feature-icon">🔁</span>
+<span class="feature-icon" aria-hidden="true">:material-repeat:</span>
 
 ### Resumable
 
@@ -211,11 +211,11 @@ Each stage can run again on its own; input identities are checked before any reu
 
 </div>
 
-## :material-trophy-outline: Leaderboard
+## <span aria-hidden="true">:material-trophy-outline:</span> Leaderboard
 
 {% include-markdown "_partials/leaderboard_main_index.md" %}
 
-## :zap: Quick start
+## <span aria-hidden="true">:material-flash-outline:</span> Quick start
 
 Most users only need the released data. Install `datasets`, `zstandard` and
 `numpy`, pin the dataset revision and decode one scene:
@@ -241,29 +241,14 @@ status and stream the large configurations.
 
 ??? example "Rebuild the dataset from the JAXA tiles"
 
-    The generator rebuilds the dataset from the source terrain. This is a large
-    job: the AW3D30 inventory holds 23,993 tiles, and the shipped
-    `config/config.yaml` asks for 1,000,000 scenes at 256 × 256. Read the
-    [user guide](guide/index.md) first. `passage regenerate`, the path whose
-    receipts ship with v1.0, accepts `--dry-run` and `--pilot 1` for a trial
-    run; the steps below run the same generator one stage at a time.
+    The AW3D30 inventory holds 23,993 tiles, and the shipped configuration
+    requests 1,000,000 scenes at 256 × 256. Follow the
+    [generation guide](guide/index.md) for the source checkout, terrain
+    download, calibration and required geographic hold-out mask. Start with
+    a [trial generation](guide/generate.md#common-options) before committing
+    storage and compute to a full release.
 
-    ```bash
-    # Install uv (if needed), then the locked environment
-    curl -LsSf https://astral.sh/uv/install.sh | sh
-    git clone --branch develop https://github.com/ThalesGroup/passage.git
-    cd passage
-    uv sync --frozen
-
-    uv run --frozen passage download                  # Step 1 — fetch JAXA tiles
-    uv run --frozen passage calibrate                 # Step 2 — compute elevation range
-    uv run --frozen passage generate --resolution 256 # Step 3 — generate scenes and routes
-    uv run --frozen passage compress --resolution 256 # Step 4 — write Parquet shards
-    uv run --frozen passage export --resolution 256   # Step 5 — prepare the release tree
-    uv run --frozen passage upload --repo-id <your-user>/<your-dataset>  # Step 6
-    ```
-
-## :microscope: Research uses
+## <span aria-hidden="true">:material-microscope:</span> Research uses
 
 | Domain | Use | What PASSAGE provides |
 |--------|-----|-----------------------|
@@ -273,7 +258,7 @@ status and stream the large configurations.
 | Surrogate models | Fast approximations of optimal routes | 4.4 M scenes and 26.4 M route variants |
 | Computer vision | Route prediction from elevation images | (N, N, 3) tensors and route masks |
 
-## :memo: Cite PASSAGE { #cite-passage }
+## <span aria-hidden="true">:material-file-document-outline:</span> Cite PASSAGE { #cite-passage }
 
 <div class="pg-cite" markdown>
 
@@ -299,14 +284,14 @@ cite the paper, and name the dataset version you used (PASSAGE v1.0):
     completed with the proceedings details (volume, pages and paper URL) once
     they are available; the title, authors, venue and year will not change.
     Machine-readable metadata is in
-    [`CITATION.cff`](https://github.com/ThalesGroup/passage/blob/main/CITATION.cff).
+    [`CITATION.cff`](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/CITATION.cff).
 
-## :book: Learn more
+## <span aria-hidden="true">:material-book-open-variant:</span> Learn more
 
 <div class="feature-grid pg-cols-5" markdown>
 
 <div class="feature-card" markdown>
-<span class="feature-icon">📖</span>
+<span class="feature-icon" aria-hidden="true">:material-book-open-variant:</span>
 
 ### [User guide](guide/index.md)
 
@@ -314,7 +299,7 @@ The pipeline step by step, from installation to the release tree.
 </div>
 
 <div class="feature-card" markdown>
-<span class="feature-icon">🔬</span>
+<span class="feature-icon" aria-hidden="true">:material-flask-outline:</span>
 
 ### [Generation process](generation/index.md)
 
@@ -322,7 +307,7 @@ Sampling, cost models, obstacles and the reference solver, with the mathematics.
 </div>
 
 <div class="feature-card" markdown>
-<span class="feature-icon">🏁</span>
+<span class="feature-icon" aria-hidden="true">:material-flag-checkered:</span>
 
 ### [Benchmark](benchmark/index.md)
 
@@ -330,7 +315,7 @@ The evaluation protocol, the `passage-eval` package and how to evaluate a planne
 </div>
 
 <div class="feature-card" markdown>
-<span class="feature-icon">🏗️</span>
+<span class="feature-icon" aria-hidden="true">:material-sitemap:</span>
 
 ### [Code architecture](architecture/index.md)
 
@@ -338,7 +323,7 @@ Modules, data formats and test strategy.
 </div>
 
 <div class="feature-card" markdown>
-<span class="feature-icon">📚</span>
+<span class="feature-icon" aria-hidden="true">:material-book-multiple-outline:</span>
 
 ### [API reference](api/index.md)
 
@@ -347,7 +332,7 @@ Documentation generated from the docstrings.
 
 </div>
 
-## :handshake: Acknowledgments
+## <span aria-hidden="true">:material-handshake-outline:</span> Acknowledgments
 
 - **[JAXA](https://www.eorc.jaxa.jp/ALOS/en/dataset/aw3d30/aw3d30_e.htm)** for the ALOS World 3D–30m (AW3D30) digital surface model.
 - **[Hugging Face](https://huggingface.co/)** for the Datasets library and Hub infrastructure.
@@ -377,6 +362,6 @@ PASSAGE paper: J. Takaku, T. Tadono, M. Doutsu, F. Ohgushi and H. Kai, "Updates 
 [doi:10.5194/isprs-archives-XLIII-B4-2020-183-2020](https://doi.org/10.5194/isprs-archives-XLIII-B4-2020-183-2020).
 
 A summary of these terms is in
-[`DATASET_LICENSE.md`](https://github.com/ThalesGroup/passage/blob/main/DATASET_LICENSE.md);
+[`DATASET_LICENSE.md`](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/DATASET_LICENSE.md);
 the JAXA terms of use remain the authoritative text. The **Dataset** tab lists the
 third-party elevation sources that AW3D30 uses to fill voids.

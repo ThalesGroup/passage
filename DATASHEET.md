@@ -123,9 +123,10 @@ Yes. Every source tile belongs to one split. Tiles inside the South America
 hold-out mask go to `test`; the others go to `train`, `calibration` or
 `validation` by seeded 5°×5° blocks. A crop is admitted only if all its source
 tiles and a one-tile guard ring belong to its split, so source-cell windows of
-different splits are disjoint. Fix a method's free settings on the
-`calibration` split and freeze them before the single test pass. The frozen
-policy is:
+different splits are disjoint. The paper uses `calib` and `valid` as shorthand
+for the released `calibration` and `validation` splits. Fit on `train`, select
+models on `validation`, and freeze decoder settings on `calibration` before
+evaluation on `test`. The release policy is:
 
 ```json
 {
@@ -265,7 +266,11 @@ hashes. `release-receipts/generation-provenance.json` preserves the original has
 ### Has the dataset been used for any tasks already?
 
 The accompanying paper presents dense path-mask segmentation and cost-to-go
-regression as examples of learned terrain-aware routing.
+regression as examples of learned terrain-aware routing. It evaluates the
+frozen finalists on all 40,000 test scenes at 256×256, with CPU A* measured
+on the same targets. Its other resolutions use 1,024 test scenes per
+resolution for indicative timings. The test split is public, and the paper
+reports descriptive results.
 
 ### What (other) tasks could the dataset be used for?
 

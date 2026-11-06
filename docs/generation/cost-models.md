@@ -18,7 +18,11 @@ A **cost model** (or objective) sets the cost of each step of a route on the rou
 | $h_u, h_v$ | Elevations of $u$ and $v$, in meters |
 | $h_{\min}, h_{\max}$ | Lowest and highest elevation of the **crop**, in meters, obstacle cells included |
 
-Costs are **crop-relative**: the normalized terms divide by the elevation range of the crop, $h_{\max} - h_{\min}$. This is not the elevation channel $\bar{e}$ of the tensor, which uses the global calibration range (see [Sampling Procedure](sampling.md#step-6-normalize-elevation)). The solver first turns $\bar{e}$ back into meters, then applies the formulas below in float64. When the crop is flat ($h_{\max} = h_{\min}$), every normalized term is taken as zero.
+The reference solver decodes the stored elevation channel $\bar{e}$ to
+meters with the global calibration range (see [Sampling Procedure](sampling.md#step-6-normalize-elevation)),
+then evaluates these formulas in float64. The `elevation` and
+`slope_uphill` terms divide by the crop range $h_{\max} - h_{\min}$; both
+reduce to distance on a flat crop.
 
 ---
 
@@ -30,8 +34,8 @@ $$
 c_{\mathrm{elevation}}(u,v) = d_{uv}\left(1 + w\,\frac{h_v - h_{\min}}{h_{\max} - h_{\min}}\right)
 $$
 
-!!! tip "When to use"
-    Useful in mountainous terrain where **higher altitude means higher risk** (weather, oxygen, turbulence). A helicopter might prefer the valleys.
+This objective favours lower terrain within a crop. It does not estimate
+flight risk or altitude clearance.
 
 ---
 
@@ -57,8 +61,7 @@ $$
 
 The $\max(0, h_v - h_u)$ term keeps only elevation gains. The gain is divided by the crop's elevation range and multiplies the step length.
 
-!!! example "Helicopter analogy"
-    A HEMS helicopter climbing from a valley floor to a ridge spends more energy than when it descends. This model captures that asymmetry.
+The same edge can therefore cost more uphill than downhill.
 
 ---
 
@@ -70,7 +73,8 @@ $$
 c_{\mathrm{energy}}(u,v) = d_{uv} + w\,\max(0,\,h_v - h_u)
 $$
 
-Unlike the slope model, which multiplies the step length, the energy model **adds** a penalty per meter of gain. The gain is in meters, not normalized, and the penalty does not depend on the step length.
+Unlike the slope model, which multiplies the step length, the energy model **adds** a penalty per meter of gain. The gain is in meters, not normalized, and the penalty does not depend on the step length. The objective is a routing
+proxy; estimating fuel or battery use requires a vehicle model.
 
 ---
 
@@ -82,7 +86,8 @@ $$
 c_{\mathrm{absolute\_elevation}}(u,v) = d_{uv}\left(1 + w\,\frac{\lvert h_v \rvert}{\max(\lvert h_{\min} \rvert,\, \lvert h_{\max} \rvert)}\right)
 $$
 
-Routes stay close to sea level and avoid both peaks and deep depressions. This model is not used by the v1.0 release.
+The absolute elevation term is zero when every cell is at sea level. This
+model is not used by the v1.0 release.
 
 ---
 
@@ -108,6 +113,8 @@ The weight $w$ sets the **balance between distance and terrain**:
 - $w \gg 1$: terrain dominates, which can give longer routes that are cheaper under the objective.
 
 The v1.0 weights are fixed in `config/config.yaml`. Each scene also records them, as float64, in its metadata (`metadata.solvers.<solver>.weight` and its graph specification).
+The paper selected each weight by comparing its routes with distance-only
+routes, using Hausdorff divergence with a penalty for following crop borders.
 
 | Solver | Cost model | Weight $w$ |
 |--------------|-----------|:---------:|
@@ -124,7 +131,7 @@ On the same terrain and markers, the objectives give different routes:
 ```text
 elevation           → prefers the low cells of the crop (valleys)
 slope_uphill        → avoids climbs, even at the price of a longer route
-energy              → minimizes the total elevation gain in meters
+energy              → balances distance and total climb in meters
 distance            → shortest 8-connected route (baseline)
 absolute_elevation  → stays close to sea level
 ```

@@ -5,7 +5,7 @@ icon: material/notebook-multiple
 
 # Benchmark notebooks
 
-Four notebooks cover the `passage-eval` side: an evaluator walkthrough, the paper results, the classical baselines and the results format. Open each notebook source to view or run it locally.
+Four notebooks cover the `passage-eval` side: an evaluator walkthrough, historical validation results, classical baselines and the results format. Open each notebook source to view or run it locally.
 
 [Notebook rendering and licenses](../../licenses/notebook-exports.md)
 
@@ -19,11 +19,11 @@ Four notebooks cover the `passage-eval` side: an evaluator walkthrough, the pape
 
     [:octicons-arrow-right-24: Open the notebook](./01-astar-walkthrough.md)
 
-- :material-notebook-outline: **Paper results**
+- :material-notebook-outline: **Historical validation results**
 
     ---
 
-    Reads the per-task results of the two paper finalists released under `src/passage-eval/results/paper-results/`. These are not leaderboard entries.
+    Tabulates optional per-task exports from earlier 256×256 validation runs with older Seg and Reg baseline procedures. The source notebook uses its original labels. It does not reconstruct the [camera-ready paper results](../candidates.md) or populate the leaderboard.
 
     [:octicons-arrow-right-24: Open the notebook](./02-paper-results.md)
 

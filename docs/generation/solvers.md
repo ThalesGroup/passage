@@ -89,17 +89,17 @@ $$
 where $g(s)$ is the cost from the start to cell $s$, and $h(s)$ is the **heuristic**, an estimate of the remaining cost to the goal.
 
 !!! success "Optimality guarantee"
-    With an **admissible** heuristic ($h(s) \leq h^*(s)$ for every $s$, where $h^*$ is the true remaining cost), A\* finds an optimal route. The grid backend never reopens a closed cell, so it also needs a **consistent** heuristic: $h(u) \leq c(u,v) + h(v)$ for every step. On an 8-connected grid, the Euclidean and Chebyshev heuristics are both admissible and consistent.
+    An **admissible** heuristic never overestimates the remaining cost: $h(s) \leq h^*(s)$ for every $s$, where $h^*$ is the true remaining cost. For A\* graph search that never reopens a closed cell, a **consistent** heuristic guarantees optimality: $h(u) \leq c(u,v) + h(v)$ for every step. On an 8-connected grid, the Euclidean and Chebyshev heuristics are both admissible and consistent.
 
 ### Dijkstra's Algorithm
 
-Dijkstra is A\* with $h(s) = 0$; it explores all directions equally:
+Dijkstra is A\* with $h(s) = 0$; it explores in order of accumulated cost:
 
 $$
 f(s) = g(s)
 $$
 
-Dijkstra always finds an optimal route, but it expands more cells than A\* with a good heuristic.
+With nonnegative step costs, Dijkstra finds an optimal route when one exists. A useful heuristic can reduce the number of cells A\* needs to expand.
 
 ---
 
@@ -161,7 +161,7 @@ Use only these two values: other values are not checked, and the backends do not
 
 ## Performance
 
-Solve time depends on the resolution, the terrain, the obstacles and the distance between the endpoints. The [`solver_runtime_scaling.ipynb`](https://huggingface.co/datasets/thalesgroup/passage/blob/main/notebooks/paper/solver_runtime_scaling.ipynb) notebook on the Hub reports the search effort and the measured solve time of the reference solver across resolutions.
+Solve time depends on the resolution, the terrain, the obstacles and the distance between the endpoints. The [`solver_runtime_scaling.ipynb`](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/notebooks/paper/solver_runtime_scaling.ipynb) notebook on the Hub reports the search effort and the measured solve time of the reference solver across resolutions.
 
 ---
 

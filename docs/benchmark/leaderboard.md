@@ -5,46 +5,41 @@ icon: material/trophy-outline
 
 # Leaderboard
 
-The leaderboard ranks complete planning procedures on PASSAGE v1.0
-([`thalesgroup/passage`](https://huggingface.co/datasets/thalesgroup/passage)),
-scored with `passage-eval`. Its released index is
-`src/passage-eval/results/leaderboard.csv`. Published entries carry no host or
-user names.
+The leaderboard is the entry index for complete planning procedures on
+[PASSAGE v1.0](https://huggingface.co/datasets/thalesgroup/passage), scored with
+`passage-eval`. Its checked-in index is
+`src/passage-eval/results/leaderboard.csv` in the source checkout.
+Public rows omit host and user names.
 
 {% include-markdown "../_partials/leaderboard_main_benchmark.md" %}
 
-The comparison keeps the paper's six primary criteria: median and p90 cost
-regret, ASSD, percentile-Hausdorff distance, success rate and obstacle-violation
-rate. Geometry remains a primary criterion. Complete latency is reported
-separately for each hardware and runtime. A valid-route rate is additional; it
-does not replace success and obstacle violations.
+Compare the six primary metrics on matching tasks: median and p90 cost
+regret, average symmetric surface distance (ASSD), percentile Hausdorff
+distance, success rate and obstacle-violation rate. Compare latency separately
+by hardware, runtime and timing boundary. See the [evaluation protocol](protocol.md).
 
 ## Paper results
 
-The per-task results of the two finalists reported in the paper are released
-under `src/passage-eval/results/paper-results/`, with three seeds of 1,024
-validation tasks at 256² under `elevation`. They
-are not leaderboard entries. Their geometry values follow the study's
-normalization; see the
-[alignment record](protocol.md#1-reference-paper-and-evaluation). The
-[paper-results notebook](notebooks/02-paper-results.md) tabulates them.
+The [paper results](candidates.md) cover the complete 40,000-scene 256×256
+public test split under `elevation`. They are exploratory after prior test
+exposure. Reporting a measurement in the paper does not make it a submitted
+or verified leaderboard entry.
 
 ## Entry status
 
-Each entry will carry one of two statuses:
+- **Submitted** means the submitter declared a score and its receipt.
+- **Verified** means the leaderboard operator reviewed the measurement evidence
+  and admitted the identified result under the applicable procedure.
 
-- **submitted**: scored by its submitter with `passage-eval` and declared with
-  its receipt; not re-measured yet;
-- **verified**: re-measured by Thales, once, on a qualified hardware lane.
-
-A verified entry keeps the values its submitter declared; the re-measurement
-is recorded next to them. This status is unrelated to the "verified" badge
-that the Hugging Face Hub shows for evaluations run in HF Jobs.
+A local score, an all-green test admission gate, or an
+evaluator setting named `verified-candidate-run` does not grant that status.
+Verification is also separate from reproducible-entry qualification or
+confirmatory statistical evidence. The Hugging Face Hub's badge for
+evaluations run in HF Jobs uses a separate definition.
 
 ## How to add an entry
 
-The submission service is not deployed yet. To score a planner locally with
-the `passage-eval` CLI, see [Evaluate your planner](contributing-a-method.md).
-This creates local evaluation results; it does not create an official
-leaderboard entry. Running `make docs-prepare` refreshes this page from the
-released leaderboard.
+[Evaluate your planner](contributing-a-method.md) to produce local scores and
+receipts. The repository's CLI does not publish official entries, and the site
+has no submission service. Maintainers can regenerate this view from the
+checked-in index with `make docs-prepare`.
