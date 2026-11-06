@@ -121,7 +121,7 @@ outputs/calibrate/
 ### `calibrate.json` schema
 
 The receipt below is an excerpt of the released
-[`calibrate.json`](https://huggingface.co/datasets/thalesgroup/passage/blob/main/calibration/calibrate.json).
+[`calibrate.json`](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/calibration/calibrate.json).
 Lists hold one entry per tile; `"…"` marks shortened values. The two
 `tile_stats` entries are the tiles that set the global maximum and minimum.
 

@@ -5,11 +5,10 @@ icon: material/book-open-page-variant
 
 # Dataset Generation
 
-Welcome to the PASSAGE Dataset Generation section. It walks you through
-the **complete generator workflow** — from installing the toolkit to
-publishing your dataset on Hugging Face Hub — and includes the deeper
-[**Generation Process**](../generation/index.md) reference covering
-sampling, cost models, obstacles and solvers.
+Use this guide to build PASSAGE scenes from source elevation tiles and
+prepare them for publication on the Hugging Face Hub. The
+[Generation Process](../generation/index.md) explains how the generator
+samples crops, places obstacles and solves routes.
 
 To **score a planner** on the resulting benchmark (decoded-path
 metrics, statistical discipline, deployment footprint), see the
@@ -31,11 +30,11 @@ PASSAGE follows a linear, six-step pipeline. Each step is a CLI subcommand that 
 
 ```mermaid
 flowchart LR
-    A["🌐 Download<br>JAXA tiles"] --> B["📏 Calibrate<br>Elevation range"]
-    B --> C["⚙️ Generate<br>Scenes and routes"]
-    C --> D["🗜️ Compress<br>Parquet shards"]
-    D --> E["🧾 Export<br>README + notebooks + assets"]
-    E --> F["🚀 Upload<br>HF Hub publish"]
+    A["Download<br>JAXA tiles"] --> B["Calibrate<br>Elevation range"]
+    B --> C["Generate<br>Scenes and routes"]
+    C --> D["Compress<br>Parquet shards"]
+    D --> E["Export<br>README + notebooks + assets"]
+    E --> F["Upload<br>HF Hub publish"]
 
     style A fill:#0891b233,stroke:#0891b2,stroke-width:1.5px
     style B fill:#a78bfa2e,stroke:#8b6fe0,stroke-width:1.5px
@@ -68,7 +67,8 @@ resumable batches (see [Steps 4-6 — Release](export.md#all-in-one-passage-rege
 - **Python 3.11+** on Linux
 - **`uv`** package manager (recommended) or `pip`
 - About 463 GB of disk for the 23,993 AW3D30 DSM tiles of the release, plus room for the generated scenes
-- Hugging Face token (only for `upload`)
+- The [release hold-out mask](configuration.md#hold-out-region) before generation
+- A Hugging Face write token if you plan to publish with `upload`
 
 ---
 

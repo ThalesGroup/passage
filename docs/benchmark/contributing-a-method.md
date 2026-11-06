@@ -79,12 +79,15 @@ as appropriate. Each decoder and budget defines a separate procedure.
 Existing `Planner.predict_path(scene)` implementations and tensor/scene callables
 remain supported. Use `inference_format: request` for the new interface.
 
-The timer covers candidate-input preparation, inference, decoding, repair,
+The local in-process timer covers candidate-input preparation, inference, decoding, repair,
 fallback, device completion synchronization, route snapshot, legality and physical
 recosting. Device work completes before route snapshot and recosting. Persistence and
 reference/geometry scoring follow outside it. Model construction is excluded;
 the `cold` series is the first pass over the tasks after construction. Warmup and
-warm outputs are retained and scored separately.
+warm outputs are retained and scored separately. The paper's direct timer
+keeps independent host validation and recosting separate; see the
+[evaluation protocol](protocol.md#5-trustworthiness-and-deployment) before
+comparing timings across runners.
 
 > **Deadline semantics**
 >

@@ -4,7 +4,7 @@ title: Module Reference
 
 # Module Reference
 
-The `passage` package (`src/passage/`) has **22 modules**. This page gives the role of each module and its main functions and classes. The evaluator, `passage_eval` (`src/passage-eval/`), ships in the same distribution; see [`passage-eval` Package](../benchmark/passage-eval.md) and its [API reference](../benchmark/api.md).
+This reference covers the main modules of the `passage` package (`src/passage/`). The evaluator, `passage_eval` (`src/passage-eval/`), ships in the same distribution; see [`passage-eval` Package](../benchmark/passage-eval.md) and its [API reference](../benchmark/api.md).
 
 ---
 
@@ -21,7 +21,7 @@ graph LR
     INIT --> QUA["qualification modules"]
     INIT --> NBX["notebook_export.py"]
 
-    GEN --> RG["release generator<br><small>called by generate.py</small>"]
+    GEN --> RG["successor_generation.py<br><small>Release generation</small>"]
     REG --> RG
     REG --> EXP
     RG --> REF["reference.py"]
@@ -75,9 +75,13 @@ Scans every DSM tile for its minimum and maximum elevation and writes `calibrate
 
 ### `generate.py` — Scene Generation
 
-`run_generate()` is the entry point of `passage generate`. When the configuration sets `generation.dataset_version` (as the shipped `config/config.yaml` does), it hands over to the **release generator**, a separate module. That generator draws each scene as described in [Sampling Procedure](../generation/sampling.md), solves its six variants with the reference solver, writes the tensor, metadata, routes and a receipt per scene, and checks every receipt again on resume.
+`run_generate()` is the entry point of `passage generate`. When the configuration sets `generation.dataset_version` (as the shipped `config/config.yaml` does), it hands over to the release generator in `successor_generation.py`.
 
 `generate.py` also holds helpers that the release generator uses: `_derive_sample_seed()`, `_assign_splits()`, `_resolve_obstacle_config()`, `_generate_obstacles_mask()`, `lat_to_str()`, `lon_to_str()`, `parse_lat_lon_from_filename()` and the constant `TILE_SIZE_PX` (3600). Without `generation.dataset_version`, `run_generate()` runs a configurable generator (`generate_sample()`, `find_path()`, `load_tile()`, `load_tile_grid()`, `count_valid_samples()`) that the v1.0 release does not use.
+
+### `successor_generation.py` — Release Generation
+
+`SuccessorGenerationSession` authenticates the terrain inventory, freezes the geographic split roster and keeps workers available for a resolution. The generator [samples each scene](../generation/sampling.md), solves its six variants with the reference solver, writes the tensor, metadata and routes, and commits the scene receipt last. On resume it validates the existing receipts.
 
 ### `reference.py` — Reference Solver
 
@@ -101,7 +105,7 @@ The NetworkX, pathfinding and Numba grid backends, not used for the v1.0 labels:
 
 ### `export.py` — Parquet Export and Upload
 
-Packages the generated scenes for Hugging Face. `compress_release()` (`passage compress`) writes the Parquet shards; `prepare_export()` (`passage export`) refreshes the notebooks, assets, calibration and README of the export tree; `upload_export()` (`passage upload`) uploads it; `export_and_upload()` runs the three steps in one call. `_features()` defines the Hugging Face `Features` schema, and `parse_path_csv()` reads a route file (one `row,col` pair per line) into `[[row, col], …]`. The module also exports and verifies release batches for `passage regenerate`. It calls a separate publication module that writes the dataset card, datasheet, Croissant metadata and a content receipt from the release receipts, and checks them before upload.
+Packages the generated scenes for Hugging Face. `compress_release()` (`passage compress`) writes the Parquet shards; `prepare_export()` (`passage export`) refreshes the notebooks, assets, calibration and README of the export tree; `upload_export()` (`passage upload`) uploads it; `export_and_upload()` runs the three steps in one call. `_features()` defines the Hugging Face `Features` schema, and `parse_path_csv()` reads a route file (one `row,col` pair per line) into `[[row, col], …]`. The module also exports and verifies release batches for `passage regenerate`. For release builds, it calls `successor_publication.py` to write and verify the dataset card, datasheet, Croissant metadata and a content receipt.
 
 ### `regenerate.py` — Full Rebuild
 

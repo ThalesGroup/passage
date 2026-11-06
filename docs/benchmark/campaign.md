@@ -9,10 +9,13 @@ icon: material/playlist-check
 ## 1. Executive summary
 
 A campaign runs the procedures of a sealed plan over an admissible roster, in lots of at most 1,024 tasks, and
-aggregates the scored lots per procedure. The planned 256 evaluation uses the sealed 1,024-scene roster S, training
-seed 2026, and the frozen Seg and Reg candidates; the physical A* is the host-side reference solver and is not a timed
-candidate. The package binds every operational setting in a hash-pinned plan. The test split remains closed until the
-admission gate is all green.
+aggregates the scored lots per procedure. This guide describes the supervised
+campaign for the historical 1,024-scene roster S at 256×256 with training seed
+2026 and the frozen Seg and Reg candidates. Physical A* supplies a host-side
+reference for that plan. The [paper results](candidates.md) cover a separate
+direct timing campaign on the full test split with a timed same-device CPU A*
+reference. The supervised harness pins each plan and opens test only when its
+admission record is all green.
 
 Three mechanisms make 32-scene lots feasible within a lease or timeout:
 
@@ -29,8 +32,7 @@ Three mechanisms make 32-scene lots feasible within a lease or timeout:
 
 Section 2 describes the steps and commands, section 3 the plan, section 4 the windows and sessions, section 5 the
 receipts, resume and R7 relaunch, section 6 the aggregation, section 7 the rehearsal receipt and the operator recipe,
-and section 8 the limits. The test split is opened only under the test admission gate described in
-`docs/benchmark/test-admission.md`.
+and section 8 the limits. The test split is opened only under the [test admission gate](test-admission.md).
 
 > **Status.** The R7 settings are effective only when identically sealed in the plan and admission record. Lease,
 > lot size, overheads and margin are also sealed in the `batching` decision.

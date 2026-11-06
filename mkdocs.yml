@@ -18,6 +18,7 @@ exclude_docs: |
   /assets/javascripts/lunr/
   /DATA_QUALIFICATION.md
   /TRAJECTORY_STYLE.md
+  /README_TEMPLATE.md
   /_partials/
   /benchmark/supervised-execution.md
   /benchmark/test-admission.md
@@ -196,8 +197,6 @@ extra_javascript:
   - javascripts/home.js
   - javascripts/mermaid-zoom.js
   - javascripts/katex.js
-  - https://unpkg.com/katex@0.16.11/dist/katex.min.js
-  - https://unpkg.com/katex@0.16.11/dist/contrib/auto-render.min.js
 
 extra:
   huggingface:
@@ -249,13 +248,13 @@ nav:
       - "Evaluation Protocol": benchmark/protocol.md
       - "passage-eval Package": benchmark/passage-eval.md
       - "Leaderboard": benchmark/leaderboard.md
-      - "First entries": benchmark/candidates.md
+      - "Paper results": benchmark/candidates.md
       - "Final candidates": benchmark/final-candidates.md
       - "Evaluate your planner": benchmark/contributing-a-method.md
       - "Reproducible Notebooks":
           - "Overview": benchmark/notebooks/index.md
           - "Evaluator walkthrough": benchmark/notebooks/01-astar-walkthrough.md
-          - "Paper results": benchmark/notebooks/02-paper-results.md
+          - "Validation notebook": benchmark/notebooks/02-paper-results.md
           - "Classical baselines": benchmark/notebooks/02-score-released-baselines.md
           - "Results format": benchmark/notebooks/03-leaderboard.md
       - "Paired statistics (paper)": benchmark/walkthrough.md
@@ -267,4 +266,7 @@ nav:
       - "Testing Strategy": architecture/testing.md
   - "API":
       - "Overview": api/index.md
-  - "Policies": policies/index.md
+  - "Policies":
+      - "Overview": policies/index.md
+      - "Third-party notices": licenses/third-party.md
+      - "Notebook rendering and licences": licenses/notebook-exports.md

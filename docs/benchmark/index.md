@@ -26,15 +26,16 @@ interpret the results.
       and the budget. It never includes the reference route or its cost.
     - **Complete request**: one timed call of the planner, from the ordinary
       input to a route. Input preparation, inference or search, decoding,
-      repair and fallback all count, and so do the evaluator's legality check
-      and cost recomputation.
+      device synchronization, repair and fallback all count. The paper's direct
+      timer excludes independent host validation and scoring; some local
+      runners include legality checks and recosting.
     - **Qualified reference**: a stored reference route that is legal, whose
       recomputed cost matches the stored cost, and that an exact solve within
       `reference_max_expansions` confirms as optimal. A run starts only when
       the reference of every task is qualified.
     - **Cohort**: the frozen list of tasks that a result was computed on
-      (sample IDs, split, objective and obstacle condition). Two results are
-      comparable only on the same cohort.
+      (sample IDs, split, objective and obstacle condition). Use the same cohort for
+      paired comparisons.
     - **Censored cost**: the cost given to a route that fails or crosses an
       obstacle, 10⁶ times the reference cost, so that every failure stays in
       the regret statistics.
@@ -78,9 +79,9 @@ interpret the results.
 
     ---
 
-    Entries scored on PASSAGE v1.0, organized by resolution, objective and
-    accelerator. Published entries carry no host or user names. The
-    leaderboard has no entries yet; the paper results are listed separately.
+    The entry index for PASSAGE v1.0. Read the
+    [paper results](candidates.md) separately: they compare Seg, Reg and
+    physical A* on the complete 40,000-scene 256×256 public test split.
 
     [:octicons-arrow-right-24: Open the leaderboard](leaderboard.md)
 
@@ -98,7 +99,7 @@ interpret the results.
 
     ---
 
-    Four notebooks: an evaluator walkthrough, the paper results, the classical
+    Four notebooks: an evaluator walkthrough, historical validation results, the classical
     baselines and the results format. Open the sources to view or run them.
 
     [:octicons-arrow-right-24: Open the notebook track](notebooks/index.md)
@@ -149,19 +150,17 @@ the [Dataset](../dataset/index.md) page) or *generate* samples (see
 ## Approach scope
 
 The cross-approach evaluation protocol is **planner-family-agnostic**
-by design: every primary metric is a
-function of a *decoded path* compared against the exact A$^{\star}$
-oracle path on the same sample under the same cost model. The
-intermediate output of each planner — logits, value field, node
-policy, rollout policy — is never scored against the oracle in
-isolation.
+by design: every primary metric scores the *decoded path* on the same
+task and objective. The exact A* reference supplies the cost and geometry
+comparators. Intermediate outputs such as logits, value fields and policies
+are useful for diagnostics.
 
-The paper evaluated two **dense-vision finalists** (path-mask segmentation and
-cost-to-go regression). No
-learned-model result on PASSAGE v1.0 is published yet; the
-[First entries](candidates.md) page describes the first leaderboard entries.
-Graph-neural-network and reinforcement-learning planners plug into the same
-contract; the paper names them as future work.
+The [paper results](candidates.md) cover two dense-vision finalists
+(path-mask segmentation and cost-to-go regression) and a physical A*
+reference. They are exploratory after prior exposure to the public test split
+and separate from leaderboard admission. Graph-neural-network and
+reinforcement-learning planners can use the same contract; the paper names
+those evaluations as future work.
 
 ---
 
