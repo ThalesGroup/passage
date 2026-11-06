@@ -6,29 +6,9 @@ name: Deploy Documentation
 
 on:
   push:
-    # develop carries the camera-ready work until it is merged into main.
     branches: [main, develop]
-    paths:
-      - "docs/**"
-      - "mkdocs.yml"
-      - "src/**"
-      - "README.md"
-      - "pyproject.toml"
-      - "uv.lock"
-      - ".github/workflows/docs.yml"
   pull_request:
-    branches: [main]
-    paths:
-      - "docs/**"
-      - "mkdocs.yml"
-      - "src/**"
-      - ".github/workflows/docs.yml"
-  workflow_dispatch:
-    inputs:
-      publish:
-        description: Publish to GitHub Pages after CI (main only; Pages must be enabled)
-        type: boolean
-        default: false
+    branches: [main, develop]
 
 permissions:
   contents: read
@@ -40,12 +20,77 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  changes:
+    name: Classify changes
+    if: github.event_name != 'push' || !github.event.deleted
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      run_ci: ${{ steps.paths.outputs.run_ci }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Detect changes that need Python checks
+        id: paths
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          base=''
+          # A docs-only commit after a failed code push must not bypass tests.
+          if [[ "$GITHUB_EVENT_NAME" == push ]]; then
+            if candidates=$(gh api --method GET \
+                "repos/$GITHUB_REPOSITORY/actions/workflows/docs.yml/runs" \
+                -f branch="$GITHUB_REF_NAME" -f event=push -f status=success -F per_page=30 \
+                --jq '.workflow_runs[].head_sha'); then
+              while IFS= read -r sha; do
+                if [[ "$sha" =~ ^[0-9a-f]{40}$ && "$sha" != "$GITHUB_SHA" ]] &&
+                   git cat-file -e "$sha^{commit}" 2>/dev/null &&
+                   git merge-base --is-ancestor "$sha" "$GITHUB_SHA" &&
+                   git show "$sha:.github/workflows/docs.yml" | cmp -s - .github/workflows/docs.yml; then
+                  base="$sha"
+                  break
+                fi
+              done <<< "$candidates"
+            fi
+          elif [[ "$GITHUB_EVENT_NAME" == pull_request ]]; then
+            # actions/checkout uses the PR merge commit. Its first parent is
+            # the exact base used to build that tree.
+            if git rev-parse --verify "$GITHUB_SHA^2" >/dev/null 2>&1; then
+              base=$(git rev-parse --verify "$GITHUB_SHA^1") || base=''
+            fi
+          fi
+
+          run_ci=true
+          paths=$(mktemp)
+          if [[ "$base" =~ ^[0-9a-f]{40}$ ]] &&
+             [[ "$(git rev-parse HEAD)" == "$GITHUB_SHA" ]] &&
+             git diff --no-renames --name-only -z "$base" "$GITHUB_SHA" -- > "$paths" &&
+             [[ -s "$paths" ]]; then
+            run_ci=false
+            while IFS= read -r -d '' path; do
+              case "$path" in
+                README.md|CONTRIBUTING.md|CODE_OF_CONDUCT.md|SECURITY.md|USAGE.md|docs/*.md|docs/*.css|docs/*.js|docs/*.html|docs/*.svg|docs/*.png|docs/*.jpg|docs/*.jpeg|docs/*.webp|docs/*.ico)
+                  ;;
+                *) run_ci=true; break ;;
+              esac
+            done < "$paths"
+          fi
+          printf 'run_ci=%s\n' "$run_ci" >> "$GITHUB_OUTPUT"
+
   # -----------------------------------------------------------------------
   # Build — runs on every configured push and PR so docs failures surface
   # early. A downloadable archive remains available even without Pages.
   # -----------------------------------------------------------------------
   build:
     name: Build site
+    if: github.event_name != 'push' || !github.event.deleted
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -85,35 +130,54 @@ jobs:
 
       - name: Upload Pages artifact
         if: >-
-          github.ref == 'refs/heads/main' && vars.DEPLOY_PAGES == 'true' &&
-          (github.event_name == 'push' ||
-           (github.event_name == 'workflow_dispatch' && inputs.publish == true))
+          github.event_name == 'push' && github.ref == 'refs/heads/main' &&
+          vars.DEPLOY_PAGES == 'true'
         uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3.0.1
         with:
           path: ./site
 
-  publication_checks:
-    name: Verify publication
-    if: >-
-      github.ref == 'refs/heads/main' && vars.DEPLOY_PAGES == 'true' &&
-      (github.event_name == 'push' ||
-       (github.event_name == 'workflow_dispatch' && inputs.publish == true))
+  python_checks:
+    name: Python CI
+    needs: changes
+    if: needs.changes.outputs.run_ci == 'true'
     uses: ./.github/workflows/ci.yml
     permissions:
       contents: read
 
+  checks:
+    name: Documentation and applicable CI
+    needs: [changes, build, python_checks]
+    if: >-
+      !cancelled() && (github.event_name != 'push' || !github.event.deleted)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify required jobs
+        shell: bash
+        env:
+          DIFF_RESULT: ${{ needs.changes.result }}
+          DOCS_RESULT: ${{ needs.build.result }}
+          CI_REQUIRED: ${{ needs.changes.outputs.run_ci }}
+          CI_RESULT: ${{ needs.python_checks.result }}
+        run: |
+          test "$DIFF_RESULT" = success
+          test "$DOCS_RESULT" = success
+          case "$CI_REQUIRED:$CI_RESULT" in
+            true:success|false:skipped) ;;
+            *) exit 1 ;;
+          esac
+
   # -----------------------------------------------------------------------
   # Deploy only from main, after the build and CI checks. Enable Pages with
   # "GitHub Actions" as the source and set DEPLOY_PAGES to "true" when the
-  # repository is eligible. Manual runs default to an archive-only build.
+  # repository is eligible. Documentation-only changes need the strict build,
+  # while changes to code since the last validated snapshot also need CI.
   # -----------------------------------------------------------------------
   deploy:
     name: Deploy to GitHub Pages
     if: >-
-      github.ref == 'refs/heads/main' && vars.DEPLOY_PAGES == 'true' &&
-      (github.event_name == 'push' ||
-       (github.event_name == 'workflow_dispatch' && inputs.publish == true))
-    needs: [build, publication_checks]
+      github.event_name == 'push' && !github.event.deleted &&
+      github.ref == 'refs/heads/main' && vars.DEPLOY_PAGES == 'true'
+    needs: [build, checks]
     runs-on: ubuntu-latest
     permissions:
       contents: read
