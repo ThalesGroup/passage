@@ -8,4 +8,4 @@ hide:
 
 Obstacle masks from least to most covered, drawn coverage against its target, and the detour that obstacles force on the optimal route over a whole validation split.
 
-[Open the source notebook](https://github.com/ThalesGroup/passage/blob/main/notebooks/obstacles.ipynb)
+[Open the source notebook](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/notebooks/obstacles.ipynb)

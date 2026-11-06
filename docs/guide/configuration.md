@@ -106,7 +106,7 @@ splits:
 
 | Key | Description |
 |-----|-------------|
-| `ratios` | Share of scenes per split, rounded to whole scenes. Also the share of 5° blocks among `train`, `calibration` and `validation` |
+| `ratios` | Target shares for scene counts and weights for assigning geographic blocks. With the hold-out mask, only the non-test splits share blocks outside the mask |
 | `seed` | Seeds both the scene-to-split assignment and the geographic block assignment |
 | `enabled` | Not read by the v1.0 release generator |
 
@@ -149,7 +149,7 @@ Do not proceed if the download or hash check fails. The mask is a geographic con
 
 ```yaml
 generation:
-  dataset_version: ...   # keep the value shipped in config/config.yaml
+  dataset_version: passage-successor-v1
   seed: 42
   max_scene_attempts: 100
   max_reference_expansions: null
@@ -249,8 +249,8 @@ obstacles:
 | `shape.size.min_ratio` / `max_ratio` | Full width and height of a superellipse, as a fraction of the crop side; its semi-axes are half of these |
 | `shape.n.min` / `max` | Exponent range ($n=1$: diamond, $n=2$: ellipse, large $n$: close to a rectangle) |
 | `shape.n.distribution.type` | Distribution of the exponent: `log_uniform` (shipped), `uniform`, `beta` (parameters `a`, `b`) or `exponential` (parameter `lambda`) |
-| `generation.max_attempts` | Masks tried before giving up; an empty mask is then used |
-| `generation.candidates_per_mask` | Largest number of superellipses tried for one mask |
+| `generation.max_attempts` | Maximum complete mask attempts before falling back to an empty mask. Marker checks on each proposal normally make the first attempt sufficient |
+| `generation.candidates_per_mask` | Maximum placement rounds per mask. A round stops after 10 proposals that cover an endpoint |
 | `impassable` | `true`: obstacle cells are blocked, and a crop whose obstacles disconnect the start from the goal is rejected. The release generator requires `true` |
 | `obstacle_penalty` | Elevation penalty added to obstacle cells when `impassable: false`; not used by the v1.0 release |
 
@@ -326,7 +326,7 @@ export:
       seed: 42
 
     generation:
-      dataset_version: ...   # keep the value shipped in config/config.yaml
+      dataset_version: passage-successor-v1
       seed: 42
       max_scene_attempts: 100
       max_reference_expansions: null

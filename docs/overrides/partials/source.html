@@ -29,12 +29,12 @@ SOFTWARE.
   dataset on the Hugging Face Hub (extra.huggingface in mkdocs.yml).
 -#}
 <div class="pg-sources">
-  <a href="{{ config.repo_url }}" class="pg-source" title="Code on GitHub" aria-label="Code on GitHub">
-    <span class="md-icon">{% include ".icons/fontawesome/brands/github.svg" %}</span>
+  <a href="{{ config.repo_url }}" class="pg-source" title="Code on GitHub (access may be required)" aria-label="Code on GitHub (access may be required)">
+    <span class="md-icon" aria-hidden="true">{% include ".icons/fontawesome/brands/github.svg" %}</span>
   </a>
   {% if config.extra.huggingface %}
   <a href="{{ config.extra.huggingface.link }}" class="pg-source" title="{{ config.extra.huggingface.title }}" aria-label="{{ config.extra.huggingface.title }}">
-    <span class="md-icon">{% include ".icons/simple/huggingface.svg" %}</span>
+    <span class="md-icon" aria-hidden="true">{% include ".icons/simple/huggingface.svg" %}</span>
   </a>
   {% endif %}
 </div>

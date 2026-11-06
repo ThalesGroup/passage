@@ -33,10 +33,10 @@ The exponent $n$ sets the shape:
 
 | $n$ value | Shape | Description |
 |----------|-------|-------------|
-| $n = 1$ | :material-diamond: Diamond (rhombus) | Sharp corners, diagonal orientation |
-| $n = 2$ | :material-circle: Ellipse | Smooth, classical shape |
-| $n = 4$ | :material-rounded-corner: Rounded rectangle | Corners begin to flatten |
-| $n \to \infty$ | :material-square: Rectangle | Hard right-angle corners |
+| $n = 1$ | Diamond (rhombus) | Sharp corners, diagonal orientation |
+| $n = 2$ | Ellipse | Smooth, classical shape |
+| $n = 4$ | Rounded rectangle | Corners begin to flatten |
+| $n \to \infty$ | Rectangle | Hard right-angle corners |
 
 By default, $n$ is drawn from a **log-uniform distribution**:
 
@@ -86,7 +86,8 @@ $$
 | `shape.size.min_ratio` ($r_{\min}$) | 0.02 |
 | `shape.size.max_ratio` ($r_{\max}$) | 0.25 |
 
-With these defaults, each shape is 2 % to 25 % of the crop side wide and high, so its semi-axes are about 1 % to 12.5 % of the side (at least one cell). The center is drawn uniformly over the whole crop, so a shape near the edge is cut by the crop border.
+The default ratios are 2 % and 25 %. Rounding and the one-cell minimum
+for the semi-axes affect the dimensions on small crops. The center is drawn uniformly over the whole crop, so a shape near the edge is cut by the crop border.
 
 ---
 
@@ -98,7 +99,8 @@ The generator adds shapes one at a time until the next shape would exceed a **ta
 2. Draw a shape: size, center, angle $\theta$ and exponent $n$.
 3. If the shape covers the start or the goal, draw another one. After ten such shapes in a row, stop.
 4. If adding the shape would raise the coverage above $t$, stop; this shape is not added.
-5. Otherwise add the shape and go back to step 2. Stop once the mask holds `candidates_per_mask` shapes.
+5. Otherwise add the shape and start another placement round, up to
+   `candidates_per_mask` rounds in total. Retries in step 3 are within a round.
 
 The final coverage is therefore at most $t$, and $t$ is at most `ratio_max` (30 %). Each scene records both values in its metadata (`obstacles.ratio_target` and `obstacles.ratio_actual`).
 
@@ -133,7 +135,7 @@ All keys sit under `obstacles` in `config/config.yaml`.
 | `shape.size.min_ratio` | 0.02 | Smallest width or height, as a fraction of the crop side |
 | `shape.size.max_ratio` | 0.25 | Largest width or height, as a fraction of the crop side |
 | `shape.n.min` / `shape.n.max` | 1.0 / 80.0 | Range of the shape exponent |
-| `generation.candidates_per_mask` | 200 | Maximum number of shapes in one mask |
+| `generation.candidates_per_mask` | 200 | Maximum placement rounds per mask, each with up to 10 proposals if they cover an endpoint |
 | `generation.max_attempts` | 50 | Maximum number of masks drawn, each with a new target. A mask is redrawn only if it covers a marker, which step 3 already prevents, so the first mask is kept. |
 | `impassable` | `true` | Obstacle cells are blocked (required by the v1.0 generator) |
 | `obstacle_penalty` | $10^8$ | Used only when `impassable: false`; not used by the v1.0 release |
@@ -158,7 +160,7 @@ $$
 e_{\text{masked}}(i, j) = \max(e) + \text{obstacle\_penalty}
 $$
 
-Routes then avoid obstacles but can still cross them, so the graph stays connected. This option only affects the alternative solver backends described in [Solvers & Heuristics](solvers.md).
+Changing the elevation can affect route costs, and routes can still cross obstacle cells. This option only affects the alternative solver backends described in [Solvers & Heuristics](solvers.md).
 
 ---
 

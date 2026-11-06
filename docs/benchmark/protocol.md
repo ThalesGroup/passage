@@ -19,7 +19,9 @@ procedure, reference paths and metric contract.
 
 The complete-request workflow qualifies references, persists each timed route,
 then scores every repeat offline. The
-[candidate guide](contributing-a-method.md) documents the runnable commands,
+[paper results](candidates.md) describe the locked, exploratory comparison on
+all 40,000 public 256×256 test scenes; earlier validation exports do not
+reconstruct it. The [candidate guide](contributing-a-method.md) documents the runnable commands,
 deadline handling, primary-repeat selection and reference-cohort policies.
 
 ## 2. Released scenes and analytic costs
@@ -88,11 +90,16 @@ scene model. See [the API guide](passage-eval.md).
 
 ## 4. Calibration and statistical discipline
 
-Declare the canonical decoder and its parameters on the calibration split before
-the test pass. Record those decisions and their deterministic hash. Freeze the
+Choose model and recipe candidates on validation and declare the canonical
+decoder and its parameters on calibration before the test pass. The paper
+uses `valid` and `calib` for these splits; the release calls them
+`validation` and `calibration`. Do not tune on test. Record those decisions and their deterministic hash. Freeze the
 headline operating point at 256×256 under `elevation`, the six primary metrics,
 and training seeds **1234, 2026, 3407**. The test pass is performed once per seed;
 repeated inference seeds do not replace three independently trained checkpoints.
+The paper's locked finalist report used three fixed fitted replicas after
+prior public test exposure; its conditional task-draw analysis is exploratory
+and distinct from the confirmatory geographic-block procedure below.
 
 Pair candidate and baseline arrays by sample ID, split, dataset hash, task
 variant, cost model, and weight. For each metric, the contrast is
@@ -173,28 +180,44 @@ same-device oracle-relative efficiency. The geographic test uses the South
 America hold-out; each evaluated cohort needs its own identified split policy and
 support analysis. Validation results alone do not establish those axes.
 
-Time the full input-to-path pipeline at batch size one on the executing hardware.
-The unit of `latency_warmup` (default 5) depends on the runner. The in-process
-CLI runner performs that many recorded warm-up *passes* over the selected tasks,
+**Paper's direct measurement.** The timer starts with raw request arrays in
+target memory and stops at path return. It includes input preparation,
+device transfers, inference or search, synchronization, route decoding and
+fallback. Runtime initialization, input delivery, logging, independent host
+validation and scoring are outside the timer. Each persistent batch-one
+session warms up with 16 calls on one separate validation scene, then times
+one request per measured scene. Percentiles include all observed returns;
+deadline outcomes and missing timings are reported separately. Compare timings
+on the same target and workload, with the same batch size and timing boundary.
+Report the runtime and numerical precision used by each method.
+
+The [paper results](candidates.md) report this full comparison at 256×256
+only. Results outside that resolution, including 1024×1024, use 1,024 test
+scenes per grid size and one neural seed, and are indicative.
+
+**Local evaluator and supervised runners.** These runners have their own
+timing boundaries. The unit of `latency_warmup` (default 5) depends on the
+runner. The in-process CLI runner performs that many recorded warm-up *passes* over the selected tasks,
 then one warm measured pass, with a separate cold pass after candidate
 construction. The supervised chain instead performs that many untimed warm-up
 *requests* per warm pass, on inputs disjoint from the roster, in fresh workers
-(section 5.A of the developer guide `docs/benchmark/supervised-execution.md`).
+(see `docs/benchmark/supervised-execution.md` in the source checkout).
 A supervised series measured without a warm-up is called `unwarmed`. A campaign
 session measures warm requests only, with no cold pass, and reports the cold
 start per session (section 6.M of the same guide).
 Declare `latency_repeats` and freeze the primary `quality_repeat_index` before
 execution. Every timed repeat retains its route, status, complete latency and
-offline quality. These settings differ from the paper's
-resolution-dependent repetition campaign. In the in-process runner, device
-completion precedes the CPU route snapshot, legality check and recosting inside
+offline quality. In the in-process runner, device completion precedes the CPU route snapshot, legality check and recosting inside
 the request timer; imports, model loading, persistence, reference solving and
 offline geometry remain outside. The manuscript's timing rule keeps validation
 and physical recosting separate from the request latency. Among the supervised
 timing profiles, `supervised_service_v1` and `supervised_service_rewarm_v1`
-follow that rule: they compare and score the service time and record the
-recost separately. The default supervised profile, like the in-process runner,
-keeps the recost inside the timed value. Scores, `compare` and the `bench`
+also exclude recosting from the scored service time, but include IPC and
+therefore use a different boundary from direct native measurements. The
+`native_raw_path_persistent_v1` timing profile uses the direct raw-arrays-to-path
+boundary and records validation and recosting separately. The default
+supervised profile and the in-process runner both keep recosting inside the
+timed value. Scores, `compare` and the `bench`
 sidecar report the recorded validation and recost time in its own block
 (`validation_recost_ms`), which states whether the profile counts it inside the
 scored latency; the in-process runner does not record it separately.
@@ -227,7 +250,7 @@ timeouts; successes, timeouts and other failures add up to the number of
 requests. Success-only percentiles appear as secondary values only. The legacy
 interpolated summaries and the paired latency contrasts of `compare` count the
 censored requests they treat as finite values. A flag states whether the series
-holds at least 100 warm requests, the manuscript's minimum; the flag does not
+holds at least 100 warm requests, a harness reporting threshold; the flag does not
 admit or refuse a result. A request counts as warm only after the warm-up that
 the run declares and records, never because its series is named `warm`. The
 flag is therefore false when `measure_latency` is false or `latency_warmup` is
@@ -251,6 +274,15 @@ inference kwargs, calibration hash when supplied, hardware, timing settings,
 precision, evaluator commit and source hash, and a declared container digest.
 Absent calibration/container declarations remain absent. Determinism defaults to
 `non_deterministic`; a stronger claim requires the submitter's evidence.
+
+The test admission gate, documented in `docs/benchmark/test-admission.md`
+in the source checkout, checks whether a guarded run may proceed under its
+recorded scope. A green gate is separate from
+leaderboard verification and the paper's reproducible-entry requirements.
+The latter require the published commit and container digest needed to
+rebuild the reference solver, candidate procedure and runtime, along with
+calibration decisions and their hash, a complete sidecar per row, and
+seed-replicated paired-bootstrap intervals.
 
 Use a fresh result directory for this contract. Frozen data and evaluator hashes
 help auditing, but a reproducible learned-method headline also needs the candidate

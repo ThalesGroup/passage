@@ -25,7 +25,7 @@ open ocean, so the downloader checks each URL before it downloads anything.
 
 The 23,993 DSM tiles used by PASSAGE v1.0 take about **463 GB** of disk (the
 sum of the file sizes in the released
-[`calibrate.json`](https://huggingface.co/datasets/thalesgroup/passage/blob/main/calibration/calibrate.json)
+[`calibrate.json`](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/calibration/calibrate.json)
 inventory). Leave extra room for the ZIP archives while they are extracted.
 
 !!! info "Data source"

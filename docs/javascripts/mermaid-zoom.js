@@ -24,7 +24,7 @@
 /* MIT License — Copyright (c) 2026 THALES
  * Zoom for Mermaid diagrams. Material renders each diagram in a closed shadow
  * root, so the rendered host element itself is moved into a full-screen viewer
- * (wheel or pinch to zoom, drag to pan, +/−/reset buttons, Esc to close) and
+ * (wheel or pinch to zoom, drag to pan, +/-/reset buttons, Esc to close) and
  * put back in place on close. Works with instant navigation (document$).
  */
 (function () {
@@ -41,9 +41,9 @@
     overlay.innerHTML =
       '<div class="pg-zoom__bar">' +
       '<button type="button" data-z="in" aria-label="Zoom in">+</button>' +
-      '<button type="button" data-z="out" aria-label="Zoom out">−</button>' +
+      '<button type="button" data-z="out" aria-label="Zoom out">-</button>' +
       '<button type="button" data-z="reset" aria-label="Reset view">1:1</button>' +
-      '<button type="button" data-z="close" aria-label="Close">✕</button></div>' +
+      '<button type="button" data-z="close">Close</button></div>' +
       '<div class="pg-zoom__stage"><div class="pg-zoom__canvas"></div></div>' +
       '<p class="pg-zoom__hint">Scroll or pinch to zoom · drag to move · Esc to close</p>';
     document.body.appendChild(overlay);
@@ -119,8 +119,8 @@
       var btn = document.createElement("button");
       btn.type = "button";
       btn.className = "pg-mermaid__zoom";
-      btn.setAttribute("aria-label", "Open the diagram in the zoom viewer");
-      btn.innerHTML = "⤢ Zoom";
+      btn.setAttribute("aria-label", "Zoom diagram");
+      btn.textContent = "Zoom";
       btn.addEventListener("click", function () { if (!viewer) open(host); });
       wrap.appendChild(btn);
       host.addEventListener("dblclick", function () { if (!viewer) open(host); });

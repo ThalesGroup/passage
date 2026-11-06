@@ -20,6 +20,10 @@ guide does not cover.
 
 ## Usage
 
+Run from the repository root after [downloading tiles](download.md) and
+[calibrating the same inventory](calibrate.md). The shipped configuration also
+requires the [release hold-out mask](configuration.md#hold-out-region).
+
 ### Basic generation
 
 ```bash
@@ -83,7 +87,9 @@ flowchart TD
     E -->|No: next attempt| A
     E -->|Yes| F[Draw the goal<br>among the other cells]
     F --> G[Place obstacles]
-    G --> H[Save tensor and metadata]
+    G --> K{Endpoints connected?}
+    K -->|No: next attempt| A
+    K -->|Yes| H[Stage tensor and metadata]
     H --> I[Solve six routes<br>with the exact reference]
     I --> J[Write routes, then the receipt]
 
@@ -98,8 +104,8 @@ flowchart TD
 1. **Split and seed** — each scene index receives a split, so that the split
    counts match `splits.ratios`, rounded to whole scenes. It also receives its
    own seed, `blake2b(generation.seed, resolution, index, split)`.
-2. **Center tile** — drawn uniformly among the source tiles of the scene's
-   split (see [Splits](#splits)).
+2. **Center tile** — drawn uniformly among the source tiles whose one-tile
+   guard ring belongs to the scene's split (see [Splits](#splits)).
 3. **Start** — a target elevation is drawn uniformly in the calibration range.
    The start is the cell of the center tile whose elevation is nearest to it.
 4. **Crop** — the R × R crop is placed at a random offset around the start. It
@@ -107,7 +113,8 @@ flowchart TD
    matching window of every tile it touches.
 5. **Checks** — the attempt is rejected when a source tile of the crop, or of
    its one-tile guard ring, belongs to another split, when a tile is missing,
-   or when a cell has no data. Missing data is never padded. A scene makes up
+   or when a cell has no data or falls outside the calibration range. Missing
+   data is never padded. A scene makes up
    to `generation.max_scene_attempts` (100) attempts; after that it is recorded
    as `rejected`.
 6. **Goal** — drawn uniformly among the other cells of the crop.

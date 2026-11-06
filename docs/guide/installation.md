@@ -28,27 +28,25 @@ This page covers how to set up PASSAGE on your machine, install dependencies, an
 ## Install with `uv` (Recommended)
 
 [`uv`](https://docs.astral.sh/uv/) is a fast Python package manager. With the
-repository's `uv.lock` file, it installs the exact locked versions:
+repository's `uv.lock` file, it installs the exact locked versions. The
+source checkout requires access to the [PASSAGE repository](https://github.com/ThalesGroup/passage):
 
 ```bash
 # Install uv (if not already installed)
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # Clone the repository
-git clone --branch develop https://github.com/ThalesGroup/passage.git
+git clone https://github.com/ThalesGroup/passage.git
 cd passage
 
 # Install the locked runtime environment (passage and passage-eval)
 uv sync --frozen
-
-# (Optional) Add the test and lint tools
-uv sync --frozen --group dev
 ```
 
 The standard installation supports CPU evaluation and does not install PyTorch,
 CUDA, TensorRT, or NVIDIA packages.
 
-Run the tools with `uv run passage …`, or activate the environment
+Run the tools with `uv run --frozen passage …`, or activate the environment
 (`source .venv/bin/activate`) and call `passage` directly. This guide uses the
 short form.
 
@@ -81,7 +79,7 @@ make pages-local
 
 ## Install with `pip`
 
-If you prefer the standard Python toolchain:
+From the cloned repository root, if you prefer the standard Python toolchain:
 
 ```bash
 # Create and activate a virtual environment
@@ -140,29 +138,26 @@ The evaluator has its own command, `passage-eval --help`.
 
 ---
 
-## Configure Hugging Face Credentials :lock:
+## Configure Hugging Face Credentials
 
 The `upload` command can publish your prepared export tree directly to the
-[Hugging Face Hub](https://huggingface.co/). It reads `HF_TOKEN` from
-`.env.secret` at the repository root; `.env.secret.template` shows the format.
+[Hugging Face Hub](https://huggingface.co/). Use a token with write access
+to your destination repository. Set `HF_TOKEN` in the environment or in `.env.secret` at the repository root;
+`.env.secret.template` shows the format.
 By default it targets `thalesgroup/passage`, so pass `--repo-id` to publish to
 your own repository.
 
-=== "`.env.secret` — Private token"
+In `.env.secret`:
 
-    ```bash
-    HF_TOKEN=hf_XXXXXXXXXXXXXXXXXXXXXXXX
-    ```
+```dotenv
+HF_TOKEN=hf_XXXXXXXXXXXXXXXXXXXXXXXX
+```
 
 !!! warning "Never commit secrets"
     Both `.env` and `.env.secret` are listed in `.gitignore`. Never commit your Hugging Face token to version control.
 
-You can also point the CLI at custom env files:
-
-```bash
-passage upload --repo-id <user>/<dataset>
-passage upload --repo-id <user>/<dataset> --env-path .env --secret-path .env.secret
-```
+See [Upload](export.md#3-upload) for how to choose a destination and custom
+credential files when the export is ready.
 
 ---
 
@@ -191,8 +186,9 @@ passage/
 ├── notebooks/                # Notebook sources and per-resolution templates
 ├── assets/                   # Banner, sample images, hold-out mask
 ├── scripts/                  # Install and documentation helpers
-├── docs/                     # This documentation site (with mkdocs.yml)
+├── docs/                     # Documentation site source
 ├── outputs/                  # Generated files (ignored by git)
+├── mkdocs.yml                # Documentation site configuration
 ├── pyproject.toml            # Project metadata and dependencies
 └── uv.lock                   # Locked dependency versions
 ```
@@ -214,8 +210,8 @@ Sanity check:
 uv run --frozen python -c "import passage_eval; print(passage_eval.__version__)"
 # -> 1.0.0
 
-# Evaluator tests (needs the dev group)
-uv run --frozen pytest tests/passage_eval -q
+# Evaluator tests
+uv run --frozen --group dev pytest tests/passage_eval -q
 ```
 
 The walkthrough of the public API — scoring, paired bootstrap, three-seed

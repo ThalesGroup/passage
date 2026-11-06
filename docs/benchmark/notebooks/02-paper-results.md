@@ -1,11 +1,11 @@
 ---
-title: "Paper results"
+title: "Historical validation results"
 hide:
   - toc
 ---
 
-# Paper results
+# Historical validation results
 
-Reads the per-task results of the two paper finalists released under `src/passage-eval/results/paper-results/`. These are not leaderboard entries.
+Tabulates optional per-task exports from earlier 256×256 validation runs with older Seg and Reg baseline procedures. The source notebook uses its original labels. It does not reconstruct the [camera-ready paper results](../candidates.md) or populate the leaderboard.
 
-[Open the source notebook](https://github.com/ThalesGroup/passage/blob/main/notebooks/passage-eval/02_paper_results.ipynb)
+Source checkout: `notebooks/passage-eval/02_paper_results.ipynb`.

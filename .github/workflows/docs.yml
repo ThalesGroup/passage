@@ -23,8 +23,12 @@ on:
       - "mkdocs.yml"
       - "src/**"
       - ".github/workflows/docs.yml"
-  # Manual runs build an archive; Pages deployment requires a push to main.
   workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish to GitHub Pages after CI (main only; Pages must be enabled)
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -81,8 +85,9 @@ jobs:
 
       - name: Upload Pages artifact
         if: >-
-          github.event_name == 'push' && vars.DEPLOY_PAGES == 'true' &&
-          github.ref == 'refs/heads/main'
+          github.ref == 'refs/heads/main' && vars.DEPLOY_PAGES == 'true' &&
+          (github.event_name == 'push' ||
+           (github.event_name == 'workflow_dispatch' && inputs.publish == true))
         uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3.0.1
         with:
           path: ./site
@@ -90,25 +95,24 @@ jobs:
   publication_checks:
     name: Verify publication
     if: >-
-      github.event_name == 'push' && vars.DEPLOY_PAGES == 'true' &&
-      github.ref == 'refs/heads/main'
+      github.ref == 'refs/heads/main' && vars.DEPLOY_PAGES == 'true' &&
+      (github.event_name == 'push' ||
+       (github.event_name == 'workflow_dispatch' && inputs.publish == true))
     uses: ./.github/workflows/ci.yml
     permissions:
       contents: read
 
   # -----------------------------------------------------------------------
-  # Deploy — on push to main, once GitHub Pages is available.
-  # The organisation's plan offers no Pages site for a private repository.
-  # When the repository is public: enable Pages with "GitHub Actions" as the
-  # source, set the repository variable DEPLOY_PAGES to "true", and push a
-  # documentation-relevant change to main. Deployment waits for the site
-  # build and the CI checks.
+  # Deploy only from main, after the build and CI checks. Enable Pages with
+  # "GitHub Actions" as the source and set DEPLOY_PAGES to "true" when the
+  # repository is eligible. Manual runs default to an archive-only build.
   # -----------------------------------------------------------------------
   deploy:
     name: Deploy to GitHub Pages
     if: >-
-      github.event_name == 'push' && vars.DEPLOY_PAGES == 'true' &&
-      github.ref == 'refs/heads/main'
+      github.ref == 'refs/heads/main' && vars.DEPLOY_PAGES == 'true' &&
+      (github.event_name == 'push' ||
+       (github.event_name == 'workflow_dispatch' && inputs.publish == true))
     needs: [build, publication_checks]
     runs-on: ubuntu-latest
     permissions:
@@ -119,6 +123,9 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      - name: Require the main branch
+        run: test "$GITHUB_REF" = refs/heads/main
+
       - name: Configure Pages
         uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5.0.0
 
