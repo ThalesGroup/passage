@@ -2,7 +2,7 @@
 
 This folder describes optional artifacts from earlier 256×256 validation runs
 under the `elevation` objective. The camera-ready paper reports a separate
-[40,000-scene public test comparison](../../../../docs/benchmark/candidates.md)
+[40,000-scene public test comparison](https://thalesgroup.github.io/passage/benchmark/candidates/)
 with different decoded-route procedures. These historical exports do not
 reconstruct that comparison or populate the leaderboard.
 
