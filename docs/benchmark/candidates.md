@@ -37,6 +37,10 @@ host validation and scoring were separate. Neural rows average the three
 within-seed statistics (seeds 1234, 2026 and 3407); the requests were not
 pooled across seeds. Physical A* uses one session per target.
 
+The Tiger sessions used the performance power profile, checked before and
+after each run. Power settings were verified for only some Orin and Thor
+sessions.
+
 ## Complete 256×256 test results
 
 These are the measurements in Table 3 of the camera-ready paper. All requests
@@ -52,9 +56,9 @@ identify A* as the quality reference.
 | Jetson AGX Thor | A* | — | — | — | — | 1.000 | 0.000 | 16.153 | 35.448 | 44.084 |
 | Jetson AGX Thor | Seg | 0.01889 | 0.07127 | 0.03266 | 12.562 | 1.000 | 0.000 | 5.102 | 8.921 | 12.865 |
 | Jetson AGX Thor | Reg | 0.07897 | 0.23432 | 0.06599 | 20.822 | 1.000 | 0.000 | 5.834 | 14.374 | 20.721 |
-| Intel Tiger Lake-LP | A* | — | — | — | — | 1.000 | 0.000 | 12.142 | 26.162 | 29.446 |
-| Intel Tiger Lake-LP | Seg | 0.01895 | 0.07140 | 0.03274 | 12.583 | 1.000 | 0.000 | 24.361 | 26.085 | 27.638 |
-| Intel Tiger Lake-LP | Reg | 0.08978 | 0.25101 | 0.06716 | 21.478 | 1.000 | 0.000 | 13.950 | 19.089 | 21.145 |
+| Intel Tiger Lake-LP | A* | — | — | — | — | 1.000 | 0.000 | 12.503 | 27.061 | 30.843 |
+| Intel Tiger Lake-LP | Seg | 0.01895 | 0.07140 | 0.03274 | 12.583 | 1.000 | 0.000 | 24.442 | 26.211 | 27.843 |
+| Intel Tiger Lake-LP | Reg | 0.08978 | 0.25101 | 0.06716 | 21.478 | 1.000 | 0.000 | 13.894 | 19.044 | 21.095 |
 
 Seg and Reg both had lower median latency than CPU A* on Orin and Thor.
 CPU A* had the lowest median on Tiger. Seg had lower observed median and
