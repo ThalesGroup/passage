@@ -18,8 +18,8 @@ The companion model-side workspace lives at
 regression, and edge-inference baseline evidence. The submitted reference is
 [`../../paper/tmp/875_PASSAGE_A_Real_Terrain_Ben.pdf`](../../paper/tmp/875_PASSAGE_A_Real_Terrain_Ben.pdf).
 It differs from the older local `../../paper/neurips/main.pdf` and manuscript
-sources. See [the alignment record](../docs/benchmark/protocol.md#1-reference-paper-and-alignment)
-for the reference checksum and substantive differences. The editable manuscript
+sources. See the [evaluation protocol](https://thalesgroup.github.io/passage/benchmark/protocol/#1-reference-paper-and-evaluation)
+for the benchmark reference and scoring contract. The editable manuscript
 lives at [`../../paper/neurips/main.tex`](../../paper/neurips/main.tex).
 
 ## Directory Layout

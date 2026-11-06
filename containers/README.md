@@ -12,7 +12,7 @@ included in these recipes.
 CPU evaluation does not require an accelerator SDK. CUDA and TensorRT are
 optional, separately obtained and configured by the operator for NVIDIA
 targets; Tiger edge execution needs a separately obtained OpenVINO runtime.
-See the [evaluation guide](../docs/benchmark/contributing-a-method.md) for a
+See the [evaluation guide](https://thalesgroup.github.io/passage/benchmark/contributing-a-method/) for a
 local CPU example. Building an image does not qualify a run or create a
 leaderboard result, and no image needs to be published to use the Space.
 
