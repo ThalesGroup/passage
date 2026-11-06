@@ -32,8 +32,8 @@ The blob has **no NumPy `.npy` header**, so `np.load` cannot read it. Decode it 
 import numpy as np
 import zstandard
 
-# Encoding (what passage.utils.encode_tensor_blob does)
-blob = zstandard.ZstdCompressor(level=12).compress(np.ascontiguousarray(tensor).tobytes())
+# Encoding (ensure the expected dtype before compressing the raw bytes)
+blob = zstandard.ZstdCompressor(level=12).compress(np.ascontiguousarray(tensor, dtype="<f4").tobytes())
 
 # Decoding
 x = np.frombuffer(zstandard.ZstdDecompressor().decompress(blob), dtype="<f4").reshape(R, R, 3)
@@ -104,18 +104,23 @@ solvers:
 paths:
   astar_elevation:
     free:
-      status: <ok | infeasible>  # ok for every released variant
+      status: ok                 # every released variant
       cost: <float or null>
       length: <int>              # number of cells in the route
       expansions: <int>          # cells expanded by the reference search
       considered_area: <int>
-      reference_status: <exact | no_path>  # exact for every released variant
+      reference_status: exact   # every released variant
       graph_id: <sha256>
       crosses_obstacles: false
     obstacles: {…}               # same keys, obstacles blocked
   astar_energy: {…}
   astar_slope: {…}
 ```
+
+For a custom run with a search budget, a censored solve records
+`status: failed` and `reference_status: censored`. The v1.0 generator
+sets `crosses_obstacles` to false for both variants; to determine whether a
+free-terrain route passes through the mask, check the tensor at its cells.
 
 A **source window** records the tile (`lat`, `lon`, file `name`, `sha256`), the rows and columns read from it, and where they go in the crop.
 
@@ -191,7 +196,7 @@ With the shipped configuration, `passage generate` writes one directory per reso
         ├── tensors/<lat>/<lon>/<index>.npy.zst
         ├── metadata/<lat>/<lon>/<index>.yaml
         ├── paths/<solver>/<free|obstacles>/<lat>/<lon>/<index>.csv
-        └── receipts/<index>.json          # written last; marks the scene as complete
+        └── receipts/<index>.json          # written last; records the scene outcome
 ```
 
 | File | Description |

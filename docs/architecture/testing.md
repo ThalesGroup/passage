@@ -4,7 +4,9 @@ title: Testing Strategy
 
 # Testing Strategy
 
-PASSAGE has **65 test files**: 44 in `tests/` for the `passage` package and 21 in `tests/passage_eval/` for the evaluator. Together they run **865 tests**. Coverage is measured on both packages, with a gate at **80 %**. The tests cover unit logic, integration workflows, CLI behavior and edge cases.
+The PASSAGE test suite covers the generator, evaluator, command-line workflows
+and their failure cases. Coverage is measured across both packages with an
+80 % minimum.
 
 ---
 
@@ -18,10 +20,10 @@ Shared fixtures live in `tests/conftest.py` and `tests/passage_eval/conftest.py`
 | Configuration | `test_config.py`, `test_num_samples_per_resolution.py` |
 | Download | `test_download.py`, `test_download_extract.py`, `test_download_integrity.py`, `test_download_tile.py` |
 | Calibration | `test_calibrate.py`, `test_calibrate_integration.py`, `test_calibrate_no_overwrite.py`, `test_calibrate_provenance.py` |
-| Generation | `test_generate.py`, `test_generate_costmodels.py`, `test_generate_helpers.py`, `test_large_resolution.py`, `test_no_images.py`, and one file for the release generator |
+| Generation | `test_generate.py`, `test_generate_costmodels.py`, `test_generate_helpers.py`, `test_large_resolution.py`, `test_no_images.py`, `test_successor_generation.py` |
 | Obstacles | `test_obstacles.py`, `test_obstacle_generation.py`, `test_obstacles_distribution.py` |
 | Solvers | `test_pathfinding_utils.py`, `test_reference.py` |
-| Export and publication | `test_export_keep_configs.py`, `test_export_retries.py`, `test_prepare_hf.py`, `test_prepare_images_parquet.py`, `test_prepare_notebook_retry.py`, and two files for the release export and its publication metadata |
+| Export and publication | `test_export_keep_configs.py`, `test_export_retries.py`, `test_prepare_hf.py`, `test_prepare_images_parquet.py`, `test_prepare_notebook_retry.py`, `test_successor_export.py`, `test_successor_publication.py` |
 | Full rebuild | `test_regenerate.py` |
 | Dataset access, audit and qualification | `test_dataset_source.py`, `test_audit.py`, `test_authentication.py`, `test_qualification.py`, `test_qualification_runner.py`, `test_qualification_reports.py` |
 | Notebooks | `test_execute_notebook_uv_run.py`, `test_notebook_export.py`, `test_notebook_reports.py`, `test_notebook_templates.py` |
@@ -167,7 +169,7 @@ uv run pre-commit run --all-files
 
 ## CI Integration
 
-Tests run on GitHub Actions for every push and pull request to `main`. See the [CI workflow](https://github.com/ThalesGroup/passage/blob/main/.github/workflows/ci.yml) for details.
+Tests run on GitHub Actions for pushes and pull requests to `main` or `develop`. See `.github/workflows/ci.yml` in the source checkout for details.
 
 The CI pipeline:
 

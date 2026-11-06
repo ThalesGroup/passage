@@ -44,8 +44,8 @@ passage compress --resolution 256
 
 # Compress a dataset tree stored under another root
 passage compress \
-  --dataset-dirpath <root>/dataset \
-  --calibrate-dirpath <root>/calibrate \
+  --dataset-dirpath outputs/my_run/dataset \
+  --calibrate-dirpath outputs/my_run/calibrate \
   --resolution 256
 ```
 
@@ -85,23 +85,25 @@ and valid:
 
 An executed notebook is reused only when its inputs, source and configuration
 match the recorded ones. The `--force-*` flags redo one step; `--force` redoes
-them all.
+them all. Replace `your-account/your-dataset` with the repository ID you plan
+to use for publication.
 
 ```bash
-# Refresh every prepared resolution
-passage export
+# Refresh every prepared resolution for your destination repository
+passage export --repo-id your-account/your-dataset
 
 # Refresh one prepared resolution
-passage export --resolution 256
+passage export --repo-id your-account/your-dataset --resolution 256
 
 # Refresh an export tree stored under another root
 passage export \
-  --dataset-dirpath <root>/dataset \
-  --calibrate-dirpath <root>/calibrate \
+  --repo-id your-account/your-dataset \
+  --dataset-dirpath outputs/my_run/dataset \
+  --calibrate-dirpath outputs/my_run/calibrate \
   --resolution 256
 
 # Execute the per-resolution notebooks again
-passage export --resolution 256 --force-notebooks
+passage export --repo-id your-account/your-dataset --resolution 256 --force-notebooks
 ```
 
 Key flags for `export`:
@@ -135,22 +137,25 @@ If the selected `<resolution>x<resolution>` or `<resolution>x<resolution>_sample
 `upload` publishes the prepared export tree with the Hugging Face
 `upload_large_folder` method. It makes up to three attempts when the network
 times out.
-It reads `HF_TOKEN` from `.env.secret` after optionally loading `.env` (both
-at the repository root by default).
+Set `HF_TOKEN` in the environment or in `.env.secret`; see
+[Hugging Face credentials](installation.md#configure-hugging-face-credentials).
+The command loads `.env` first and then `.env.secret`, if present.
 
-By default, `upload` targets `thalesgroup/passage`. To publish your own build,
-always pass `--repo-id`.
+By default, `upload` targets `thalesgroup/passage`. For your own build,
+pass the same `--repo-id` to `export` and `upload` so the card and notebooks
+reference the destination. In the examples, replace
+`your-account/your-dataset` with your repository ID.
 
 ```bash
 # Upload the prepared export tree to your dataset repository
-passage upload --repo-id <user>/<dataset>
+passage upload --repo-id your-account/your-dataset
 
 # Upload one prepared resolution: its two configurations, plus the root files,
 # assets, calibration and notebooks
-passage upload --repo-id <user>/<dataset> --resolution 256
+passage upload --repo-id your-account/your-dataset --resolution 256
 
 # Use other credential files
-passage upload --repo-id <user>/<dataset> --env-path .env --secret-path .env.secret
+passage upload --repo-id your-account/your-dataset --env-path .env --secret-path .env.secret
 ```
 
 Key flags for `upload`:
@@ -245,17 +250,19 @@ passage regenerate
 # Print the plan (scene counts, batches, storage checks) as JSON; writes nothing
 passage regenerate --dry-run
 
-# One scene per resolution, recorded as a separate pilot, for a quick check
-passage regenerate --pilot 1
+# One scene per resolution, written to separate pilot paths
+passage regenerate --pilot 1 \
+  --dataset-dirpath outputs/pilot/dataset \
+  --scratch-dirpath outputs/pilot/scratch
 ```
 
 Raw scenes go to the scratch folder, and the final tree goes to the dataset
 folder: Parquet configurations, executed notebooks and `release-receipts/`.
 After an interruption, run the same command again: it resumes from
 `release-receipts/regeneration-journal.json`. At the end,
-`release-receipts/ready-upload.json` reports the run status. Publish the
-result separately with
-`passage upload --export-dirpath outputs/release/dataset --repo-id <user>/<dataset>`.
+`release-receipts/ready-upload.json` reports the run status. For the full run,
+review the tree once the status is `ready_for_review_and_upload`. Upload it
+separately using `outputs/release/dataset` as `--export-dirpath`.
 
 | Flag | Default | Description |
 |------|---------|-------------|
@@ -289,9 +296,9 @@ separate folder. It runs three phases, which can also run one at a time with
 
 ```bash
 passage qualify \
-  --dataset-path <root>/passage-snapshot \
+  --dataset-path outputs/passage-snapshot \
   --dataset-revision c09cc5a21a55a93e7c09d47368d5f5bf75cb8fae \
-  --output <root>/qualification
+  --output outputs/qualification
 ```
 
 | Flag | Default | Description |
@@ -335,4 +342,4 @@ for row in core.take(4):
 ```
 
 !!! success "Release ready"
-    Once `compress`, `export`, and `upload` have all run successfully, the PASSAGE export tree is ready for distribution.
+    `compress` and `export` prepare the tree for review. `upload` publishes the reviewed tree.

@@ -5,7 +5,9 @@ icon: material/shield-check
 
 # Project Policies
 
-This page shows the project's security policy, contribution guide, code of conduct and notice. Each is read from its file at the root of the repository, so only one copy exists.
+Find the project's security reporting instructions, contribution guide, code of
+conduct and attribution notice below. For the terms that apply to the data,
+see the [dataset licence and attribution](../dataset/index.md#licence-and-attribution).
 
 ---
 

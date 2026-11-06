@@ -62,6 +62,7 @@ generator rejects start and goal cells that the obstacles disconnect.
       members:
         - solve_reference
         - endpoints_connected
+        - reverse_goal_field
         - recost_legal_path
 
 ---
@@ -82,7 +83,7 @@ generator rejects start and goal cells that the obstacles disconnect.
 
 ### `passage.pathfinding_utils` — Solvers & Graphs
 
-Explicit-graph helpers for the generator's optional solver backends
+Graph and collision helpers for the generator's optional solver backends
 (`networkx`, `pathfinding` and `grid`), which the v1.0 release does not use.
 
 ::: passage.pathfinding_utils

@@ -8,15 +8,21 @@ icon: material/gate
 
 ## 1. Executive summary
 
-The 256 test pass may open the test split only after the protocol is sealed, the native chain is qualified on
-validation, every edge target is integrated under a real lease, the population and the references are sealed, the
-warm-up and latency rules are tested, and the candidate identities are verified. Before this gate existed, those
-conditions lived in separate notes, and the harness refused the test split only through scattered path checks.
+This page is a developer reference for the guarded harness and its pinned
+admission records. Its historical roster S covers 1,024 scenes selected from
+the 256×256 test split. The [paper results](candidates.md) describe a separate
+40,000-scene comparison on the full split. A recorded gate outcome establishes
+whether a specific guarded run may proceed; paper measurements and leaderboard
+admission are separate.
+
+Before a guarded test pass, the harness checks the sealed protocol, validation
+rehearsal, declared edge targets and leases, population and references,
+warm-up and latency rules, and candidate identities.
 
 This page describes the gate that makes the conditions checkable. A *record* lists the sealed decisions, the pinned
 harness, the candidate identities and the evidence files. The verifier `passage_eval.protocol.admission` evaluates six
 gates, G1 to G6, and returns `GREEN` or `RED` per gate with machine-readable reasons; it never raises for a `RED`
-gate. Every tool that loads or scores a test roster accepts the test split only with an explicit `allow_test` and a
+gate. The guarded roster tools accept the test split only with explicit test permission and a
 record whose six gates are `GREEN` (section 5).
 
 Section 2 lists the gates, section 3 the record and section 4 the evidence files. Section 5 gives the command and the
@@ -145,8 +151,8 @@ name the same file with an absolute `replica_catalog: {path, sha256}`; an admitt
 from its sealed record. Input packages contain only the selected checkpoint identity and seed, without the host
 catalogue. These pins identify weights; they do not establish target execution or qualification. The 2026 manifest
 and decoder remain frozen; its checkpoint cannot be relabelled as another seed. This descriptive mode does not establish
-the strict reproducible entry required by Rule 8. A future 40,000-scene objective is not authorisation to prepare, read
-or evaluate the rest of the test split.
+the strict reproducible entry required by Rule 8. A grant for this profile covers only its 1,024 selected scenes. It does
+not authorize preparation or execution over the full split.
 
 ### 1.C. Direct measurement toward a Rule 8 entry
 
@@ -388,7 +394,7 @@ Historical records whose host-verifier binding was created against the earlier v
   installed from a wheel, or a checkout with uncommitted changes under the harness paths, is `RED`.
 - **One frozen checkpoint per candidate.** `final-candidates.json` freezes one checkpoint per candidate, trained with
   seed 2026. A campaign plan with Seg or Reg runs only that seed; a confirmatory multi-seed campaign needs a frozen
-  checkpoint per seed, which the protocol author has not frozen.
+  checkpoint per seed. The direct profiles can pin the separate replica catalogue described in sections 1.B and 1.C.
 - **Not decided here.** Every value of section 7 belongs to the protocol author; the template seals nothing.
 
 ## 7. Draft sealing record for protocol 256
@@ -421,7 +427,7 @@ transport gates P1 and P2).
 | `reference_exclusion_caps` | {max_total_fraction, max_block_fraction, min_block_exclusions} of the reference inventory (judge R1) |
 | `block_analysis` | {rule, block_degrees, missing_footprint, min_blocks, max_block_share, max_unplaced_fraction}: block rule and adequacy criterion sealed before the label-free census (judge R5, tightening 1) |
 | `censoring_rule` | latency censoring rule {id} used for percentiles (decision 4, D3) |
-| `min_warm_requests` | minimum warm requests of a latency row (manuscript: 100) |
+| `min_warm_requests` | minimum warm requests of a latency row under this harness |
 | `cold_start_policy` | what is reported of the cold start (decision 5) |
 | `restart_and_failed_warmup_policy` | treatment of a restart and of a failed warm-up (decision 6, D2, D8) |
 | `paired_order` | {granularity, procedures, schedule_seed} of the paired order (decision 7) |
@@ -623,7 +629,7 @@ transport gates P1 and P2).
         "value": null
       },
       "min_warm_requests": {
-        "note": "minimum warm requests of a latency row (manuscript: 100)",
+        "note": "minimum warm requests of a latency row under this harness",
         "status": "required",
         "value": null
       },

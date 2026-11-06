@@ -9,15 +9,15 @@
 </p>
 
 <p align="center">
-  <a href="#citation"><img src="https://img.shields.io/badge/NeurIPS%202026-Evaluations%20%26%20Datasets-6f42c1" alt="NeurIPS 2026, Track on Evaluations and Datasets"></a>
-  <a href="https://huggingface.co/datasets/thalesgroup/passage"><img src="https://img.shields.io/badge/dataset-v1.0-yellow" alt="Hugging Face dataset, version 1.0"></a>
-  <a href="https://www.python.org/"><img src="https://img.shields.io/badge/python-%E2%89%A53.11-3776AB?logo=python&logoColor=white" alt="Python 3.11 or later"></a>
-  <a href="DATASET_LICENSE.md"><img src="https://img.shields.io/badge/dataset%20terms-AW3D30%20%2B%20MIT%20code-orange?logo=opensourceinitiative&logoColor=white" alt="Dataset terms: AW3D30 data, MIT code"></a>
+  <a href="#citation">NeurIPS 2026: Evaluations and Datasets</a> •
+  <a href="https://huggingface.co/datasets/thalesgroup/passage">Dataset v1.0</a> •
+  <a href="https://www.python.org/">Python 3.11+</a> •
+  <a href="DATASET_LICENSE.md">AW3D30 data terms</a> •
+  <a href="LICENSE">MIT code licence</a>
 </p>
 
 <p align="center">
   <a href="docs/index.md">Documentation</a> •
-  <a href="https://huggingface.co/datasets/thalesgroup/passage">Dataset</a> •
   <a href="https://huggingface.co/datasets/thalesgroup/passage/viewer">Viewer</a> •
   <a href="#harness-an-existing-algorithm">Evaluate</a> •
   <a href="#citation">Cite</a>

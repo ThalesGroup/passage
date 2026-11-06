@@ -43,11 +43,12 @@ planner mode, a pinned interpreter environment, no tree-hash cache and no ONNX R
 message counts (N3); `--dev-bind` accepts character-device nodes only (N4); staged copies are re-checked by stat
 signature as well as by content, and workers do not load bytecode that lies beside the sources (N5).
 
-Version 0.4 aligns the chain with the manuscript's timing rule and with the proposed protocol for the 256
-evaluation. A run can choose a *timing profile* (section 5.G). The default stays the v3 boundary, in which the
+Version 0.4 adds timing profiles that can separate validation and recosting
+from supervised service time (section 5.G). Supervised profiles include IPC;
+the [paper results](candidates.md) use a direct raw-arrays-to-path measurement
+without this supervised IPC boundary. The default stays the v3 boundary, in which the
 supervisor's validation and physical recost count against the candidate. `supervised_service_v1` (boundary v4)
-compares and scores the service time alone and records the validation and recost separately, as the manuscript
-requires. `supervised_service_rewarm_v1` (boundary v5) adds a re-warm after every mid-pass restart, outside the
+compares and scores the supervised service time and records validation and recosting separately. `supervised_service_rewarm_v1` (boundary v5) adds a re-warm after every mid-pass restart, outside the
 boundary (section 5.H). Every bound on a request is now part of the procedure identity (section 6.I). A helper
 bounds the worst-case wall time of a batch against a lease (section 6.J). `compare` refuses runs with different
 timing profiles and offers a strict mode for identical limits. The scorer adds censoring-aware latency quantiles

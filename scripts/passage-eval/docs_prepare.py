@@ -24,6 +24,7 @@ class NotebookSpec:
     title: str
     intro: str
     nav_label: str
+    published_in_dataset: bool = False
 
     @property
     def slug(self) -> str:
@@ -44,6 +45,7 @@ BENCHMARK_NOTEBOOKS: Sequence[NotebookSpec] = (
         section="benchmark",
         title="Evaluating a planner, step by step",
         nav_label="Evaluator walkthrough",
+        published_in_dataset=True,
         intro=(
             "Writes a planner in a few lines, scores it next to the exact A* "
             "planner on one released task, reads each of the six primary "
@@ -56,12 +58,14 @@ BENCHMARK_NOTEBOOKS: Sequence[NotebookSpec] = (
         stem="02_paper_results",
         source=REPO_ROOT / "notebooks" / "passage-eval" / "02_paper_results.ipynb",
         section="benchmark",
-        title="Paper results",
-        nav_label="Paper results",
+        title="Historical validation results",
+        nav_label="Historical validation results",
         intro=(
-            "Reads the per-task results of the two paper finalists released "
-            "under `src/passage-eval/results/paper-results/`. "
-            "These are not leaderboard entries."
+            "Tabulates optional per-task exports from earlier 256×256 validation "
+            "runs with older Seg and Reg baseline procedures. The source "
+            "notebook uses its original labels. It does not reconstruct the "
+            "[camera-ready paper results](../candidates.md) or populate the "
+            "leaderboard."
         ),
     ),
     NotebookSpec(
@@ -70,6 +74,7 @@ BENCHMARK_NOTEBOOKS: Sequence[NotebookSpec] = (
         section="benchmark",
         title="Classical baselines on the validation split",
         nav_label="Classical baselines",
+        published_in_dataset=True,
         intro=(
             "Scores the three classical planners shipped with `passage-eval` "
             "(exact A*, greedy, random walk) on 64 validation tasks for each "
@@ -84,6 +89,7 @@ BENCHMARK_NOTEBOOKS: Sequence[NotebookSpec] = (
         section="benchmark",
         title="Recording results in the passage-eval format",
         nav_label="Results format",
+        published_in_dataset=True,
         intro=(
             "Scores two classical planners, records them as `Submission` "
             "records in a temporary results folder and reads the table back: "
@@ -167,7 +173,14 @@ ALL_NOTEBOOKS = (*BENCHMARK_NOTEBOOKS, *GENERATION_NOTEBOOKS)
 
 def _wrapper_md(spec: NotebookSpec) -> str:
     rel_source = spec.source.relative_to(REPO_ROOT).as_posix()
-    source_url = f"https://github.com/ThalesGroup/passage/blob/main/{rel_source}"
+    if spec.published_in_dataset:
+        source_url = f"https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/{rel_source}"
+        source_note = f"[Open the released notebook]({source_url})"
+    elif spec.section == "benchmark":
+        source_note = f"Source checkout: `{rel_source}`."
+    else:
+        source_url = f"https://github.com/ThalesGroup/passage/blob/main/{rel_source}"
+        source_note = f"[Open the source notebook]({source_url})"
     return f"""---
 title: "{spec.title}"
 hide:
@@ -178,7 +191,7 @@ hide:
 
 {spec.intro}
 
-[Open the source notebook]({source_url})
+{source_note}
 """
 
 
@@ -197,7 +210,7 @@ def _index_md(specs: Sequence[NotebookSpec], section: str) -> str:
     title = "Benchmark notebooks" if section == "benchmark" else "Dataset / solver notebooks"
     summary = (
         "Four notebooks cover the `passage-eval` side: an evaluator "
-        "walkthrough, the paper results, the classical baselines and the "
+        "walkthrough, historical validation results, classical baselines and the "
         "results format. Open each notebook source to view or run it locally."
         if section == "benchmark"
         else
