@@ -7,6 +7,8 @@ licenses and notices are separate from the PASSAGE code and dataset terms.
   build the site. Copyright 2016–2025 Martin Donath; [MIT license](third-party/material-for-mkdocs.txt).
 - [GLightbox](https://github.com/biati-digital/glightbox) is included in the
   site assets. Copyright 2018 Biati Digital; [MIT license](third-party/glightbox.txt).
+- The site includes CSS from [mkdocstrings-python 2.0.3](https://github.com/mkdocstrings/python/tree/2.0.3).
+  Copyright 2021 Timothée Mazzucotelli. [ISC license](third-party/mkdocstrings-python-2.0.3.txt).
 - [Font Awesome Free](https://fontawesome.com/) icons by Fonticons, Inc. are
   included in site pages. The SVG icons are licensed under
   [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/); see the
@@ -17,6 +19,8 @@ licenses and notices are separate from the PASSAGE code and dataset terms.
   the [Apache 2.0 license](third-party/apache-2.0.txt).
 - [Simple Icons](https://simpleicons.org/) icons are included in site pages;
   see their [CC0 license](third-party/simple-icons.txt).
+- The arrow icon in site links comes from [GitHub Octicons](https://github.com/primer/octicons).
+  Copyright 2025 GitHub Inc. [MIT license](third-party/octicons.txt).
 
 Material for MkDocs also bundles the following third-party components:
 
@@ -45,10 +49,19 @@ delegate 3.2.0, attributed to Zeno Rocha and identified as MIT in their
 upstream READMEs. Their npm distributions do not include separate license
 files; those READMEs link to [Zeno Rocha’s MIT notice](third-party/zeno-rocha-mit-license.txt).
 
-The site also loads KaTeX from unpkg and fonts from Google Fonts. These are
-served by those providers rather than included as local site files. The
-Material for MkDocs bundles can include further third-party components; this
-page does not claim to be a complete software bill of materials.
+## Externally hosted assets
+
+- KaTeX 0.16.11 is served by unpkg. Material can also load Mermaid 11 and
+  a ResizeObserver polyfill from unpkg on demand.
+- Inter, JetBrains Mono, and Outfit are served by Google Fonts.
+- [Twemoji 16.0.1 graphics](https://github.com/jdecked/twemoji/tree/v16.0.1)
+  from the Twemoji contributors are served by jsDelivr.
+  [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+- The dataset preview image is served by Hugging Face. GLightbox can load
+  Plyr from `cdn.plyr.io` for supported video links.
+
+These resources are served by their providers. This page covers the listed
+site components and is not a complete software bill of materials.
 
 For PASSAGE itself, see the [code license](https://github.com/ThalesGroup/passage/blob/main/LICENSE)
 and [dataset terms](../dataset/index.md#licence-and-attribution).
