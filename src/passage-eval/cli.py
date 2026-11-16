@@ -924,6 +924,8 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--version", action="version", version=__version__)
     sub = parser.add_subparsers(dest="cmd", required=True)
+    candidate = sub.add_parser("candidate", help="freeze, validate or register a complete candidate package")
+    candidate.add_argument("candidate_args", nargs=argparse.REMAINDER)
 
     p_bench = sub.add_parser("bench", help="score a candidate planner end-to-end")
     p_bench.add_argument(
@@ -1039,6 +1041,13 @@ def _spec_from_args(args: argparse.Namespace) -> BenchSpec:
 
 
 def main(argv: list[str] | None = None) -> int:
+    import sys
+
+    argv = list(sys.argv[1:] if argv is None else argv)
+    if argv and argv[0] == "candidate":
+        from passage_eval.candidates.cli import main as candidate_main
+
+        return candidate_main(argv[1:])
     parser = _build_parser()
     args = parser.parse_args(argv)
     if args.cmd in {"conform", "run"}:

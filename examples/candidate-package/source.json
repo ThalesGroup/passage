@@ -1,0 +1,34 @@
+{
+  "schema": "passage-candidate-package/v1",
+  "candidate_id": "example-bfs",
+  "version": "0.1.0",
+  "family": "classical",
+  "entrypoint": "mini_planner:MiniPlanner",
+  "kwargs": {},
+  "python": "3.12",
+  "backends": ["cpu"],
+  "seed": null,
+  "dataset": {
+    "id": "thalesgroup/passage",
+    "revision": "20c53ae66531d8fd1142c7c467ac9d9aa41cd81b",
+    "config": "256x256",
+    "cost_model": "elevation",
+    "cost_weight": 62.4
+  },
+  "budget": {"wall_time_ms": 1000, "max_expansions": 65536},
+  "precision": "integer-search",
+  "training": {
+    "split": "none",
+    "test_usage": "No training or tuning data used by this example; no learned parameters.",
+    "procedure": "Unweighted eight-neighbour breadth-first search, destination-only obstacles; not an elevation-cost optimum."
+  },
+  "license": "MIT",
+  "image": {"recipe": "Containerfile", "reference": null},
+  "artifacts": [
+    {"path": "mini_planner.py", "sha256": null, "role": "code"},
+    {"path": "pyproject.toml", "sha256": null, "role": "config"},
+    {"path": "uv.lock", "sha256": null, "role": "lock"},
+    {"path": "Containerfile", "sha256": null, "role": "recipe"},
+    {"path": "LICENSE", "sha256": null, "role": "notice"}
+  ]
+}

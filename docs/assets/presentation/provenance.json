@@ -1,0 +1,64 @@
+{
+  "schema": "passage-presentation-assets/v1",
+  "source_bundle_id": "neurips-20261114-poster-v9-talk-v17-final",
+  "source_delivery_date": "2026-11-14",
+  "source_versions": {
+    "talk": "v17 final",
+    "poster": "v9 final"
+  },
+  "artifacts": [
+    {
+      "file": "dataset.png",
+      "source": "talk/slides_png/slide_03.png",
+      "source_version": "talk v17, slide 3",
+      "bytes": 356418,
+      "sha256": "73a934313bb7feffa2c9268a34718bd388ac95be8d1d06b4a9614d6eb40dce39",
+      "copy_method": "byte-for-byte copy; no image or PDF transformation"
+    },
+    {
+      "file": "evaluation.png",
+      "source": "talk/slides_png/slide_05.png",
+      "source_version": "talk v17, slide 5",
+      "bytes": 139563,
+      "sha256": "d1e3ba765972ff46686a608f8f9ab20c191d4ce023273e18e66aab899a2c1256",
+      "copy_method": "byte-for-byte copy; no image or PDF transformation"
+    },
+    {
+      "file": "candidates.png",
+      "source": "talk/slides_png/slide_06.png",
+      "source_version": "talk v17, slide 6",
+      "bytes": 358531,
+      "sha256": "eddccfd43fb0e89a2f9c12bbb09624d15f89154bcc8c0c21beb91ee229b13379",
+      "copy_method": "byte-for-byte copy; no image or PDF transformation"
+    },
+    {
+      "file": "passage_talk_v17_final.pdf",
+      "source": "passage_talk_v17_final.pdf",
+      "source_version": "final talk v17",
+      "bytes": 2035121,
+      "sha256": "0d8a9553043c05490edd413cfd77697c33a594ab7b49e71c96d4dacde8a8c7cf",
+      "copy_method": "byte-for-byte copy; no image or PDF transformation"
+    },
+    {
+      "file": "passage_poster_v9_final.pdf",
+      "source": "passage_poster_v9_final.pdf",
+      "source_version": "final poster v9",
+      "bytes": 1506882,
+      "sha256": "df32beb30efacb0bc6adc58d8728009b9063f69ec50fc1398978a091a23dc9ac",
+      "copy_method": "byte-for-byte copy; no image or PDF transformation"
+    }
+  ],
+  "qualitative_example": {
+    "source": "media/manifest.json, scene",
+    "source_sha256": "98979aecd6f912d11e082c5d1e251e65695280748188cf4164765142c9aa29cb",
+    "sample_id": "0000001971",
+    "split": "train",
+    "resolution": 256,
+    "seed": 2026,
+    "scope": "Qualitative TRAIN256 example; per-scene elevation costs, not aggregate TEST results.",
+    "displayed_excess_cost_percent": {
+      "seg": 2.5,
+      "reg": 16.2
+    }
+  }
+}

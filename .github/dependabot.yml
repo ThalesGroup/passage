@@ -1,0 +1,26 @@
+# MIT License
+#
+# Copyright (c) 2026 THALES
+
+version: 2
+
+# Weekly version updates target the normal integration branch. GitHub security
+# update PRs still target the default branch. This publication mirror cannot
+# update the GitLab source automatically: port fixes to a source MR before the
+# next publication sync, following CONTRIBUTING.md.
+updates:
+  - package-ecosystem: uv
+    directory: "/"
+    target-branch: develop
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    target-branch: develop
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5

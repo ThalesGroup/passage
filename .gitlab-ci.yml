@@ -8,6 +8,10 @@ stages:
   - test
   - deploy
 
+variables:
+  # Keep source/runtime identities stable after a supervised test seals them.
+  PYTHONDONTWRITEBYTECODE: "1"
+
 default:
   image: python:3.12
   before_script:
@@ -19,6 +23,20 @@ lint:
     - uv sync --locked --group dev
     - uv run --locked ruff check src/ tests/
     - uv run --locked ruff format --check src/ tests/
+
+dependency-audit:
+  stage: test
+  variables:
+    UV_PYTHON: "3.12"
+  # Audit all groups/extras for the default Linux/Python 3.12 environment,
+  # without installing project dependencies or optional torch/CUDA packages.
+  script:
+    - uv export --locked --all-groups --all-extras --no-emit-project > requirements-audit.txt
+    - >-
+      uvx --from 'pip-audit==2.10.1' pip-audit
+      --requirement requirements-audit.txt
+      --disable-pip --require-hashes --strict
+      --vulnerability-service pypi --progress-spinner off
 
 test:
   stage: test

@@ -64,7 +64,7 @@ resumable batches (see [Steps 4-6 — Release](export.md#all-in-one-passage-rege
 
 ## Prerequisites
 
-- **Python 3.11+** on Linux
+- **Python 3.11.5+** on Linux
 - **`uv`** package manager (recommended) or `pip`
 - About 463 GB of disk for the 23,993 AW3D30 DSM tiles of the release, plus room for the generated scenes
 - The [release hold-out mask](configuration.md#hold-out-region) before generation

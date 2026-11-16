@@ -95,6 +95,13 @@ Contributor rules with Gitflow:
 - Use `hotfix/<name>` only for urgent production fixes validated by maintainers.
 - Keep your branch synchronized with `develop` while your pull request is open.
 
+Maintainers integrate changes, including fixes proposed by Dependabot, in the
+authoritative GitLab project first. Publish the reviewed source through the
+sanitized `official` export: GitLab `official` and GitHub `develop` must identify
+the same commit. Merge GitHub `develop` into `main` after the required checks.
+Keep private source history out of the public export and preserve dataset,
+checkpoint and measurement identities during synchronization.
+
 ## Pull Request Checklist
 
 Before requesting review, verify all items below.
