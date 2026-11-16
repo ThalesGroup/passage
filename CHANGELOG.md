@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Refresh the ImageIO, Loguru, Plotly, Pymdown Extensions and python-dotenv
+  dependencies. Update Mkdocstrings alongside Pymdown Extensions to preserve
+  documentation highlighting, and remove an unsupported Hugging Face Hub extra.
+- Update the pinned GitHub Actions, preserving cache pruning and Pages hidden
+  files. Group weekly dependency proposals by ecosystem for consolidated review.
+
 ## 1.0.0 — first official code release
 
 The code version is 1.0.0; the dataset retains its separate v1.0 identity.
