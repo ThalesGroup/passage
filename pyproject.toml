@@ -15,7 +15,7 @@ build-backend = "setuptools.build_meta"
 dev = [
   "ipykernel>=7.1.0",
   "nbclient>=0.10.4",
-  "plotly>=5.20.0",
+  "plotly>=7.1.0",
   "pre-commit>=4.5.1",
   "pytest>=9.0.3",
   "pytest-cov>=6.0.0",
@@ -37,7 +37,7 @@ docs = [
   "ipykernel>=7.0.0",
   "jupyter_client>=8.0.0",
   # Interactive HTML leaderboard charts embedded in docs/index.md.
-  "plotly>=5.20.0",
+  "plotly>=7.1.0",
 ]
 
 [project]
