@@ -12,7 +12,7 @@ This page covers how to set up PASSAGE on your machine, install dependencies, an
 
 | Requirement | Details |
 |-------------|---------|
-| Python | 3.11 or later; the repository pins 3.12 in `.python-version`, and the tests run on 3.11 and 3.12 |
+| Python | 3.11.5 or later; the repository pins 3.12 in `.python-version`, and the tests run on 3.11 and 3.12 |
 | Operating system | Linux. The calibration and release tools use POSIX file locks (`fcntl`), so Windows is not supported |
 | Disk space | About 463 GB for the 23,993 AW3D30 DSM tiles of the release, plus room for the scenes you generate. The published Parquet files alone take about 1.27 TB |
 | CPU and memory | Generation runs one worker process per CPU by default. Large crops need much more memory per worker: `generate` caps its default at 16 workers for 2048 and 8 for 4096 |

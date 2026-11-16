@@ -23,7 +23,7 @@ pins:
     v: "Croissant 1.1 + RAI"
     link: "https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/croissant.json"
   - k: "Python"
-    v: "≥ 3.11"
+    v: "≥ 3.11.5"
 stats:
   - label: "Core scenes"
     text: "4.4 M"
@@ -69,6 +69,10 @@ disconnect are rejected by the generator. The dataset,
 the generator and the `passage-eval` evaluator are publicly released (code under
 MIT, data under the JAXA terms), so that classical planners, learned surrogates,
 graph networks and reinforcement learning can be scored on the same tasks.
+
+Explore the [final presentation schemes](presentation.md) for a visual overview
+of the dataset, evaluation harness and SEG/REG pipelines, with the talk and
+poster PDFs.
 
 ## <span aria-hidden="true">:material-compass-outline:</span> From terrain to benchmark
 

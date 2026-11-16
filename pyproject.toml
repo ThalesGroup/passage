@@ -50,7 +50,7 @@ authors = [
   {name = "Geoffrey Delhomme", email = "geoffrey.delhomme@thalesgroup.com"},
   {name = "PASSAGE authors"}
 ]
-requires-python = ">=3.11"
+requires-python = ">=3.11.5"
 dependencies = [
   # passage (data generation) ----------------------------------------------
   "loguru>=0.7.3",
@@ -62,7 +62,7 @@ dependencies = [
   # Runtime transitive security floors must also apply to pip installations,
   # which do not consume [tool.uv].constraint-dependencies.
   "filelock>=4.2.1",
-  "tornado>=6.6",
+  "tornado>=6.6.1",
   "tqdm>=4.60.0",
   "rasterio>=1.3.0",
   "pyyaml>=6.0",
@@ -125,6 +125,8 @@ packages = [
     "passage_eval.campaign.direct",
     "passage_eval.campaign.edge",
     "passage_eval.campaign.edge.data",
+    "passage_eval.campaign.candidate",
+    "passage_eval.candidates",
     "passage_eval.deployment",
     "passage_eval.diagnostics",
     "passage_eval.execution",
@@ -192,9 +194,9 @@ constraint-dependencies = [
   "mistune>=3.3.3",     # PYSEC-2026-3863 and related advisories
   "multidict>=6.9.1",   # GHSA-54p9-h82j-f925
   "pillow>=13.0.0",     # GHSA-v9pv-5gc8-w2m6 and related advisories
-  "soupsieve>=2.9.0",   # Includes fixes for high and moderate parser issues
+  "soupsieve>=4.0.0",   # GHSA-mmhr-3c5m-f64f and related parser advisories
   "setuptools>=84.1.0", # GHSA-xmj3-9gf7-h52w
-  "tornado>=6.6",       # GHSA-r4j5-9xpp-3985 and related advisories
+  "tornado>=6.6.1",     # GHSA-5cjw-f85j-cv6r and related advisories
   "urllib3>=2.8.0",     # GHSA-vxq7-64xx-v4gw and related advisories
   "virtualenv>=21.14.10", # CVE-2026-113713 and related advisories
 ]

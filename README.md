@@ -11,7 +11,7 @@
 <p align="center">
   <a href="#citation">NeurIPS 2026: Evaluations and Datasets</a> •
   <a href="https://huggingface.co/datasets/thalesgroup/passage">Dataset v1.0</a> •
-  <a href="https://www.python.org/">Python 3.11+</a> •
+  <a href="https://www.python.org/">Python 3.11.5+</a> •
   <a href="DATASET_LICENSE.md">AW3D30 data terms</a> •
   <a href="LICENSE">MIT code licence</a>
 </p>
@@ -39,6 +39,16 @@ scenes at seven resolutions, from 64×64 to 4096×4096 cells, and 26,400,000
 route variants, all exact routes. Its test split is a geographic hold-out
 (South America), and this repository holds the MIT-licensed generator and
 the `passage-eval` evaluator.
+
+The first official code release, **1.0.0**, includes the
+common candidate package interface, CPU/CUDA worker, rootless execution and
+independent host scoring. See the
+[1.0.0 release and installation guide](docs/release.md) for source installation,
+artifact verification and the separate runtime prerequisites.
+
+The [final presentation schemes](docs/presentation.md) show dataset construction,
+the evaluation contract and the frozen SEG/REG pipelines, with unchanged copies
+of the final talk v17 and poster v9.
 
 The [dataset card](https://huggingface.co/datasets/thalesgroup/passage)
 describes the files, graph, label guarantees, splits and limitations. Data and
@@ -89,15 +99,21 @@ Core configurations are large; use `streaming=True` to read them incrementally.
 See the [dataset quick start](https://huggingface.co/datasets/thalesgroup/passage#quick-start)
 for streaming and training targets.
 
-**Use the code.** Install [uv](https://docs.astral.sh/uv/getting-started/installation/), then:
+**Use the code.** Obtain the reviewed 1.0.0 source checkout or source snapshot
+and install [uv](https://docs.astral.sh/uv/getting-started/installation/). After
+the pending public synchronization, the repository route is
+[`ThalesGroup/passage`](https://github.com/ThalesGroup/passage). From that source root:
 
 ```bash
-git clone https://github.com/ThalesGroup/passage.git
-cd passage
 uv sync --frozen
+uv run --frozen python -c 'from importlib.metadata import version; assert version("passage") == "1.0.0"'
 uv run --frozen passage --help
 uv run --frozen passage-eval --help
 ```
+
+For a separately supplied wheel, verify its recorded SHA-256 before installation;
+the [release guide](docs/release.md) shows the exact `passage-1.0.0` filename and
+an isolated install. A public package-index release is not assumed.
 
 The [generator guide](https://thalesgroup.github.io/passage/guide/) covers source-tile download,
 calibration, generation and export. [USAGE.md](USAGE.md) lists the commands.
@@ -124,15 +140,28 @@ runnable CPU example, adapter, specification and matched comparison report.
 Freeze choices on calibration before test. The evaluator keeps reference labels
 outside the planner and scores the routes it timed; failed requests stay in the results.
 
-**Try the dense-vision candidates:**
+To package a complete procedure, start with the [CPU candidate example](examples/candidate-package/README.md)
+and [registration guide](docs/benchmark/candidate-registration.md). The common
+interface freezes artifact hashes, validates and registers a package, runs CPU or
+CUDA execution through an operator-provided runtime, and scores routes on the
+host. Registration alone neither publishes a package nor admits a result.
+
+**Dense-vision candidate references:**
 
 - [Seg — ConvNeXt V2 Atto](https://huggingface.co/thalesgroup/passage-seg-convnextv2-atto): path-mask segmentation with a raw-logit A* decoder.
 - [Reg — RepViT M1](https://huggingface.co/thalesgroup/passage-reg-repvit-m1): cost-to-go regression with Bellman descent and goal-rooted reconnection.
 
-Both model repositories currently require authorized Hugging Face access. Their
+These model repositories require authorized Hugging Face access; public model
+publication and access activation are separate pending steps. Their
 READMEs describe the 256×256 exports, inference commands and native-runtime
 requirements. See the [candidate definitions](https://thalesgroup.github.io/passage/benchmark/final-candidates/)
 and [evaluation protocol](https://thalesgroup.github.io/passage/benchmark/protocol/) for context.
+
+The private leaderboard's active SEG/REG view displays 27 TEST observations
+and three separate VALID pilot observations with `measured_unadmitted` status.
+Historical observations retain their original provenance. They are separate from this repository's local
+leaderboard storage and empty checked-in TEST entry table; they do not establish
+public availability or admitted results.
 
 ---
 
