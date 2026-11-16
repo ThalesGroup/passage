@@ -1,0 +1,8 @@
+# Supply an already built, immutable PASSAGE worker image as RUNTIME_IMAGE.
+# Its Python minor must be 3.12 and it must contain the common worker and NumPy.
+ARG RUNTIME_IMAGE
+FROM ${RUNTIME_IMAGE}
+ENV PYTHONDONTWRITEBYTECODE=1
+WORKDIR /candidate
+ENTRYPOINT ["python", "-m", "passage_eval.campaign.candidate.worker"]
+CMD ["--manifest", "/candidate/candidate.json", "--inputs", "/inputs/scenes.npz", "--output", "/output", "--device", "cpu"]

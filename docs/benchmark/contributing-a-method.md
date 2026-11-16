@@ -5,6 +5,10 @@ icon: material/account-plus-outline
 
 # Evaluate your planner
 
+For a complete versioned package, operator registration and container execution,
+follow [Register a candidate](candidate-registration.md). The local catalogue
+does not require a public submission service or an admission signature.
+
 
 The evaluator measures the complete procedure that emits a route, then scores that
 same persisted route against an independently qualified reference. This guide

@@ -1,0 +1,8 @@
+[project]
+name = "passage-example-candidate"
+version = "0.1.0"
+requires-python = ">=3.12,<3.13"
+dependencies = []
+
+# The candidate adds no third-party dependencies. The operator's common runtime
+# supplies passage_eval and its NumPy dependency; seal that runtime separately.

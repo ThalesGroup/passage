@@ -693,7 +693,7 @@ def test_session_freezes_code_identity_before_first_resolution(tmp_path, monkeyp
             return result
 
         # Simulate a stat identity change without changing the shared producers
-        # that concurrent work or a running test may have imported.
+        # which other agents are implementing or a running test has imported.
         monkeypatch.setattr(s, "_fingerprint", changed_identity)
         with pytest.raises(RuntimeError, match="generating source changed"):
             session.prepare_resolution(64)

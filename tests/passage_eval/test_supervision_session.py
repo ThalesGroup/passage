@@ -371,7 +371,10 @@ def roster_session(tmp_path):
     warmup = WarmupInput(roster=RosterInput(warm["path"], warm["roster_sha256"], plan["dataset_root"]))
     config = SupervisorConfig(
         worker_python=sys.executable,
-        isolation=sandbox.IsolationConfig(level="process"),
+        isolation=sandbox.IsolationConfig(
+            level="process",
+            env_set={"NUMBA_CACHE_DIR": str(tmp_path / "numba-cache")},
+        ),
         timing_profile=REWARM,
         ipc_baseline_pings=3,
         max_restarts=2,

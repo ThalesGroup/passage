@@ -1,9 +1,10 @@
 # Changelog
 
-## 1.0.0
+## 1.0.0 — first official code release
 
-First public release of PASSAGE, published with the NeurIPS 2026 Evaluations
-and Datasets Track paper. The repository and the dataset share version 1.0.
+The code version is 1.0.0; the dataset retains its separate v1.0 identity.
+Historical private wheels and runtime receipts, including those labelled 1.1.0,
+retain their original versions and hashes. They are not renamed release artifacts.
 
 - **Dataset PASSAGE v1.0** on Hugging Face
   ([`thalesgroup/passage`](https://huggingface.co/datasets/thalesgroup/passage)):
@@ -27,10 +28,26 @@ and Datasets Track paper. The repository and the dataset share version 1.0.
   reference waypoint count and Hausdorff p95 is reported in pixels. Paired
   comparisons resample geographic blocks, and every score has a reproducibility
   sidecar. Classical baselines and leaderboard storage are included.
-- **Leaderboard**: released empty. Its first entries will be the two
-  dense-vision finalists of the paper, retrained on PASSAGE v1.0. The per-task
-  paper results are released separately under
-  `src/passage-eval/results/paper-results/`.
+- **Common candidate interface**: `passage-candidate-package/v1` manifests,
+  artifact hashing with `candidate freeze`, validation without planner imports,
+  and immutable local registration. The common worker supports CPU/CUDA
+  execution, rootless OCI sessions, input-only transport, retained execution
+  receipts and independent host scoring. Runtime images and device compatibility
+  remain operator prerequisites; registration does not grant admission.
+- **Security**: require Python 3.11.5 or later, Soup Sieve 4.0.0 or later and
+  Tornado 6.6.1 or later. The refreshed lock uses Soup Sieve 4.1.1 and Tornado
+  6.6.1 to address the five dependency alerts reported in November 2026.
+  Recurring audits and dependency-update proposals cover both publication and
+  source integration workflows.
+- **Presentation schemes**: unchanged final talk v17 slides and poster v9,
+  with source checksums and separate qualitative TRAIN versus TEST context.
+- **Leaderboard evidence**: the private Space's active SEG/REG view displays
+  27 TEST and three separate VALID pilot observations marked
+  `measured_unadmitted`. Historical observations retain their provenance. These are distinct from the
+  repository's local storage and empty checked-in TEST entry table. Per-task
+  paper results remain separate under `src/passage-eval/results/paper-results/`.
+  Public model/runtime publication and leaderboard admission are pending.
 - **Documentation and metadata**: user guides, benchmark protocol, datasheet,
   Croissant metadata, citation file, dataset terms (`DATASET_LICENSE.md`),
-  notebooks and a test suite with at least 80 % coverage.
+  notebooks and a test suite. The [release guide](docs/release.md) documents local
+  builds, exact-version installation and the remaining publication checks.
