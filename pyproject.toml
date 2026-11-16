@@ -53,7 +53,7 @@ authors = [
 requires-python = ">=3.11.5"
 dependencies = [
   # passage (data generation) ----------------------------------------------
-  "loguru>=0.7.3",
+  "loguru>=0.8.0",
   "opencv-python>=4.0.0",
   "numba>=0.58.0",
   "networkx>=3.0",
