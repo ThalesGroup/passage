@@ -11,6 +11,10 @@ on:
 permissions:
   contents: read
 
+env:
+  # Supervised tests seal source/runtime trees; later imports must not add .pyc files.
+  PYTHONDONTWRITEBYTECODE: "1"
+
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true

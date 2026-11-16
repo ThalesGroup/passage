@@ -19,6 +19,10 @@ process. Start with [Evaluate your planner](contributing-a-method.md) to run
 `conform → run → score → compare → report`; use the protocol and API pages to
 interpret the results.
 
+For a visual overview of the dataset, execution harness and SEG/REG pipelines,
+see the [final presentation schemes](../presentation.md), with the talk and
+poster PDFs.
+
 !!! info "Terms used in the Benchmark pages"
 
     - **Ordinary input**: what a deployed planner sees for one task: elevation
