@@ -30,7 +30,7 @@ docs = [
   "mkdocs-include-markdown-plugin>=7.1.7",
   "mkdocs-minify-plugin>=0.8",
   "mkdocs-glightbox>=0.4",
-  "pymdown-extensions>=11.0.1",
+  "pymdown-extensions>=13.1",
   # Notebook tools are available for users who run or render notebooks locally.
   "nbclient>=0.10.4",
   "nbconvert>=7.17.2",
