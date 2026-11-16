@@ -7,6 +7,8 @@
   documentation highlighting, and remove an unsupported Hugging Face Hub extra.
 - Update the pinned GitHub Actions, preserving cache pruning and Pages hidden
   files. Group weekly dependency proposals by ecosystem for consolidated review.
+- Reject ML image builds whose installed runtime cannot satisfy the supplied
+  core wheel's declared requirements, before running the existing CPU probe.
 
 ## 1.0.0 — first official code release
 

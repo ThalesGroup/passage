@@ -50,6 +50,7 @@ test:
     - uv sync --locked --group dev
     - uv run --locked python --version
     - uv run --locked python -c 'import os, sys; assert sys.version_info[:2] == tuple(map(int, os.environ["PYTHON_VERSION"].split(".")))'
+    - uv run --locked python -m unittest discover -s containers/candidate -p 'test_*.py'
     - uv run --locked pytest --cov --cov-report=xml:coverage.xml --cov-report=term-missing -x -v
   artifacts:
     when: always

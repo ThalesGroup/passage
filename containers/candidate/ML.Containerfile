@@ -7,11 +7,12 @@ ENV NUMBA_CACHE_DIR=/tmp/numba-cache MPLCONFIGDIR=/tmp/matplotlib PYTHONPATH=/ca
 # the installer from the pinned Python base without resolving dependencies.
 RUN rm -rf /usr/local/lib/python3.12/site-packages && mkdir -p /usr/local/lib/python3.12/site-packages
 COPY site-packages/ /usr/local/lib/python3.12/site-packages/
-COPY snapshot.files.json runtime.snapshot.lock.json runtime.observed.requirements.txt verify_ml_snapshot.py verify_ml_runtime.py /opt/passage-image-inputs/
+COPY snapshot.files.json runtime.snapshot.lock.json runtime.observed.requirements.txt verify_ml_snapshot.py verify_ml_core_requirements.py verify_ml_runtime.py /opt/passage-image-inputs/
 COPY core-wheels/ /opt/passage-image-inputs/core-wheels/
 RUN python /opt/passage-image-inputs/verify_ml_snapshot.py \
  && python -m ensurepip --default-pip \
  && python -m pip install --no-index --no-deps --force-reinstall /opt/passage-image-inputs/core-wheels/*.whl \
+ && python /opt/passage-image-inputs/verify_ml_core_requirements.py /opt/passage-image-inputs/core-wheels/*.whl \
  && CUDA_VISIBLE_DEVICES="" python /opt/passage-image-inputs/verify_ml_runtime.py
 WORKDIR /candidate
 ENTRYPOINT ["python", "-m", "passage_eval.campaign.candidate.worker"]
