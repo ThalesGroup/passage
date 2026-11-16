@@ -55,6 +55,25 @@ docker build --network=none \
 
 The base is `python:3.12@sha256:17b9724493d916f56565c131f389faff2597f46dec6ce09516f95125bc9f519f`. It must already be available locally, or be acquired before the offline build. The build starts with an empty image-side site-packages directory, copies the exact snapshot, verifies its full file set and hashes, bootstraps pip offline from the pinned Python base and installs the supplied core wheel with `--no-index --no-deps --force-reinstall`.
 
+Before the CPU probe, a metadata guard reads the supplied wheel's sole
+`.dist-info/METADATA` from its ZIP archive and checks that the installed core's
+name, version, `Requires-Python` and `Requires-Dist` match it. This also detects
+stale installed requirements when historical wheels share the same version.
+It checks the wheel's Python requirement and active default dependencies
+against the image's Python and installed versions. Markers use that target
+environment with no core extras selected. The guard uses `packaging`, already
+required by the approved Torch runtime; it does not import ML packages,
+resolve dependencies, or inspect unrelated NVIDIA wheel tags. Active direct
+URL requirements fail because this check cannot establish their installed
+origin.
+
+The approved snapshot must already satisfy the new wheel's requirements:
+`--no-deps` does not upgrade it. For example, historical Loguru 0.7.3 and ImageIO
+2.38.1 do not satisfy the fresh wheel's `loguru>=0.8.0` and `imageio>=2.38.2`.
+On a mismatch, prepare an approved fresh runtime prefix and a new kit; preserve
+the historical environment, kit, inventories and receipts. A historical kit
+rebuilds only with its original recorded wheel.
+
 A CPU-only build probe imports Torch, SB3-Contrib, Gymnasium and the actual core worker, and performs a tiny CPU matrix multiplication. It records the CUDA build version without querying or initializing a CUDA device. The final environment leaves CUDA visibility under the execution launcher's control. GPU execution still needs compatible driver/device exposure and its own observed test.
 
 ## Use the common worker
@@ -91,4 +110,10 @@ The kit is ARM64 and CPython 3.12 specific. Its installed-file lock is different
 python3.12 -m unittest discover -s containers/candidate -p 'test_*.py'
 ```
 
-The tests verify source preservation, selective editable-file removal, hardlink use, unexpected-file detection and symlink rejection. Final image evidence must record the local configuration digest, platform manifest digest and OCI index digest separately, with their observed media types. No upload is part of these commands.
+The tests verify source preservation, selective editable-file removal, hardlink
+use, unexpected-file detection and symlink rejection. Real temporary metadata
+also exercises the core requirement guard, including outdated or missing
+dependencies, default markers, Python compatibility and legacy NVIDIA tags.
+Final image evidence must record the local configuration digest, platform
+manifest digest and OCI index digest separately, with their observed media
+types. No upload is part of these commands.

@@ -91,7 +91,7 @@ def prepare(runtime_env: Path, wheel: Path, output: Path) -> dict:
     files, excluded = snapshot_site_packages(site, output / "site-packages")
     write_json(output / "snapshot.files.json", files)
     source = Path(__file__).resolve().parent
-    for name in ("ML.Containerfile", "verify_ml_snapshot.py", "verify_ml_runtime.py"):
+    for name in ("ML.Containerfile", "verify_ml_snapshot.py", "verify_ml_core_requirements.py", "verify_ml_runtime.py"):
         shutil.copyfile(source / name, output / name)
     (output / "core-wheels").mkdir()
     shutil.copyfile(wheel, output / "core-wheels" / wheel.name)
