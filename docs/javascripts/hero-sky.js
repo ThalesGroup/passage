@@ -31,8 +31,9 @@
    * with stars, shooting stars and an aurora; a heightfield drawn as neon rows
    * and columns with hidden-line fill; a route that follows the valley, with
    * light pulses travelling along it; search waves that light the mesh nodes
-   * like an A* frontier. The camera follows the valley, leans with the pointer
-   * and speeds up while the page scrolls; a click on the host starts a wave
+   * like an A* frontier. The camera follows the valley, climbs over the terrain
+   * ahead so the mesh never shows its underside, leans with the pointer and
+   * speeds up while the page scrolls; a click on the host starts a wave
    * (on the terrain) or a shooting star (in the sky).
    *
    * Canvas 2D only: no data, no network, no dependency. Pauses when the canvas
@@ -63,11 +64,11 @@
     var nav = typeof navigator !== "undefined" ? navigator : {};
     var headless = !!nav.webdriver || /HeadlessChrome/.test(nav.userAgent || "");
     o.animated = !!o.animated && !headless;
-    var TAU = Math.PI * 2, CAM_Y = 62, Z_NEAR = 70, DZ = 21, DX = 19, X_MARGIN = 260, NB = 48, AUR_S = 0.25;
+    var TAU = Math.PI * 2, CAM_Y = 62, Z_NEAR = 45, DZ = 21, DX = 19, X_MARGIN = 260, NB = 48, AUR_S = 0.25;
     var W = 0, H = 0, DPR = 1, HZ = 0, F = 1, ZFAR = 1600, X0 = 0, COLS = 0, dprScale = 1;
     var rows = {}, back = null, aur = null, actx = null, sprites = [], glow = null, stars = [], waves = [], meteors = [], fno = 0;
     var LINE = [], LINE_A = [], FILL = [];
-    var zCam = 0, camX = 0, roll = 0, clock = 14, last = 0, raf = 0, visible = true, destroyed = false;
+    var zCam = 0, camX = 0, camAlt = CAM_Y, camY = CAM_Y, roll = 0, clock = 14, last = 0, raf = 0, visible = true, destroyed = false;
     var boost = 0, lastScroll = scrollTop(), dim = 0, nextWave = 1.6, nextMeteor = 3.5, waveSide = 0;
     var ptr = { x: 0, y: 0, tx: 0, ty: 0 }, frames = 0, spent = 0;
     var pointerHost = o.pointerHost || canvas.parentElement || document.documentElement;
@@ -131,6 +132,14 @@
       g.addColorStop(0, "#03051a"); g.addColorStop(clamp(HZ / H * 0.55, 0, 1), "#0a0f34");
       g.addColorStop(clamp(HZ / H, 0, 1), "#1c2268"); g.addColorStop(1, "#070b24");
       b.fillStyle = g; b.fillRect(0, 0, W, H);
+      // Below the horizon the backdrop is ground, shaded like flat terrain at each
+      // depth, so a gap under the mesh can never show the sky.
+      var gr = b.createLinearGradient(0, HZ, 0, H);
+      for (var gi = 0; gi <= 10; gi++) {
+        var gu = gi / 10, gz = CAM_Y * F / Math.max(0.5, gu * (H - HZ)), gt = clamp((gz - Z_NEAR) / (ZFAR - Z_NEAR), 0, 1);
+        gr.addColorStop(gu, rgba(lerp3([5, 8, 30], [24, 30, 96], Math.pow(gt, 1.5)), 1));
+      }
+      b.fillStyle = gr; b.fillRect(0, HZ, W, H - HZ + 1);
       b.save(); b.translate(W / 2, HZ); b.scale(1, 0.32);
       var R = Math.max(W, H) * 0.6, rg = b.createRadialGradient(0, 0, 0, 0, 0, R);
       rg.addColorStop(0, "rgba(73,224,255,0.34)"); rg.addColorStop(0.18, "rgba(83,184,217,0.2)");
@@ -191,6 +200,13 @@
       zCam += 44 * (1 + boost) * dt;
       var look = zCam + 330, target = o.follow * valley(look) + ptr.x * 48;
       camX = dt ? camX + (target - camX) * (1 - Math.exp(-dt * 1.4)) : target;
+      // Terrain following: `strict` keeps the nearest rows below the bottom edge;
+      // `ahead` starts the climb before a rise reaches the camera.
+      var need = altitudeNeed(zCam, camX, aheadX, rowHeight, X0, COLS, W, H, HZ, F, Z_NEAR, DZ, DX);
+      // Headroom of 10 absorbs the pointer's vertical lean; the climb follows the forward speed.
+      var aim = Math.max(CAM_Y, need.ahead + 10);
+      camAlt = dt ? camAlt + (aim - camAlt) * (1 - Math.exp(-dt * (aim > camAlt ? 2.4 * (1 + boost) : 0.6))) : aim;
+      camY = Math.max(need.strict, camAlt - ptr.y * 10);
       var slope = (valley(look + 60) - valley(look - 60)) / 120;
       roll = clamp(-slope * 0.05 * o.follow - ptr.x * 0.012, -0.03, 0.03);
       if (!dt) return;
@@ -205,6 +221,33 @@
       if (nextMeteor <= 0) { meteor(Math.random() * W * 0.8 + W * 0.1, Math.random() * HZ * 0.4); nextMeteor = 5 + Math.random() * 7; }
       for (var i = waves.length - 1; i >= 0; i--) if ((clock - waves[i].t) * waves[i].v > waves[i].max) waves.splice(i, 1);
       for (var j = meteors.length - 1; j >= 0; j--) { var m = meteors[j]; m.age += dt; m.x += m.vx * dt; m.y += m.vy * dt; if (m.age > m.life) meteors.splice(j, 1); }
+    }
+
+    function rowHeight(k, c) { return row(k).h[c]; }
+    // Where the camera will be when the row now at depth Z becomes the second nearest.
+    function aheadX(Z) { return o.follow * valley(zCam + Z - Z_NEAR - DZ + 330) + ptr.x * 48; }
+
+    // Camera height needed over the terrain ahead (pure: heights come from hAt, the
+    // future camera position from cxAt). A row at depth Z stays below the bottom edge,
+    // rotated corners included, when camY >= h + (H + margin - HZ) * Z / F.
+    // `strict` applies that bound to the two nearest rows, at the depth where the
+    // second becomes the nearest. `ahead` applies it to the corridor the camera will
+    // fly over, relaxed with distance, so a rise becomes a ramp instead of a jump.
+    function altitudeNeed(zc, cx, cxAt, hAt, x0, cols, w, h, hz, f, zNear, dz, dx) {
+      var per = (h + 24 + w * 0.016 - hz) / f, strict = -Infinity, ahead = -Infinity;
+      var k0 = Math.ceil((zc + zNear) / dz), zSwitch = zNear + dz, foot = (w * 0.62 + 30) * zSwitch / f * 1.6;
+      function maxIn(k, xc, half) {
+        var m = -Infinity, c0 = Math.max(0, Math.floor((xc - half - x0) / dx)), c1 = Math.min(cols - 1, Math.ceil((xc + half - x0) / dx));
+        for (var c = c0; c <= c1; c++) { var v = hAt(k, c); if (v > m) m = v; }
+        return m;
+      }
+      for (var i = 0; i < 26; i++) {
+        var k = k0 + i, Z = k * dz - zc;
+        if (i < 2) strict = Math.max(strict, maxIn(k, cx, (w * 0.62 + 30) * Z / f) + per * Math.min(Z, zSwitch));
+        var ramp = maxIn(k, cxAt(Z), foot) + per * zSwitch + 6 - 0.2 * Math.max(0, Z - zSwitch);
+        if (ramp > ahead) ahead = ramp;
+      }
+      return { strict: strict, ahead: ahead };
     }
 
     function meteor(x, y) {
@@ -278,7 +321,7 @@
     }
 
     function terrain() {
-      var I = o.intensity * (1 - dim), camY = CAM_Y - ptr.y * 10;
+      var I = o.intensity * (1 - dim);
       var kMin = Math.ceil((zCam + Z_NEAR) / DZ), kMax = Math.floor((zCam + ZFAR) / DZ);
       for (var key in rows) if (+key < kMin - 1) delete rows[key];
       // Each row is projected over the range of the farther row, which is wider.
@@ -305,6 +348,8 @@
         var c0 = B.c0, c1 = B.c1, c;
         if (c1 <= c0) continue;
         // Hidden-line fill between the two rows, then the far row and the columns.
+        // Opaque fill: far rows already take the backdrop's fog colour and their lines
+        // fade out, so they appear without popping and nothing shows through them.
         ctx.globalAlpha = 1; ctx.beginPath(); ctx.moveTo(A.sx[c0], A.sy[c0]);
         for (c = c0 + 1; c <= c1; c++) ctx.lineTo(A.sx[c], A.sy[c]);
         for (c = c1; c >= c0; c--) ctx.lineTo(B.sx[c], B.sy[c]);
@@ -411,7 +456,7 @@
       if (ev.target && ev.target.closest && ev.target.closest("a, button, input, select, textarea, summary, label, [role=button], .pg-banner")) return;
       var r = canvas.getBoundingClientRect(), x = ev.clientX - r.left, y = ev.clientY - r.top;
       if (y < HZ + 6) { meteor(x, y); return; }
-      var Z = clamp((CAM_Y - 18) * F / (y - HZ), Z_NEAR + 60, ZFAR * 0.8);
+      var Z = clamp((camY - 18) * F / (y - HZ), Z_NEAR + 80, ZFAR * 0.8);
       waves.push({ x: camX + (x - W / 2) * Z / F, z: zCam + Z, t: clock, v: 260, max: 600 });
     }
     function onVisibility() { if (running()) start(); else stop(); }
