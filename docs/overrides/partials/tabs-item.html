@@ -1,0 +1,81 @@
+{#-
+MIT License
+
+Copyright (c) 2026 THALES
+
+Tab item with a hover menu. Override of the mkdocs-material 9.7.7 partial
+`partials/tabs-item.html`: the tab link is unchanged, and each section tab
+adds a panel that lists its first sub-level (pages and sections, with their
+icons). The panel opens on hover or keyboard focus (extra.css, home.js); the
+sidebar remains the complete navigation.
+-#}
+{% macro render_content(nav_item, ref) %}
+  {% set ref = ref or nav_item %}
+  {% if nav_item == ref or "navigation.indexes" in features %}
+    {% if nav_item.is_index and nav_item.meta.icon %}
+      {% include ".icons/" ~ nav_item.meta.icon ~ ".svg" %}
+    {% endif %}
+  {% endif %}
+  {{ ref.title }}
+{% endmacro %}
+
+{#- URL of the page a menu entry opens: the page itself, or the first page of a section. -#}
+{% macro first_url(item) -%}
+  {%- if item.children -%}{{ first_url(item.children | first) }}{%- else -%}{{ item.url | url }}{%- endif -%}
+{%- endmacro %}
+
+{% macro render_menu(section) %}
+  {% set entries = section.children | rejectattr("is_index") | list %}
+  {% if entries %}
+    <div class="pg-tabmenu{% if entries | length > 5 %} pg-tabmenu--wide{% endif %}">
+      <ul class="pg-tabmenu__list">
+        {% for child in entries %}
+          {% set head = child.children | first if child.children else child %}
+          {% set icon = head.meta.icon if head.is_index or not child.children else none %}
+          {% set fallback = "material/folder-outline" if child.children else "material/file-document-outline" %}
+          {% set pages = child.children | rejectattr("is_index") | list if child.children else [] %}
+          <li class="pg-tabmenu__item{% if child.active %} pg-tabmenu__item--active{% endif %}" style="--i: {{ loop.index0 }}">
+            <a class="pg-tabmenu__link" href="{{ first_url(child) }}"{% if child.active and not child.children %} aria-current="page"{% endif %}>
+              <span class="pg-tabmenu__icon" aria-hidden="true">
+                {%- include ".icons/" ~ (icon or fallback) ~ ".svg" -%}
+              </span>
+              <span class="pg-tabmenu__text">
+                <span class="pg-tabmenu__title">{{ child.title }}</span>
+                {%- if pages %}
+                <span class="pg-tabmenu__sub">{% for page in pages %}{{ page.title }}{% if not loop.last %} · {% endif %}{% endfor %}</span>
+                {%- endif %}
+              </span>
+            </a>
+          </li>
+        {% endfor %}
+      </ul>
+    </div>
+  {% endif %}
+{% endmacro %}
+
+{% macro render(nav_item, ref) %}
+  {% set ref = ref or nav_item %}
+  {% set class = "md-tabs__item" %}
+  {% if ref.active %}
+    {% set class = class ~ " md-tabs__item--active" %}
+  {% endif %}
+  {% if nav_item.children %}
+    {% set first = nav_item.children | first %}
+    {% if first.children %}
+      {{ render(first, ref) }}
+    {% else %}
+      <li class="{{ class }} pg-tab">
+        <a href="{{ first.url | url }}" class="md-tabs__link">
+          {{ render_content(first, ref) }}
+        </a>
+        {{ render_menu(ref) }}
+      </li>
+    {% endif %}
+  {% else %}
+    <li class="{{ class }}">
+      <a href="{{ nav_item.url | url }}" class="md-tabs__link">
+        {{ render_content(nav_item) }}
+      </a>
+    </li>
+  {% endif %}
+{% endmacro %}

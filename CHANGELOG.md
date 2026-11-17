@@ -5,6 +5,10 @@
 - Restyle the documentation site and the README header with the PASSAGE Neon
   theme, built on the Thales colours of the app icon; the helicopter banner
   stays the centre of the home hero.
+- Animate the home hero with a night flight over a neon wireframe terrain
+  (aurora, summit beacons, a route along the valley and search waves) that
+  steers with the pointer and stops under reduced motion; open each tab's first
+  sub-level in a menu on hover or keyboard focus; indent the sidebar levels.
 - Reorganise the documentation into Home, Dataset and Benchmark. Release,
   presentation and policies are under Home, generation and the data format
   under Dataset, and code architecture and API under Benchmark.

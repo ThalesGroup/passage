@@ -195,6 +195,7 @@ extra_css:
 
 extra_javascript:
   - javascripts/home.js
+  - javascripts/hero-sky.js
   - javascripts/mermaid-zoom.js
   - javascripts/katex.js
 
