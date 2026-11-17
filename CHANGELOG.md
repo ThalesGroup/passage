@@ -5,10 +5,14 @@
 - Restyle the documentation site and the README header with the PASSAGE Neon
   theme, built on the Thales colours of the app icon; the helicopter banner
   stays the centre of the home hero.
-- Animate the home hero with a night flight over a neon wireframe terrain
-  (aurora, summit beacons, a route along the valley and search waves) that
-  steers with the pointer and stops under reduced motion; open each tab's first
-  sub-level in a menu on hover or keyboard focus; indent the sidebar levels.
+- Give the home hero a topographic map at night, the same as the leaderboard
+  background: contour lines in blue shades that brighten with elevation over
+  a navy hillshade, and a few least-cost routes that appear behind a light,
+  carry a light point from start to goal and fade, going around the text. The
+  map is painted once in idle steps and only small layers move, so the page
+  stays fluid without a GPU; it stops under reduced motion and off-screen.
+  Open each tab's first sub-level in a menu on hover or keyboard focus; indent
+  the sidebar levels.
 - Reorganise the documentation into Home, Dataset and Benchmark. Release,
   presentation and policies are under Home, generation and the data format
   under Dataset, and code architecture and API under Benchmark.

@@ -203,9 +203,9 @@
   background: linear-gradient(90deg, #0b1033 0%, #11174a 62%, #161c5e 100%);
   box-shadow: none;
 }
+/* No backdrop blur on the sticky header: without a GPU it is recomputed on every scrolled frame. */
 [data-md-color-scheme="slate"] :is(.md-header, .md-tabs) {
-  background: linear-gradient(90deg, rgba(11, 16, 51, 0.9) 0%, rgba(17, 23, 74, 0.9) 62%, rgba(22, 28, 94, 0.9) 100%);
-  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  background: linear-gradient(90deg, rgba(11, 16, 51, 0.97) 0%, rgba(17, 23, 74, 0.97) 62%, rgba(22, 28, 94, 0.97) 100%);
 }
 .md-header::after {
   content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 1px; pointer-events: none;
@@ -268,42 +268,9 @@
   mask-image: radial-gradient(ellipse 75% 70% at 50% 42%, #000 35%, transparent 85%);
 }
 .pg-hero__bg { position: absolute; inset: 0; z-index: -2; }
-.hero-terrain { width: 100%; height: 100%; display: block; }
-.hero-contours { animation: pg-drift 46s ease-in-out infinite alternate; transform-origin: 50% 50%; }
-.hero-contours path { fill: none; stroke: rgba(91, 147, 196, 0.2); stroke-width: 1; vector-effect: non-scaling-stroke; }
-.hero-contours path.major { stroke: rgba(83, 184, 217, 0.4); stroke-width: 1.3; }
-.hero-r1 { --rc: #49e0ff; } .hero-r2 { --rc: #a9e6f5; } .hero-r3 { --rc: #7c80ff; } .hero-r4 { --rc: #53b8d9; }
-.hero-ridges path { stroke: rgba(169, 230, 245, 0.3); stroke-width: 1; vector-effect: non-scaling-stroke; }
-.hero-ridge { animation: pg-float 14s ease-in-out infinite alternate; }
-.hero-ridge:nth-child(2) { animation-duration: 17s; animation-delay: -4s; }
-.hero-ridge:nth-child(3) { animation-duration: 20s; animation-delay: -9s; }
-@keyframes pg-float { from { transform: translateY(-6px); } to { transform: translateY(6px); } }
-.hero-route-halo { fill: none; stroke: var(--rc); stroke-opacity: 0.16; stroke-width: 11; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
-.hero-route {
-  fill: none; stroke: var(--rc); stroke-opacity: 0.92; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke;
-  stroke-dasharray: 1000; stroke-dashoffset: 1000; animation: pg-draw 3.6s cubic-bezier(0.65, 0, 0.35, 1) forwards;
-}
-.hero-r2 .hero-route { animation-delay: 0.6s; } .hero-r3 .hero-route { animation-delay: 1.2s; } .hero-r4 .hero-route { animation-delay: 1.8s; }
-.hero-pulse {
-  fill: none; stroke: #fff; stroke-width: 3.2; stroke-linecap: round; vector-effect: non-scaling-stroke;
-  stroke-dasharray: 60 940; stroke-dashoffset: 1000; opacity: 0; animation: pg-pulse 7s linear 4s infinite;
-}
-.hero-r2 .hero-pulse { animation-duration: 8.5s; animation-delay: 5s; }
-.hero-r3 .hero-pulse { animation-duration: 6.5s; animation-delay: 6s; }
-.hero-r4 .hero-pulse { animation-duration: 9.5s; animation-delay: 7s; }
-.hero-comet { fill: #fff; stroke: var(--rc); stroke-width: 2; }
-.hero-start { fill: var(--rc); }
-.hero-goal { fill: var(--pn-bad); }
-.hero-goal-ring { fill: none; stroke: var(--pn-bad); stroke-width: 2; transform-box: fill-box; transform-origin: center; animation: pg-ping 2.6s ease-out infinite; }
 .pg-hero__veil {
   position: absolute; inset: 0; z-index: -1; pointer-events: none; overflow: hidden;
   background: linear-gradient(180deg, rgba(4, 6, 26, 0.2) 0%, rgba(7, 11, 36, 0.4) 40%, rgba(7, 11, 36, 0.7) 78%, rgba(7, 11, 36, 0.9) 92%, var(--md-default-bg-color) 100%);
-}
-/* One slow horizontal scan sweep. */
-.pg-hero__veil::before {
-  content: ""; position: absolute; top: 0; bottom: 0; left: 0; width: 22%;
-  background: linear-gradient(90deg, transparent, rgba(73, 224, 255, 0.07) 50%, transparent);
-  transform: translateX(-110%); animation: pg-scan 12s linear 2.5s infinite;
 }
 .pg-hero__inner { display: grid; justify-items: center; text-align: center; gap: 0.85rem; padding: 3.4rem 0.8rem 3.6rem; }
 .pg-eyebrow {
@@ -324,7 +291,7 @@
 .pg-btn {
   position: relative; overflow: hidden; display: inline-grid; place-items: center; min-height: 2.2rem;
   font: 600 0.68rem/1.25 "Inter", sans-serif; padding: 0.55rem 1.1rem; border-radius: 999px; color: var(--pn-ink);
-  border: 1px solid rgba(73, 224, 255, 0.4); background: rgba(4, 6, 26, 0.55); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  border: 1px solid rgba(73, 224, 255, 0.4); background: rgba(4, 6, 26, 0.72);
   transition: border-color 0.2s, box-shadow 0.25s, transform 0.2s var(--pn-ease), color 0.2s;
 }
 .pg-btn:is(:hover, :focus-visible) {
@@ -469,9 +436,6 @@
   border: 1px solid var(--pg-line); box-shadow: var(--pg-shadow);
   transition: transform 0.3s var(--pn-ease), border-color 0.25s, box-shadow 0.3s;
 }
-[data-md-color-scheme="slate"] .md-typeset :is(.feature-card, .pipeline-step), [data-md-color-scheme="slate"] .md-typeset .grid.cards > ul > li, [data-md-color-scheme="slate"] .md-typeset .grid > .card {
-  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
-}
 .md-typeset :is(.feature-card, .pipeline-step):hover, .md-typeset .grid.cards > ul > li:hover, .md-typeset .grid > .card:hover {
   transform: translateY(-3px); border-color: color-mix(in srgb, var(--pg-cyan) 60%, transparent);
   box-shadow: var(--pg-shadow), 0 0 0 1px color-mix(in srgb, var(--pg-cyan) 25%, transparent), 0 0 24px var(--pg-glow);
@@ -572,42 +536,49 @@
 .md-footer::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 1px; background: linear-gradient(90deg, transparent, var(--pg-cyan-neon), var(--pg-violet-neon), transparent); opacity: 0.45; }
 
 /* Hero banner: the helicopter artwork is the centrepiece of the hero, framed by a
-   neon edge that slowly circulates; a soft float and the glow stop under reduced
-   motion. */
+   neon edge that slowly circulates. Every animation here moves by transform
+   only (rotate, translate), so the compositor runs it without main-thread
+   work; all of them stop under reduced motion. */
 .pg-banner {
   position: relative; margin: 0.9rem 0 0.2rem; width: min(100%, 1040px); border-radius: 20px; padding: 2px;
-  background: conic-gradient(from var(--pg-banner-angle, 0deg), rgba(73, 224, 255, 0.95), rgba(124, 128, 255, 0.85), rgba(83, 184, 217, 0.25), rgba(73, 224, 255, 0.95));
+  overflow: hidden; isolation: isolate;
   box-shadow: 0 0 34px rgba(73, 224, 255, 0.28), 0 0 90px rgba(124, 128, 255, 0.18), 0 28px 70px rgba(2, 4, 16, 0.55);
-  /* hero-sky.js leans the banner towards the pointer; the float uses `translate`. */
-  transform: perspective(1800px) rotateX(var(--pg-tilt-y, 0deg)) rotateY(var(--pg-tilt-x, 0deg));
-  transition: transform 0.7s var(--pn-ease);
-  animation: pg-banner-spin 14s linear infinite, pg-banner-float 9s ease-in-out infinite alternate;
 }
-/* Pointer glare and a periodic light sheen across the artwork. */
+/* The neon frame: a still conic gradient behind the artwork; the 2 px padding
+   shows it as the edge. (It no longer turns: without a GPU that repaints the
+   whole banner on every frame.) */
 .pg-banner::before {
-  content: ""; position: absolute; inset: 2px; z-index: 1; border-radius: 18px; pointer-events: none;
-  background:
-    radial-gradient(38% 46% at var(--pg-glare-x, 50%) var(--pg-glare-y, 0%), rgba(255, 255, 255, calc(0.16 * var(--pg-glare-o, 0))), transparent 70%),
-    linear-gradient(105deg, transparent 42%, rgba(200, 245, 255, 0.12) 50%, transparent 58%) 160% 0 / 260% 100% no-repeat;
-  mix-blend-mode: screen;
+  content: ""; position: absolute; z-index: -1; left: 50%; top: 50%; width: 160%; aspect-ratio: 1; translate: -50% -50%;
+  background: conic-gradient(rgba(73, 224, 255, 0.95), rgba(124, 128, 255, 0.85), rgba(83, 184, 217, 0.25), rgba(73, 224, 255, 0.95));
+  rotate: 35deg;
+}
+.pg-banner picture { position: relative; display: block; overflow: hidden; border-radius: 18px; }
+.pg-banner img { display: block; width: 100%; height: auto; border-radius: 18px; }
+/* A periodic light sheen across the artwork. */
+.pg-banner picture::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none; translate: -100% 0;
+  background: linear-gradient(105deg, transparent 42%, rgba(200, 245, 255, 0.12) 50%, transparent 58%);
   animation: pg-sheen 11s ease-in-out 3s infinite;
 }
-@keyframes pg-sheen { 0%, 72% { background-position: 0 0, 160% 0; } 100% { background-position: 0 0, -60% 0; } }
-.pg-banner picture, .pg-banner img { display: block; width: 100%; height: auto; border-radius: 18px; }
+/* The lower shade. */
 .pg-banner::after {
-  content: ""; position: absolute; inset: 2px; border-radius: 18px; pointer-events: none;
-  background: linear-gradient(180deg, transparent 62%, rgba(4, 6, 26, 0.35)), radial-gradient(120% 80% at 50% 120%, rgba(73, 224, 255, 0.16), transparent 60%);
+  content: ""; position: absolute; inset: 2px; z-index: 1; border-radius: 18px; pointer-events: none;
+  background:
+    linear-gradient(180deg, transparent 62%, rgba(4, 6, 26, 0.35)),
+    radial-gradient(120% 80% at 50% 120%, rgba(73, 224, 255, 0.16), transparent 60%);
 }
-@property --pg-banner-angle { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
-@keyframes pg-banner-spin { to { --pg-banner-angle: 360deg; } }
-@keyframes pg-banner-float { from { translate: 0 0; } to { translate: 0 -6px; } }
-@media (prefers-reduced-motion: reduce) { .pg-banner, .pg-banner::before { animation: none; } .pg-banner { transform: none; } }
+@keyframes pg-sheen { 0%, 72% { translate: -100% 0; } 100% { translate: 100% 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .pg-banner picture::after { animation: none; }
+}
 
-/* Home hero background: hero-sky.js draws a night flight over a neon wireframe
-   terrain (stars, aurora, a route along the valley, search waves). The contour
-   SVG and the grid stay as the fallback without JavaScript. */
-.pg-hero__canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
-.pg-hero--live .hero-terrain, .pg-hero--live::after, .pg-hero--live .pg-hero__veil::before { display: none; }
+/* Home hero background: hero-atlas.js paints a topographic map once, in idle
+   steps, and animates only small layers on it (neon-atlas.css): PASSAGE scenes
+   and long routes. The grid stays as the fallback without JavaScript. Without
+   hardware acceleration the banner sheen stays off. */
+.pg-hero__atlas { position: absolute; inset: 0; }
+.pg-hero--lite .pg-banner picture::after { animation: none; }
+.pg-hero--live::after { display: none; }
 .pg-hero--live .pg-hero__veil {
   background: linear-gradient(180deg, rgba(4, 6, 26, 0) 0%, rgba(4, 6, 26, 0.06) 34%, rgba(7, 11, 36, 0.34) 66%, rgba(7, 11, 36, 0.72) 86%, var(--md-default-bg-color) 100%);
 }
@@ -745,11 +716,6 @@
 .md-typeset .md-button .twemoji, .md-typeset .md-button svg { vertical-align: -0.15em; }
 
 /* ------------------------------------------------------------- keyframes */
-@keyframes pg-drift { from { transform: translate3d(0, 0, 0) scale(1.03); } to { transform: translate3d(-28px, 10px, 0) scale(1.07); } }
-@keyframes pg-draw { to { stroke-dashoffset: 0; } }
-@keyframes pg-pulse { 0% { stroke-dashoffset: 1000; opacity: 0; } 4% { opacity: 0.95; } 92% { opacity: 0.95; } 100% { stroke-dashoffset: 0; opacity: 0; } }
-@keyframes pg-ping { from { transform: scale(0.6); opacity: 0.9; } to { transform: scale(2.3); opacity: 0; } }
-@keyframes pg-scan { 0% { transform: translateX(-110%); } 55%, 100% { transform: translateX(560%); } }
 @keyframes pg-power { 0% { opacity: 0.2; } 8% { opacity: 1; } 12% { opacity: 0.4; } 18% { opacity: 1; } 24% { opacity: 0.65; } 30%, 100% { opacity: 1; } }
 
 /* ------------------------------------------------------------ responsive */
@@ -772,9 +738,7 @@
 @media screen and (max-width: 59.9375em) {
   }
 @media (prefers-reduced-motion: reduce) {
-  .hero-contours, .hero-ridge, .hero-route, .hero-pulse, .hero-goal-ring, .pg-title { animation: none; }
-  .hero-route { stroke-dashoffset: 0; }
-  .hero-pulse, .hero-comet, .pg-hero__veil::before { display: none; }
+  .pg-title { animation: none; }
   .pg-btn, .pg-btn:is(:hover, :focus-visible), .pg-pins li > a:hover, .pg-stats > div:hover { transform: none; }
   .pg-btn--primary::after { display: none; }
   .md-typeset :is(.feature-card, .pipeline-step):hover, .md-typeset .grid.cards > ul > li:hover, .md-typeset .grid > .card:hover { transform: none; }
