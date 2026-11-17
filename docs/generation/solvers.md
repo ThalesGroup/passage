@@ -1,5 +1,6 @@
 ---
 title: Solvers & Heuristics
+icon: material/map-marker-path
 ---
 
 # Solvers & Heuristics
@@ -89,7 +90,7 @@ $$
 where $g(s)$ is the cost from the start to cell $s$, and $h(s)$ is the **heuristic**, an estimate of the remaining cost to the goal.
 
 !!! success "Optimality guarantee"
-    An **admissible** heuristic never overestimates the remaining cost: $h(s) \leq h^*(s)$ for every $s$, where $h^*$ is the true remaining cost. For A\* graph search that never reopens a closed cell, a **consistent** heuristic guarantees optimality: $h(u) \leq c(u,v) + h(v)$ for every step. On an 8-connected grid, the Euclidean and Chebyshev heuristics are both admissible and consistent.
+    An **admissible** heuristic never overestimates the remaining cost: $h(s) \leq h^*(s)$ for every $s$, where $h^*$ is the true remaining cost. For A\* graph search that never reopens a closed cell, a **consistent** heuristic guarantees optimality: $h(u) \leq c(u,v) + h(v)$ for every step. On an eight-connected grid, the Euclidean and Chebyshev heuristics are both admissible and consistent.
 
 ### Dijkstra's Algorithm
 
@@ -113,7 +114,7 @@ $$
 h_{\text{euclidean}}(s, g) = \Delta \cdot \sqrt{(i_g - i_s)^2 + (j_g - j_s)^2}
 $$
 
-The straight-line distance. It is admissible on 4- and 8-connected grids, and it is the tightest of the three on 8-connected grids. The octile distance (the length of the shortest 8-connected route) would be tighter still; PASSAGE does not implement it.
+The straight-line distance. It is admissible on four- and eight-connected grids, and it is the tightest of the three on eight-connected grids. The octile distance (the length of the shortest eight-connected route) would be tighter still; PASSAGE does not implement it.
 
 ### Manhattan Heuristic
 
@@ -121,10 +122,10 @@ $$
 h_{\text{manhattan}}(s, g) = \Delta \cdot \left(\lvert i_g - i_s \rvert + \lvert j_g - j_s \rvert\right)
 $$
 
-The sum of the vertical and horizontal distances. It is admissible on 4-connected grids (no diagonals).
+The sum of the vertical and horizontal distances. It is admissible on four-connected grids (no diagonals).
 
 !!! warning
-    On 8-connected grids, the Manhattan heuristic **overestimates**: one diagonal step of $30\sqrt{2} \approx 42.4$ m covers a Manhattan distance of 60 m. It is then **inadmissible**, and A\* may return a route that is not optimal. Use `euclidean` or `chebyshev` instead.
+    On eight-connected grids, the Manhattan heuristic **overestimates**: one diagonal step of $30\sqrt{2} \approx 42.4$ m covers a Manhattan distance of 60 m. It is then **inadmissible**, and A\* may return a route that is not optimal. Use `euclidean` or `chebyshev` instead.
 
 ### Chebyshev Heuristic
 
@@ -132,17 +133,17 @@ $$
 h_{\text{chebyshev}}(s, g) = \Delta \cdot \max\left(\lvert i_g - i_s \rvert,\; \lvert j_g - j_s \rvert\right)
 $$
 
-The "chessboard" distance. It is admissible on 4- and 8-connected grids. It is never larger than the Euclidean distance, so it is never tighter.
+The "chessboard" distance. It is admissible on four- and eight-connected grids. It is never larger than the Euclidean distance, so it is never tighter.
 
 ---
 
 ## Heuristic Comparison
 
-| Heuristic | Formula | Best for | On 8-connected grids |
+| Heuristic | Formula | Best for | On eight-connected grids |
 |-----------|---------|----------|-----------|
-| Euclidean | $\Delta\sqrt{\Delta i^2 + \Delta j^2}$ | 8-connected grids | Admissible; tightest of the three |
-| Manhattan | $\Delta(\lvert \Delta i \rvert + \lvert \Delta j \rvert)$ | 4-connected grids | Inadmissible |
-| Chebyshev | $\Delta \max(\lvert \Delta i \rvert, \lvert \Delta j \rvert)$ | 8-connected grids | Admissible; never tighter than Euclidean |
+| Euclidean | $\Delta\sqrt{\Delta i^2 + \Delta j^2}$ | Eight-connected grids | Admissible; tightest of the three |
+| Manhattan | $\Delta(\lvert \Delta i \rvert + \lvert \Delta j \rvert)$ | Four-connected grids | Inadmissible |
+| Chebyshev | $\Delta \max(\lvert \Delta i \rvert, \lvert \Delta j \rvert)$ | Eight-connected grids | Admissible; never tighter than Euclidean |
 
 ---
 

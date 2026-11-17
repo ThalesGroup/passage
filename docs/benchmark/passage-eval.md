@@ -5,7 +5,6 @@ icon: material/package-variant-closed
 
 # `passage-eval` package
 
-
 `passage_eval` loads released scenes, scores decoded paths under their analytic
 terrain task, and preserves the evidence needed for statistical comparison. It
 ships in the root `passage` distribution, version `1.0.0`. This guide uses the
@@ -156,7 +155,9 @@ appropriate measured inputs; they do not infer missing studies from a single run
 
 ## 5. Sidecars and result storage
 
-`Submission` and `submit` write metric rows and optional evidence. By default,
+`Submission` and `submit` write metric rows and optional evidence to a local
+results root; these records are not leaderboard entries (see
+[Submit a candidate](candidate-registration.md)). By default,
 a `Submission` records the local host name and user name; remove them before
 you share results. The CLI workflow writes a run manifest, terminal request
 records, numeric route arrays and reference qualifications. Offline scoring adds

@@ -7,8 +7,12 @@ icon: material/book-open-page-variant
 
 Use this guide to build PASSAGE scenes from source elevation tiles and
 prepare them for publication on the Hugging Face Hub. The
-[Generation Process](../generation/index.md) explains how the generator
+[generation process](../generation/index.md) pages explain how the generator
 samples crops, places obstacles and solves routes.
+
+To use the released PASSAGE v1.0 data, you do not need to regenerate it:
+start from the [dataset card](../dataset/index.md) and the
+[data format](../architecture/data-format.md).
 
 To **score a planner** on the resulting benchmark (decoded-path
 metrics, statistical discipline, deployment footprint), see the

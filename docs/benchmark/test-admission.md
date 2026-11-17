@@ -10,7 +10,7 @@ icon: material/gate
 
 This page is a developer reference for the guarded harness and its pinned
 admission records. Its historical roster S covers 1,024 scenes selected from
-the 256×256 test split. The [paper results](candidates.md) describe a separate
+the 256×256 test split. The [paper results](candidates/index.md) describe a separate
 40,000-scene comparison on the full split. A recorded gate outcome establishes
 whether a specific guarded run may proceed; paper measurements and leaderboard
 admission are separate.

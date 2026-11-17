@@ -2,6 +2,7 @@
 title: "Timing a planner fairly"
 hide:
   - toc
+icon: material/notebook-outline
 ---
 
 # Timing a planner fairly

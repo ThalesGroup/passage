@@ -5,12 +5,12 @@ icon: material/api
 
 # `passage-eval` API reference
 
-Auto-generated documentation for every public symbol exported by the
+Auto-generated documentation for the main public modules of the
 [`passage-eval`](https://github.com/ThalesGroup/passage/tree/main/src/passage-eval)
 sub-package. The narrative usage guide lives at the
-[`passage-eval` package page](passage-eval.md); the formal protocol
-sits at [Evaluation protocol](protocol.md); the confirmatory paired analysis API
-is described at [Paired statistics](walkthrough.md). This page is the
+[`passage-eval` package page](../passage-eval.md); the formal protocol
+sits at [Evaluation protocol](../protocol.md); the confirmatory paired analysis API
+is described at [Paired statistics](../walkthrough.md). This page is the
 canonical docstring view.
 
 ---
@@ -20,7 +20,7 @@ canonical docstring view.
 Existing algorithms implement `plan(PlanRequest) -> PlanResult`. The request
 contains candidate-visible terrain, endpoints, graph and shared budget; reference
 labels stay evaluator-owned. See
-[Evaluate your planner](contributing-a-method.md) for runnable specifications.
+[Evaluate your planner](../contributing-a-method.md) for runnable specifications.
 
 ::: passage_eval.protocol.contracts.GraphSpec
     options:
@@ -40,6 +40,38 @@ labels stay evaluator-owned. See
 ::: passage_eval.protocol.contracts.PlanResult
     options:
       show_root_heading: true
+      show_source: false
+
+---
+
+## Planner interface and data loading
+
+The lighter Python path of the [`passage-eval` package](../passage-eval.md) guide:
+load released scenes, score a `Planner` and reload its per-sample arrays.
+
+::: passage_eval.protocol.planner
+    options:
+      show_root_heading: true
+      members:
+        - Scene
+        - PlannerOutput
+        - Planner
+        - evaluate_planner
+        - score_planner
+      show_source: false
+
+::: passage_eval.io.dataset.load_val_scenes
+    options:
+      show_root_heading: true
+      show_source: false
+
+::: passage_eval.io.predictions
+    options:
+      show_root_heading: true
+      members:
+        - PerSampleArrays
+        - load_per_sample_npz
+        - primary_metrics_from_arrays
       show_source: false
 
 ---
@@ -73,7 +105,7 @@ labels stay evaluator-owned. See
 The censoring rule and the re-warm profile are proposals, not sealed rules. The
 developer guide `docs/benchmark/supervised-execution.md` in the source
 checkout (sections 5.G to 5.I, 6.I and 6.J) explains them, including the separate report of validation and
-recost time and the request limits that strict comparison requires; the [evaluation protocol](protocol.md) states the
+recost time and the request limits that strict comparison requires; the [evaluation protocol](../protocol.md) states the
 proposed censoring rule.
 
 ::: passage_eval.execution.timing
@@ -207,6 +239,24 @@ count, A$^{\star}$-expansions ratio, and decoder-recovery rate.
       members_order: source
       show_source: false
       filters: ["!^_"]
+
+---
+
+## Result records — `passage_eval.results`
+
+`Submission` rows of a local results root (`leaderboard.csv` and `runs/`).
+These local records are not leaderboard entries; to enter the leaderboard, see
+[Submit a candidate](../candidate-registration.md). By default a `Submission`
+records the local host and user names; remove them before sharing results.
+
+::: passage_eval.results
+    options:
+      show_root_heading: true
+      members:
+        - Submission
+        - submit
+        - load_leaderboard
+      show_source: false
 
 ---
 

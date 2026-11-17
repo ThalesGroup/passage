@@ -1,5 +1,6 @@
 ---
 title: "Step 1 — Download Tiles"
+icon: material/cloud-download-outline
 ---
 
 # Step 1 — Download Tiles
@@ -107,8 +108,9 @@ flowchart TD
 3. **Download and extract** — the ZIP goes to `archives/`. Each `*_DSM.tif`
    file is checked (safe name, complete size) in a staging folder, then moved
    to `tiles/`. The ZIP is deleted once extraction succeeds.
-4. **Retries** — network and archive errors are retried up to three times.
-   After that, the archive is marked `failed`.
+4. **Retries** — after a network or archive error, the archive is tried
+   again, up to three attempts in total. After the third failed attempt, the
+   archive is marked `failed`.
 5. **Tracking** — `download.csv` holds one row per archive (`lat_min`,
    `lon_min`, `url`, `url_valid`, `extracted`, `status`, `error`), and
    `download_summary.json` counts the archives per status.

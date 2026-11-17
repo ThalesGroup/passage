@@ -1,3 +1,7 @@
+---
+icon: material/license
+---
+
 # Third-party notices
 
 The PASSAGE documentation site includes components from other projects. Their

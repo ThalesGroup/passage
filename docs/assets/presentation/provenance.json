@@ -1,64 +1,90 @@
 {
-  "schema": "passage-presentation-assets/v1",
+  "schema": "passage-presentation-assets/v2",
+  "presentation": "PASSAGE, NeurIPS 2026 Track on Evaluations and Datasets: recorded talk, slides and speaker script",
   "source_bundle_id": "neurips-20261114-poster-v9-talk-v17-final",
   "source_delivery_date": "2026-11-14",
-  "source_versions": {
-    "talk": "v17 final",
-    "poster": "v9 final"
-  },
+  "speaker_script_source": "talk/passage_talk_v17_final_script.md",
+  "video": "https://recorder-v3.slideslive.com/#/share?share=115719&s=628ee4dc-6efc-43ae-b73d-1e8a629abbc8",
   "artifacts": [
     {
-      "file": "dataset.png",
-      "source": "talk/slides_png/slide_03.png",
-      "source_version": "talk v17, slide 3",
-      "bytes": 356418,
-      "sha256": "73a934313bb7feffa2c9268a34718bd388ac95be8d1d06b4a9614d6eb40dce39",
-      "copy_method": "byte-for-byte copy; no image or PDF transformation"
+      "file": "slides/slide-01.webp",
+      "source": "talk/slides_png/slide_01.png",
+      "source_sha256": "8ec2ce5cef9f48341eca54f4f818007b1110f4d565157199e12fa20bc647367f",
+      "bytes": 152488,
+      "sha256": "dfd49c9c656b6768db7834d1242d84883322489847e59684dff3df51a38ad839",
+      "copy_method": "WebP re-encoding of the 1920 × 1080 PNG render (quality 86)"
     },
     {
-      "file": "evaluation.png",
+      "file": "slides/slide-02.webp",
+      "source": "talk/slides_png/slide_02.png",
+      "source_sha256": "f612f6e57a87890831bfa340550d57f64d7c53b8b955fffd963264fc3eeaf430",
+      "bytes": 233966,
+      "sha256": "14605c9dfbef798d36ffc269ad7c60327a4bfa80c77b317db20d28a001556f5f",
+      "copy_method": "WebP re-encoding of the 1920 × 1080 PNG render (quality 86)"
+    },
+    {
+      "file": "slides/slide-03.webp",
+      "source": "talk/slides_png/slide_03.png",
+      "source_sha256": "73a934313bb7feffa2c9268a34718bd388ac95be8d1d06b4a9614d6eb40dce39",
+      "bytes": 182926,
+      "sha256": "3d65ea6ee07306785671f40055465900740e05de81b0e932cf5d9a347d4a70ea",
+      "copy_method": "WebP re-encoding of the 1920 × 1080 PNG render (quality 86)"
+    },
+    {
+      "file": "slides/slide-04.webp",
+      "source": "talk/slides_png/slide_04.png",
+      "source_sha256": "dbb58da7817222cb9decad649db0c84667a4040d94e431de08521d4fda1c25a0",
+      "bytes": 167794,
+      "sha256": "0dffa455ab844731c023a734ef7c831df61a0a74224edaf479fac7e83f3a75ed",
+      "copy_method": "WebP re-encoding of the 1920 × 1080 PNG render (quality 86)"
+    },
+    {
+      "file": "slides/slide-05.png",
       "source": "talk/slides_png/slide_05.png",
-      "source_version": "talk v17, slide 5",
+      "source_sha256": "d1e3ba765972ff46686a608f8f9ab20c191d4ce023273e18e66aab899a2c1256",
       "bytes": 139563,
       "sha256": "d1e3ba765972ff46686a608f8f9ab20c191d4ce023273e18e66aab899a2c1256",
-      "copy_method": "byte-for-byte copy; no image or PDF transformation"
+      "copy_method": "byte-for-byte copy of the 1920 × 1080 PNG render"
     },
     {
-      "file": "candidates.png",
+      "file": "slides/slide-06.webp",
       "source": "talk/slides_png/slide_06.png",
-      "source_version": "talk v17, slide 6",
-      "bytes": 358531,
-      "sha256": "eddccfd43fb0e89a2f9c12bbb09624d15f89154bcc8c0c21beb91ee229b13379",
-      "copy_method": "byte-for-byte copy; no image or PDF transformation"
+      "source_sha256": "eddccfd43fb0e89a2f9c12bbb09624d15f89154bcc8c0c21beb91ee229b13379",
+      "bytes": 178636,
+      "sha256": "7a13334c5975d0558146004e458b2af72acb9b0f55bccb420c5b089c363ef598",
+      "copy_method": "WebP re-encoding of the 1920 × 1080 PNG render (quality 86)"
     },
     {
-      "file": "passage_talk_v17_final.pdf",
+      "file": "slides/slide-07.png",
+      "source": "talk/slides_png/slide_07.png",
+      "source_sha256": "2525474cbffcc58db81d204f9cacaae534b13ebdb98e7f110d9774a2c7a9040c",
+      "bytes": 144619,
+      "sha256": "2525474cbffcc58db81d204f9cacaae534b13ebdb98e7f110d9774a2c7a9040c",
+      "copy_method": "byte-for-byte copy of the 1920 × 1080 PNG render"
+    },
+    {
+      "file": "slides/slide-08.webp",
+      "source": "talk/slides_png/slide_08.png",
+      "source_sha256": "885c39364193edcbd01e15dcc32174c36dc06b3e279b554f48dfe129cafc5fa8",
+      "bytes": 144066,
+      "sha256": "936e03efb03c658eeaeebb407f3658292adcf9275ce17bd40d2c88a8a9c5563b",
+      "copy_method": "WebP re-encoding of the 1920 × 1080 PNG render (quality 86)"
+    },
+    {
+      "file": "slides/slide-09.webp",
+      "source": "talk/slides_png/slide_09.png",
+      "source_sha256": "95f322fc67bdea4285aa223fd1bf07cfd2493ef5d7b3b7f907c14c05afd9bf25",
+      "bytes": 229586,
+      "sha256": "fa376a63e77b7e6a5328f1950215db4c1f15b0f5af2802d277c8febef9b63fe7",
+      "copy_method": "WebP re-encoding of the 1920 × 1080 PNG render (quality 86)"
+    },
+    {
+      "file": "passage-neurips-2026-talk.pdf",
       "source": "passage_talk_v17_final.pdf",
-      "source_version": "final talk v17",
+      "source_sha256": "0d8a9553043c05490edd413cfd77697c33a594ab7b49e71c96d4dacde8a8c7cf",
       "bytes": 2035121,
       "sha256": "0d8a9553043c05490edd413cfd77697c33a594ab7b49e71c96d4dacde8a8c7cf",
-      "copy_method": "byte-for-byte copy; no image or PDF transformation"
-    },
-    {
-      "file": "passage_poster_v9_final.pdf",
-      "source": "passage_poster_v9_final.pdf",
-      "source_version": "final poster v9",
-      "bytes": 1506882,
-      "sha256": "df32beb30efacb0bc6adc58d8728009b9063f69ec50fc1398978a091a23dc9ac",
-      "copy_method": "byte-for-byte copy; no image or PDF transformation"
+      "copy_method": "byte-for-byte copy, renamed"
     }
-  ],
-  "qualitative_example": {
-    "source": "media/manifest.json, scene",
-    "source_sha256": "98979aecd6f912d11e082c5d1e251e65695280748188cf4164765142c9aa29cb",
-    "sample_id": "0000001971",
-    "split": "train",
-    "resolution": 256,
-    "seed": 2026,
-    "scope": "Qualitative TRAIN256 example; per-scene elevation costs, not aggregate TEST results.",
-    "displayed_excess_cost_percent": {
-      "seg": 2.5,
-      "reg": 16.2
-    }
-  }
+  ]
 }

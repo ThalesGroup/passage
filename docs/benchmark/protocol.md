@@ -5,7 +5,6 @@ icon: material/format-list-numbered
 
 # Evaluation protocol
 
-
 The evaluator implements the paper's terrain task and decoded-path metrics.
 This page defines the executable contract, reference costs, path metrics,
 calibration procedure and statistical comparisons.
@@ -19,9 +18,9 @@ procedure, reference paths and metric contract.
 
 The complete-request workflow qualifies references, persists each timed route,
 then scores every repeat offline. The
-[paper results](candidates.md) describe the locked, exploratory comparison on
+[paper results](candidates/index.md) describe the locked, exploratory comparison on
 all 40,000 public 256×256 test scenes; earlier validation exports do not
-reconstruct it. The [candidate guide](contributing-a-method.md) documents the runnable commands,
+reconstruct it. [Evaluate your planner](contributing-a-method.md) documents the runnable commands,
 deadline handling, primary-repeat selection and reference-cohort policies.
 
 ## 2. Released scenes and analytic costs
@@ -86,7 +85,7 @@ reliability rates and `n_path_valid`; never hide the reduced geometry coverage.
 
 Use `score_planner` or `evaluate_planner` to evaluate paths. The lower-level
 `compute_primary_metrics` assumes its supplied costs already use the analytic
-scene model. See [the API guide](passage-eval.md).
+scene model. See the [`passage-eval` package](passage-eval.md) guide.
 
 ## 4. Calibration and statistical discipline
 
@@ -128,8 +127,8 @@ remain descriptive and no confirmatory win is returned. An unavailable test
 stays in the six-test family. More method pairs require a prespecified larger
 correction family.
 
-The prospective `passage_eval.protocol.block_randomization` helper implements
-one possible paired test: swap method labels independently by whole geographic
+For a predeclared comparison, the `passage_eval.protocol.block_randomization`
+helper implements one possible paired test: swap method labels independently by whole geographic
 block, with the same swap across all seeds, and recompute each seed-mean
 aggregate contrast. Exact enumeration is available for small block counts;
 otherwise random swaps include the observed identity in the p-value numerator
@@ -165,8 +164,9 @@ without footprint instead of inventing singleton blocks. The label-free census
 largest block's share for both rules before any result; its adequacy criterion
 (at least 30 blocks, no block above 10 % of the tasks) is a proposal, not a
 sealed value. The optional `python -I -m passage_eval.campaign statistics` command
-links previously pinned campaign aggregates to `compare_primary_metrics` and the
-block randomization test; it is outside the current single-seed qualification. One
+applies `compare_primary_metrics` and the block randomization test to the pinned
+Seg and Reg aggregates of a supervised campaign, one pair per training seed; it is
+not part of a descriptive single-seed pass. One
 training seed gives descriptive per-seed intervals without p-values or Holm; the
 three declared seeds would give the confirmatory family only when the blocks meet
 the sealed criterion. Released paper results are reported separately and are
@@ -191,15 +191,15 @@ deadline outcomes and missing timings are reported separately. Compare timings
 on the same target and workload, with the same batch size and timing boundary.
 Report the runtime and numerical precision used by each method.
 
-The [paper results](candidates.md) report this full comparison at 256×256
+The [paper results](candidates/index.md) report this full comparison at 256×256
 only. Results outside that resolution, including 1024×1024, use 1,024 test
 scenes per grid size and one neural seed, and are indicative.
 
 **Local evaluator and supervised runners.** These runners have their own
 timing boundaries. The unit of `latency_warmup` (default 5) depends on the
 runner. The in-process CLI runner performs that many recorded warm-up *passes* over the selected tasks,
-then one warm measured pass, with a separate cold pass after candidate
-construction. The supervised chain instead performs that many untimed warm-up
+then the warm measured series (one pass, or `latency_repeats` passes when
+declared), with a separate cold pass after candidate construction. The supervised chain instead performs that many untimed warm-up
 *requests* per warm pass, on inputs disjoint from the roster, in fresh workers
 (see `docs/benchmark/supervised-execution.md` in the source checkout).
 A supervised series measured without a warm-up is called `unwarmed`. A campaign
@@ -248,8 +248,9 @@ value. The block also gives the numbers of requests, distinct scenes, repeats
 per scene, successes, timeouts, censored requests and failures that are not
 timeouts; successes, timeouts and other failures add up to the number of
 requests. Success-only percentiles appear as secondary values only. The legacy
-interpolated summaries and the paired latency contrasts of `compare` count the
-censored requests they treat as finite values. A flag states whether the series
+interpolated summaries and the paired latency contrasts of `compare` treat
+censored requests as finite values (their recorded lower bounds) and report how
+many they include. A flag states whether the series
 holds at least 100 warm requests, a harness reporting threshold; the flag does not
 admit or refuse a result. A request counts as warm only after the warm-up that
 the run declares and records, never because its series is named `warm`. The
@@ -275,9 +276,9 @@ precision, evaluator commit and source hash, and a declared container digest.
 Absent calibration/container declarations remain absent. Determinism defaults to
 `non_deterministic`; a stronger claim requires the submitter's evidence.
 
-The test admission gate, documented in `docs/benchmark/test-admission.md`
-in the source checkout, checks whether a guarded run may proceed under its
-recorded scope. A green gate is separate from
+The test admission gate (`passage-eval admission-check`), documented in
+`docs/benchmark/test-admission.md` in the source checkout, checks whether a
+guarded run may proceed under its recorded scope. A green gate is separate from
 leaderboard verification and the paper's reproducible-entry requirements.
 The latter require the published commit and container digest needed to
 rebuild the reference solver, candidate procedure and runtime, along with

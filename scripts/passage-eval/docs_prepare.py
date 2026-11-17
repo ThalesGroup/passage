@@ -185,6 +185,7 @@ def _wrapper_md(spec: NotebookSpec) -> str:
 title: "{spec.title}"
 hide:
   - toc
+icon: material/notebook-outline
 ---
 
 # {spec.title}

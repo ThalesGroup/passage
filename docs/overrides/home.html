@@ -40,10 +40,17 @@ Home page: a full-width hero above the Markdown content of docs/index.md.
       <h1 class="pg-title" id="pg-hero-title">PASSAGE</h1>
       <p class="pg-tagline">{{ page.meta.tagline }}</p>
       <div class="pg-actions">
-        <a class="pg-btn pg-btn--primary" href="{{ 'guide/' | url }}">Get started</a>
+        <a class="pg-btn pg-btn--primary" href="{{ 'dataset/' | url }}">Get started</a>
         <a class="pg-btn" href="{{ 'benchmark/' | url }}">Benchmark</a>
         <a class="pg-btn" href="#cite-passage">Cite</a>
       </div>
+
+      <figure class="pg-banner">
+        <picture>
+          <source type="image/webp" srcset="{{ 'assets/banner-768.webp' | url }} 768w, {{ 'assets/banner.webp' | url }} 1536w" sizes="(max-width: 60em) 100vw, 1100px">
+          <img src="{{ 'assets/banner.png' | url }}" width="1536" height="1024" alt="PASSAGE banner: a rescue helicopter over snow-covered mountains at sunset" loading="eager" decoding="async">
+        </picture>
+      </figure>
 
       <aside class="pg-neurips" aria-label="NeurIPS 2026 acceptance">
         <span class="pg-neurips__icon" aria-hidden="true">{% include ".icons/material/trophy-outline.svg" %}</span>

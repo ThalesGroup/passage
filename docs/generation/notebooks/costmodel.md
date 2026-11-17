@@ -2,6 +2,7 @@
 title: "The three routing objectives"
 hide:
   - toc
+icon: material/notebook-outline
 ---
 
 # The three routing objectives

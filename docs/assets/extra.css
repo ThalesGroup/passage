@@ -497,10 +497,6 @@
 /* Glance table + figure */
 .md-typeset .pg-figure { margin: 1.4rem auto; text-align: center; }
 .md-typeset .pg-figure img { border-radius: 12px; box-shadow: 0 0 0 1px var(--pg-line), var(--pg-shadow); }
-.md-typeset .pg-figure.pg-art img { border-radius: 16px; box-shadow: 0 0 0 1px color-mix(in srgb, var(--pg-cyan) 35%, transparent), 0 18px 50px rgba(2, 4, 16, 0.35), 0 0 48px var(--pg-glow); }
-.md-typeset .pg-why { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr); gap: 1.4rem; align-items: start; margin: 0.4rem 0 1rem; }
-.md-typeset .pg-why .pg-lede { margin: 0; }
-.md-typeset .pg-why .pg-figure { margin: 0; }
 .md-typeset .pg-figure figcaption { max-width: 44rem; margin: 0.6rem auto 0; font-size: 0.62rem; color: var(--md-default-fg-color--light); }
 
 /* Citation */
@@ -575,6 +571,56 @@
 .md-footer { position: relative; }
 .md-footer::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 1px; background: linear-gradient(90deg, transparent, var(--pg-cyan-neon), var(--pg-violet-neon), transparent); opacity: 0.45; }
 
+/* Hero banner: the helicopter artwork is the centrepiece of the hero, framed by a
+   neon edge that slowly circulates; a soft float and the glow stop under reduced
+   motion. */
+.pg-banner {
+  position: relative; margin: 0.9rem 0 0.2rem; width: min(100%, 1040px); border-radius: 20px; padding: 2px;
+  background: conic-gradient(from var(--pg-banner-angle, 0deg), rgba(73, 224, 255, 0.95), rgba(124, 128, 255, 0.85), rgba(83, 184, 217, 0.25), rgba(73, 224, 255, 0.95));
+  box-shadow: 0 0 34px rgba(73, 224, 255, 0.28), 0 0 90px rgba(124, 128, 255, 0.18), 0 28px 70px rgba(2, 4, 16, 0.55);
+  animation: pg-banner-spin 14s linear infinite, pg-banner-float 9s ease-in-out infinite alternate;
+}
+.pg-banner picture, .pg-banner img { display: block; width: 100%; height: auto; border-radius: 18px; }
+.pg-banner::after {
+  content: ""; position: absolute; inset: 2px; border-radius: 18px; pointer-events: none;
+  background: linear-gradient(180deg, transparent 62%, rgba(4, 6, 26, 0.35)), radial-gradient(120% 80% at 50% 120%, rgba(73, 224, 255, 0.16), transparent 60%);
+}
+@property --pg-banner-angle { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
+@keyframes pg-banner-spin { to { --pg-banner-angle: 360deg; } }
+@keyframes pg-banner-float { from { transform: translateY(0); } to { transform: translateY(-6px); } }
+@media (prefers-reduced-motion: reduce) { .pg-banner { animation: none; } }
+
+/* Presentation page: responsive 16:9 video in a neon frame, and speaker-script
+   blocks under each slide. */
+.md-typeset .pg-video {
+  position: relative; aspect-ratio: 16 / 9; width: 100%; margin: 0.6rem 0 1rem; border-radius: 16px; overflow: hidden;
+  background: #04061a; box-shadow: 0 0 0 1px color-mix(in srgb, var(--pg-cyan) 45%, transparent), 0 0 40px var(--pg-glow), 0 22px 60px rgba(2, 4, 16, 0.4);
+}
+.md-typeset .pg-video iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; border-radius: 0; }
+.md-typeset .pg-script {
+  position: relative; margin: 0.8rem 0 2rem; padding: 0.85rem 1.1rem 0.2rem 1.15rem; border-radius: var(--pg-radius);
+  background: var(--pg-surface); border: 1px solid var(--pg-line); border-inline-start: 3px solid var(--pg-cyan);
+}
+.md-typeset .pg-script::before {
+  content: "Script"; display: block; margin-bottom: 0.35rem; font: 700 0.56rem/1 var(--pg-font-display);
+  letter-spacing: 0.18em; text-transform: uppercase; color: var(--pg-cyan);
+}
+.md-typeset .pg-script p { margin: 0 0 0.75rem; }
+.md-typeset h3 + p img[src*="presentation/slides/"] { border-radius: 12px; box-shadow: 0 0 0 1px var(--pg-line), var(--pg-shadow); }
+
+/* Material buttons in the neon palette: outline by default, gradient when primary. */
+.md-typeset .md-button {
+  color: var(--md-typeset-a-color); border: 1px solid color-mix(in srgb, var(--pg-cyan) 55%, transparent); border-radius: 999px;
+  background: color-mix(in srgb, var(--pg-surface) 70%, transparent); font-weight: 600; padding: 0.55em 1.3em;
+  transition: color 0.2s, border-color 0.2s, box-shadow 0.25s, background 0.2s;
+}
+.md-typeset .md-button:is(:hover, :focus-visible) {
+  color: var(--md-default-fg-color); border-color: var(--pg-cyan); background: color-mix(in srgb, var(--pg-cyan) 12%, var(--pg-surface)); box-shadow: 0 0 14px var(--pg-glow);
+}
+.md-typeset .md-button--primary { color: #06102e; border-color: transparent; background: linear-gradient(110deg, #49e0ff, #53b8d9 45%, #7c80ff); }
+.md-typeset .md-button--primary:is(:hover, :focus-visible) { color: #06102e; background: linear-gradient(110deg, #49e0ff, #53b8d9 45%, #7c80ff); box-shadow: 0 0 18px rgba(73, 224, 255, 0.45); }
+.md-typeset .md-button .twemoji, .md-typeset .md-button svg { vertical-align: -0.15em; }
+
 /* ------------------------------------------------------------- keyframes */
 @keyframes pg-drift { from { transform: translate3d(0, 0, 0) scale(1.03); } to { transform: translate3d(-28px, 10px, 0) scale(1.07); } }
 @keyframes pg-draw { to { stroke-dashoffset: 0; } }
@@ -601,8 +647,7 @@
   .md-typeset .pipeline-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media screen and (max-width: 59.9375em) {
-  .md-typeset .pg-why { grid-template-columns: minmax(0, 1fr); gap: 1rem; }
-}
+  }
 @media (prefers-reduced-motion: reduce) {
   .hero-contours, .hero-ridge, .hero-route, .hero-pulse, .hero-goal-ring, .pg-title { animation: none; }
   .hero-route { stroke-dashoffset: 0; }

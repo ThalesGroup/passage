@@ -8,5 +8,5 @@ Attribution for the dataset, as JAXA asks: **The original data used for this
 product have been supplied by JAXA's ALOS World 3D–30m (AW3D30).**
 
 The documentation logo and favicon (`docs/assets/logo.svg`,
-`docs/assets/favicon.svg`) are original artwork of the PASSAGE project, released
-under the MIT License with the code.
+`docs/assets/favicon.svg`) are a vector redraw of the PASSAGE app icon, original
+artwork of the PASSAGE project, released under the MIT License with the code.

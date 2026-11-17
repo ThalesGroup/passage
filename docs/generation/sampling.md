@@ -1,5 +1,6 @@
 ---
 title: Sampling Procedure
+icon: material/dice-multiple-outline
 ---
 
 # Sampling Procedure
@@ -93,7 +94,7 @@ The **marker channel** of the output tensor encodes both endpoints:
 
 ## Step 5 — Add Obstacles
 
-Super-ellipse obstacles are drawn on the crop. They cover at most 30 % of it and never cover the start or the goal. Obstacle cells are blocked for routing; if they disconnect the start from the goal, the attempt is rejected. See [Obstacle Generation](obstacles.md).
+Superellipse obstacles are drawn on the crop. They cover at most 30 % of it and never cover the start or the goal. Obstacle cells are blocked for routing; if they disconnect the start from the goal, the attempt is rejected. See [Obstacle Generation](obstacles.md).
 
 ---
 

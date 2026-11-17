@@ -1,5 +1,6 @@
 ---
 title: "Step 2 — Calibrate Elevations"
+icon: material/tune-variant
 ---
 
 # Step 2 — Calibrate Elevations
@@ -179,4 +180,4 @@ Lists hold one entry per tile; `"…"` marks shortened values. The two
 
 ## Next Step
 
-With calibration complete, proceed to **[Step 3 — Generate Dataset](generate.md)** to create pathfinding samples.
+With calibration complete, proceed to **[Step 3 — Generate Dataset](generate.md)** to create the scenes.

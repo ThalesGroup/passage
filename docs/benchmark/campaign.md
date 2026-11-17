@@ -12,7 +12,7 @@ A campaign runs the procedures of a sealed plan over an admissible roster, in lo
 aggregates the scored lots per procedure. This guide describes the supervised
 campaign for the historical 1,024-scene roster S at 256×256 with training seed
 2026 and the frozen Seg and Reg candidates. Physical A* supplies a host-side
-reference for that plan. The [paper results](candidates.md) cover a separate
+reference for that plan. The [paper results](candidates/index.md) cover a separate
 direct timing campaign on the full test split with a timed same-device CPU A*
 reference. The supervised harness pins each plan and opens test only when its
 admission record is all green.

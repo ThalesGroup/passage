@@ -1,5 +1,6 @@
 ---
 title: Installation
+icon: material/tools
 ---
 
 # Installation
@@ -28,8 +29,8 @@ This page covers how to set up PASSAGE on your machine, install dependencies, an
 ## Install with `uv` (Recommended)
 
 [`uv`](https://docs.astral.sh/uv/) is a fast Python package manager. With the
-repository's `uv.lock` file, it installs the exact locked versions. The
-source checkout requires access to the [PASSAGE repository](https://github.com/ThalesGroup/passage):
+`uv.lock` file of the [PASSAGE repository](https://github.com/ThalesGroup/passage),
+it installs the exact locked versions:
 
 ```bash
 # Install uv (if not already installed)
@@ -184,7 +185,9 @@ passage/
 │   └── passage-eval/         # Evaluator, imported as passage_eval
 ├── tests/                    # Test suite; evaluator tests in tests/passage_eval/
 ├── notebooks/                # Notebook sources and per-resolution templates
-├── assets/                   # Banner, sample images, hold-out mask
+├── paper/notebooks/          # Study notebooks published under notebooks/paper/ on the Hub
+├── assets/                   # Banner, badges, dataset card template; place the hold-out mask here
+├── examples/                 # Planner and candidate-package examples for passage-eval
 ├── scripts/                  # Install and documentation helpers
 ├── docs/                     # Documentation site source
 ├── outputs/                  # Generated files (ignored by git)

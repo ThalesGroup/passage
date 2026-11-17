@@ -5,7 +5,7 @@ icon: material/sitemap
 
 # Code Architecture
 
-This section describes the internal organization of the PASSAGE codebase: module responsibilities, data flows, design patterns and testing strategy. One distribution ships two packages: `passage` (`src/passage/`, the data pipeline) and `passage_eval` (`src/passage-eval/`, the evaluator).
+This section describes the internal organization of the PASSAGE codebase: module responsibilities, data flows, design patterns and testing strategy. One distribution ships two packages: `passage` (`src/passage/`, the data pipeline) and `passage_eval` (`src/passage-eval/`, the evaluator). These pages describe the `passage` package; the evaluator is described in the [`passage-eval` package](../benchmark/passage-eval.md) guide and its [API reference](../benchmark/api/index.md).
 
 ---
 
@@ -123,7 +123,7 @@ The role of each source module, its main functions and the ten CLI subcommands.
 
 <div class="feature-card" markdown>
 ### [Data Format](data-format.md)
-Tensor encoding, metadata keys, route files, Parquet columns and file naming conventions.
+In the Dataset section: tensor encoding, metadata keys, route files, Parquet columns and file naming conventions.
 </div>
 
 <div class="feature-card" markdown>

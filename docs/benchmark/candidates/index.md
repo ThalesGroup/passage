@@ -9,7 +9,7 @@ The camera-ready PASSAGE paper compares two dense-vision planners and a
 same-device CPU A* reference on all **40,000 test scenes at 256×256**, using
 the `elevation` objective with weight **62.4**. This was a locked comparison
 after prior exposure to the public test split, so the results are exploratory.
-They are reported separately from the [leaderboard](leaderboard.md).
+They are reported separately from the [leaderboard](../leaderboard/index.md).
 
 ## What the paper measured
 
@@ -25,7 +25,7 @@ checks the returned route and recomputes its physical cost independently.
 | Reg (cost-to-go regression) | RepViT-M1 predicts a softplus cost-to-go field | Geometric Bellman descent, with goal-rooted geometric Dijkstra reconnection if descent stalls |
 | Physical A* reference | No network | Exact A* on the physical edge costs |
 
-See [Final dense-vision candidates](final-candidates.md) for decoder parameters
+See [Final dense-vision candidates](../final-candidates.md) for decoder parameters
 and checkpoint records.
 
 On each target, the neural methods ran on the GPU, and route decoding and
@@ -74,7 +74,8 @@ are indicative: training budgets, numerical precision and power settings
 limit comparisons across sizes. Observed returns after the 5 s deadline
 remain in those timing summaries. The paper gives a full harness comparison only at 256×256.
 
-The [historical validation notebook](notebooks/02-paper-results.md) expects
-optional per-task files from earlier 256×256 validation runs. Those files
-use older baseline procedures and do not reconstruct the 40,000-scene
-comparison.
+The [historical validation notebook](../notebooks/02-paper-results.md) reads the
+tracked per-seed `metrics.json` files under
+`src/passage-eval/results/paper-results/`, from earlier 256×256 validation runs.
+Those runs use older baseline procedures and do not reconstruct the
+40,000-scene comparison.

@@ -1,3 +1,7 @@
+---
+icon: material/notebook-check-outline
+---
+
 # Notebook rendering and licenses
 
 The documentation links to notebook source files; it does not distribute

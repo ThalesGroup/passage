@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Restyle the documentation site and the README header with the PASSAGE Neon
+  theme, built on the Thales colours of the app icon; the helicopter banner
+  stays the centre of the home hero.
+- Reorganise the documentation into Home, Dataset and Benchmark. Release,
+  presentation and policies are under Home, generation and the data format
+  under Dataset, and code architecture and API under Benchmark.
+- Replace the presentation schemes with the NeurIPS 2026 talk: the recorded
+  video, then every slide with its speaker script.
+- Define the leaderboard submission process: Seg and Reg as the main candidates
+  and the model for new ones, a contestant guide with a local check and a
+  GitHub submission form, and the Thales runbook from intake to publication.
 - Refresh the ImageIO, Loguru, Plotly, Pymdown Extensions and python-dotenv
   dependencies. Update Mkdocstrings alongside Pymdown Extensions to preserve
   documentation highlighting, and remove an unsupported Hugging Face Hub extra.

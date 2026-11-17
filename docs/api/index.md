@@ -1,11 +1,13 @@
 ---
 title: API Reference
-icon: material/api
+icon: material/code-braces
 ---
 
-# API Reference
+# `passage` API reference
 
-Auto-generated documentation from PASSAGE source code docstrings.
+Auto-generated documentation from the docstrings of the `passage` generator
+package (`src/passage/`). The evaluator has its own
+[`passage-eval` API reference](../benchmark/api/index.md).
 
 ---
 

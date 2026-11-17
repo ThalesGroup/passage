@@ -15,7 +15,7 @@ Four notebooks cover the `passage-eval` side: an evaluator walkthrough, historic
 
     ---
 
-    Writes a planner in a few lines, scores it next to the exact A* planner on one released task, reads each of the six primary metrics, then scores both on a small validation sample. It needs the local dataset copy declared by `dataset_path`; without it, the notebook needs to be run after fetching the data.
+    Writes a planner in a few lines, scores it next to the exact A* planner on one released task, reads each of the six primary metrics, then scores both on a small validation sample. It reads the local dataset copy named by `dataset_path`, or the Hub at the pinned `dataset_revision` when `dataset_path = None`.
 
     [:octicons-arrow-right-24: Open the notebook](./01-astar-walkthrough.md)
 
@@ -23,7 +23,7 @@ Four notebooks cover the `passage-eval` side: an evaluator walkthrough, historic
 
     ---
 
-    Tabulates optional per-task exports from earlier 256×256 validation runs with older Seg and Reg baseline procedures. The source notebook uses its original labels. It does not reconstruct the [camera-ready paper results](../candidates.md) or populate the leaderboard.
+    Tabulates the per-seed aggregate metrics (`metrics.json`) of earlier 256×256 validation runs with older Seg and Reg baseline procedures, stored under `src/passage-eval/results/paper-results/`, and their seed means. The source notebook uses its original labels. It does not reconstruct the [camera-ready paper results](../candidates/index.md) or populate the leaderboard.
 
     [:octicons-arrow-right-24: Open the notebook](./02-paper-results.md)
 
@@ -31,7 +31,7 @@ Four notebooks cover the `passage-eval` side: an evaluator walkthrough, historic
 
     ---
 
-    Scores the three classical planners shipped with `passage-eval` (exact A*, greedy, random walk) on 64 validation tasks for each objective, with a distribution-free interval for each median regret. Reference points for reading the metrics, not benchmark results. Needs the local dataset copy.
+    Scores the three classical planners shipped with `passage-eval` (exact A*, greedy, random walk) on 64 validation tasks for each objective, with a distribution-free interval for each median regret. Reference points for reading the metrics, not benchmark results. Reads the local dataset copy, or the Hub at the pinned revision.
 
     [:octicons-arrow-right-24: Open the notebook](./02-score-released-baselines.md)
 
@@ -39,7 +39,7 @@ Four notebooks cover the `passage-eval` side: an evaluator walkthrough, historic
 
     ---
 
-    Scores two classical planners, records them as `Submission` records in a temporary results folder and reads the table back: benchmark cell, six metrics, data revision and code version, without host or user names. Needs the local dataset copy.
+    Scores two classical planners, records them as `Submission` records in a temporary results folder and reads the table back: benchmark cell, six metrics, data revision and code version, without host or user names. Reads the local dataset copy, or the Hub at the pinned revision.
 
     [:octicons-arrow-right-24: Open the notebook](./03-leaderboard.md)
 

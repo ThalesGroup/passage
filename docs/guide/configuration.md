@@ -1,5 +1,6 @@
 ---
 title: Configuration Reference
+icon: material/file-cog-outline
 ---
 
 # Configuration Reference
@@ -125,8 +126,11 @@ hold_out:
 The mask is a 181 × 361 pixel PNG with one pixel per degree: row 0 is latitude
 +90°, column 0 is longitude −180°. Non-zero pixels mark hold-out tiles. Tiles
 inside the mask belong to the `test` split only, and every `test` scene comes
-from them. Supply an authorised mask at the configured path; it is not included in every source distribution.
-For the legacy generator, use a 1-bit, grayscale, RGB or RGBA PNG; RGB channels must agree.
+from them. The code repository does not include the mask: place it at the
+configured path before generation, as shown below. The release generator
+treats a pixel as hold-out when any of its RGB channels is non-zero. The other
+generation path (without `generation.dataset_version`) accepts a 1-bit,
+grayscale, RGB or RGBA PNG whose RGB channels agree.
 When hold-out filtering is enabled, a missing, unreadable or invalid mask stops generation.
 
 The public PASSAGE v1.0 hold-out mask is available separately from the [dataset repository](https://huggingface.co/datasets/thalesgroup/passage). To obtain it manually at the default path and verify its bytes before generation:
@@ -250,7 +254,7 @@ obstacles:
 | `shape.n.min` / `max` | Exponent range ($n=1$: diamond, $n=2$: ellipse, large $n$: close to a rectangle) |
 | `shape.n.distribution.type` | Distribution of the exponent: `log_uniform` (shipped), `uniform`, `beta` (parameters `a`, `b`) or `exponential` (parameter `lambda`) |
 | `generation.max_attempts` | Maximum complete mask attempts before falling back to an empty mask. Marker checks on each proposal normally make the first attempt sufficient |
-| `generation.candidates_per_mask` | Maximum placement rounds per mask. A round stops after 10 proposals that cover an endpoint |
+| `generation.candidates_per_mask` | Maximum placement rounds per mask. Placement stops after 10 proposals in a row that cover an endpoint |
 | `impassable` | `true`: obstacle cells are blocked, and a crop whose obstacles disconnect the start from the goal is rejected. The release generator requires `true` |
 | `obstacle_penalty` | Elevation penalty added to obstacle cells when `impassable: false`; not used by the v1.0 release |
 
