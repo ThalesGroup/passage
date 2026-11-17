@@ -14,13 +14,14 @@ from typing import Sequence
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
+
 @dataclass(frozen=True)
 class NotebookSpec:
     """One notebook + the metadata needed to render it as a docs page."""
 
-    stem: str                              #: file stem (no extension)
-    source: Path                           #: full path to the .ipynb
-    section: str                           #: 'benchmark' | 'generation'
+    stem: str  #: file stem (no extension)
+    source: Path  #: full path to the .ipynb
+    section: str  #: 'benchmark' | 'generation'
     title: str
     intro: str
     nav_label: str
@@ -206,7 +207,8 @@ def _index_md(specs: Sequence[NotebookSpec], section: str) -> str:
 
     [:octicons-arrow-right-24: Open the notebook](./{s.slug}.md)
 """
-        for s in specs if s.section == section
+        for s in specs
+        if s.section == section
     )
     title = "Benchmark notebooks" if section == "benchmark" else "Dataset / solver notebooks"
     summary = (
@@ -214,8 +216,7 @@ def _index_md(specs: Sequence[NotebookSpec], section: str) -> str:
         "walkthrough, historical validation results, classical baselines and the "
         "results format. Open each notebook source to view or run it locally."
         if section == "benchmark"
-        else
-        "Demo and analysis notebooks for the data-generation side. "
+        else "Demo and analysis notebooks for the data-generation side. "
         "Open each notebook source to view or run it locally."
     )
     return f"""---
@@ -244,14 +245,14 @@ icon: material/notebook-multiple
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="docs-prepare")
-    parser.add_argument("--no-execute", action="store_true",
-                        help="accepted for compatibility; notebooks are not executed")
-    parser.add_argument("--all", action="store_true",
-                        help="accepted for compatibility; notebooks are not executed")
-    parser.add_argument("--clean", action="store_true",
-                        help="accepted for compatibility; local exports are not removed")
-    parser.add_argument("--only", choices=["benchmark", "generation"],
-                          default=None, help="only process one track")
+    parser.add_argument(
+        "--no-execute", action="store_true", help="accepted for compatibility; notebooks are not executed"
+    )
+    parser.add_argument("--all", action="store_true", help="accepted for compatibility; notebooks are not executed")
+    parser.add_argument(
+        "--clean", action="store_true", help="accepted for compatibility; local exports are not removed"
+    )
+    parser.add_argument("--only", choices=["benchmark", "generation"], default=None, help="only process one track")
     args = parser.parse_args(argv)
 
     specs = [s for s in ALL_NOTEBOOKS if args.only in (None, s.section)]
