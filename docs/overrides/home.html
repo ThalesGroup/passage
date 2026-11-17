@@ -60,13 +60,6 @@ Home page: a full-width hero above the Markdown content of docs/index.md.
         {% endfor %}
       </ul>
 
-      <figure class="pg-banner">
-        <picture>
-          <source type="image/webp" srcset="{{ 'assets/banner-768.webp' | url }} 768w, {{ 'assets/banner.webp' | url }} 1536w" sizes="(max-width: 60em) 100vw, 1100px">
-          <img src="{{ 'assets/banner.png' | url }}" width="1536" height="1024" alt="PASSAGE banner: a rescue helicopter over snow-covered mountains at sunset" loading="eager" decoding="async">
-        </picture>
-      </figure>
-
       <dl class="pg-stats">
         {% for s in page.meta.stats %}
         <div><dt>{{ s.label }}</dt><dd data-count="{{ s.count }}" data-decimals="{{ s.decimals | default(0) }}" data-suffix="{{ s.suffix | default('') }}">{{ s.text }}</dd></div>
