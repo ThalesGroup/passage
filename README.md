@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/banner.png" alt="PASSAGE banner: real terrain with planned routes" width="100%"/>
+  <img src="assets/brand/banner.svg" alt="PASSAGE: a neon contour map with a least-cost route from a start cell to a goal cell, and the cells a search explored" width="100%"/>
 </p>
 
 <h1 align="center">PASSAGE: real-terrain benchmark for constrained path planning</h1>
@@ -9,11 +9,14 @@
 </p>
 
 <p align="center">
-  <a href="#citation">NeurIPS 2026: Evaluations and Datasets</a> •
-  <a href="https://huggingface.co/datasets/thalesgroup/passage">Dataset v1.0</a> •
-  <a href="https://www.python.org/">Python 3.11.5+</a> •
-  <a href="DATASET_LICENSE.md">AW3D30 data terms</a> •
-  <a href="LICENSE">MIT code licence</a>
+  <a href="#citation"><img src="assets/brand/badge-neurips-2026.svg" alt="NeurIPS 2026, Track on Evaluations and Datasets"></a>
+  <a href="https://huggingface.co/datasets/thalesgroup/passage"><img src="assets/brand/badge-dataset.svg" alt="Hugging Face dataset, version 1.0"></a>
+  <a href="docs/release.md"><img src="assets/brand/badge-code.svg" alt="Code release 1.0.0"></a>
+  <a href="#at-a-glance"><img src="assets/brand/badge-scenes.svg" alt="4.4 million scenes"></a>
+  <a href="#at-a-glance"><img src="assets/brand/badge-exact-routes.svg" alt="26.4 million exact routes"></a>
+  <a href="https://www.python.org/"><img src="assets/brand/badge-python.svg" alt="Python 3.11.5 or later"></a>
+  <a href="LICENSE"><img src="assets/brand/badge-code-licence.svg" alt="Code licence: MIT"></a>
+  <a href="DATASET_LICENSE.md"><img src="assets/brand/badge-data-terms.svg" alt="Data terms: JAXA AW3D30"></a>
 </p>
 
 <p align="center">
