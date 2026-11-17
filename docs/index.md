@@ -49,6 +49,7 @@ stats:
 
 ## <span aria-hidden="true">:material-terrain:</span> Why PASSAGE
 
+<div class="pg-why">
 <p class="pg-lede">Constrained path planning on real terrain underlies routing for
 search-and-rescue, robotics and airborne advisory systems, where rescue-helicopter
 crews fly through mountain passes, valleys and ridgelines. Existing public
@@ -56,6 +57,14 @@ benchmarks cover this only in part: synthetic grids give algorithmic control
 without geographic realism, and geographic data give real terrain without
 controllable obstacles or shared baselines (the
 <a href="#cite-passage">NeurIPS 2026 paper</a>, introduction).</p>
+<figure class="pg-figure pg-art">
+  <picture>
+    <source type="image/webp" srcset="assets/banner-768.webp 768w, assets/banner.webp 1536w" sizes="(max-width: 60em) 100vw, 560px">
+    <img src="assets/banner.png" width="1536" height="1024" alt="Illustration: a rescue helicopter over snow-covered mountains at sunset, titled PASSAGE, path solver dataset and generator" loading="lazy" decoding="async">
+  </picture>
+  <figcaption>Illustration: rescue-helicopter routing through mountain passes, valleys and ridgelines, the real-terrain setting that motivates PASSAGE.</figcaption>
+</figure>
+</div>
 
 PASSAGE is a dataset and benchmark for constrained path planning on real
 terrain: each scene is a square crop of the

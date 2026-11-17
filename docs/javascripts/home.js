@@ -23,6 +23,7 @@
  */
 /* MIT License — Copyright (c) 2026 THALES
  * Home page: count the release figures up when they enter the viewport.
+ * All pages: a pointer-following spotlight on cards (fine pointers only).
  * Works with Material's instant navigation (document$) and respects reduced motion.
  */
 (function () {
@@ -51,4 +52,21 @@
   }
   if (typeof document$ !== "undefined" && document$.subscribe) document$.subscribe(init);
   else document.addEventListener("DOMContentLoaded", init);
+})();
+(function () {
+  // Spotlight: one delegated listener, so instant navigation needs no re-binding.
+  var cards = ".feature-card, .pipeline-step, .grid.cards > ul > li, .grid > .card";
+  if (!window.matchMedia || !matchMedia("(hover: hover) and (pointer: fine)").matches) return;
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  document.addEventListener("pointermove", function (ev) {
+    var el = ev.target && ev.target.closest ? ev.target.closest(cards) : null;
+    if (!el) return;
+    var r = el.getBoundingClientRect();
+    el.style.setProperty("--mx", (ev.clientX - r.left).toFixed(0) + "px");
+    el.style.setProperty("--my", (ev.clientY - r.top).toFixed(0) + "px");
+  }, { passive: true });
+  document.addEventListener("pointerout", function (ev) {
+    var el = ev.target && ev.target.closest ? ev.target.closest(cards) : null;
+    if (el && !el.contains(ev.relatedTarget)) { el.style.removeProperty("--mx"); el.style.removeProperty("--my"); }
+  }, { passive: true });
 })();
