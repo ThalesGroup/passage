@@ -1,3 +1,7 @@
+---
+icon: material/cube-scan
+---
+
 # Run a candidate with rootless OCI
 
 Use this runner to execute an image-installed PASSAGE worker when the host Docker
@@ -7,8 +11,10 @@ private runtime state. No daemon configuration changes are required.
 
 The runner records filesystem and process evidence. It does not implement strict
 benchmark admission, resource cgroups, or reconstruction of the image from its
-layers. See [Contributing a method](contributing-a-method.md) for the surrounding
-candidate workflow.
+layers. The candidate package it runs is described in
+[Submit a candidate](candidate-registration.md); the operator uses this runner
+during the [official evaluation](official-evaluation.md), and a contestant can
+use it for a local dry run.
 
 ## Prepare an image once
 
@@ -24,11 +30,11 @@ and its extracted root. Preparation retains both as evidence.
 
 ```bash
 python -m passage_eval.campaign.candidate.oci prepare \
-  --image local/passage-seg-candidate:cpu-arm64-20261111 \
-  --output /absolute/path/to/oci-runtime/seg-rootfs
+  --image local/my-candidate:cpu \
+  --output /absolute/path/to/oci-runtime/candidate-rootfs
 ```
 
-The result is `seg-rootfs/rootfs-receipt.json`. It identifies the local image using
+The result is `candidate-rootfs/rootfs-receipt.json`. It identifies the local image using
 its observed Docker inspect ID, descriptor and repository digests. Docker inspect
 may expose an OCI index ID rather than a config digest. The receipt therefore
 keeps config metadata separate, reports unavailable config or platform-manifest
@@ -43,23 +49,25 @@ an image. An existing output directory is rejected.
 ## Run a CPU session
 
 Provide a sealed candidate manifest and **one input-only NPZ file**. The archive
-must contain exactly `sample_ids`, `terrain`, `obstacles`, `starts` and `goals`;
-reference costs, labels, indices and prepared training archives are rejected.
+must contain exactly `sample_ids`, `terrain`, `obstacles`, `starts` and `goals`,
+at most 2 GiB uncompressed; reference costs, labels, indices and prepared
+training archives are rejected.
 The worker validates the array shapes, types and declared scene contract before
 importing candidate code.
 
 ```bash
 python -m passage_eval.campaign.candidate.oci run \
-  --rootfs /absolute/path/to/oci-runtime/seg-rootfs/rootfs-receipt.json \
+  --rootfs /absolute/path/to/oci-runtime/candidate-rootfs/rootfs-receipt.json \
   --manifest /path/to/package/candidate.source.json \
   --inputs /path/to/inputs/scenes.npz \
-  --output /absolute/path/to/oci-runtime/seg-run \
+  --output /absolute/path/to/oci-runtime/candidate-run \
   --device cpu \
   --timeout-seconds 300
 ```
 
 The output directory must be new and disjoint from the package and prepared root.
-The manifest may have any filename. Only its declared artifacts are copied into a
+The manifest may have any filename; a package directory stands for its
+`candidate.json`. The device must be one of the package's declared backends. Only its declared artifacts are copied into a
 fresh execution package with the manifest named `candidate.json`. This snapshot
 and the runtime configuration live outside the writable output mount.
 
@@ -78,7 +86,8 @@ namespaces are separate from the host. CPU execution receives no GPU device bind
 The worker runs as namespace UID/GID 0, mapped to the calling host user and group.
 
 The command prints a JSON receipt and writes `oci-run.json` alongside the worker's
-`run.json` and `journal.jsonl`. It records the image, manifest and input identities,
+`run.json` and `journal.jsonl`. After a successful session with complete
+cleanup, it also binds that receipt into `run.json` (its `container` field). It records the image, manifest and input identities,
 rootfs tree hashes before and after execution, the private runtime location,
 process return code, timeout and cleanup results. The archive and prepared root
 are checked before launch; the root, staged package, original package and input
@@ -118,8 +127,10 @@ configuration, stdout/stderr, rootfs manifest and failure evidence.
 
 ## Inspect the optional CUDA plan
 
-CUDA support is restricted to the explicitly assigned UUID
-`GPU-1ae3b771-4e59-bf00-5c9d-06e82bd84ece`. Planning reads the CDI file and stats
+CUDA support is restricted to one explicitly assigned GPU UUID, fixed in the
+launcher as `ALLOWED_GPU` (`GPU-1ae3b771-4e59-bf00-5c9d-06e82bd84ece` in this
+release); `cdi-plan` and `run --device cuda` refuse any other UUID. Planning
+reads the CDI file (default `--spec /var/run/cdi/nvidia.yaml`) and stats
 character devices without opening a GPU or querying CUDA:
 
 ```bash
@@ -166,7 +177,7 @@ synchronization. Those require a separately recorded execution and worker drain.
 from pathlib import Path
 from passage_eval.campaign.candidate.oci import prepare_rootfs, run_oci
 
-prepare_rootfs("local/passage-seg-candidate:cpu-arm64-20261111", Path("/data/rootfs"))
+prepare_rootfs("local/my-candidate:cpu", Path("/data/rootfs"))
 receipt = run_oci(
     Path("/data/rootfs/rootfs-receipt.json"),
     Path("/data/package/candidate.json"),
@@ -176,12 +187,12 @@ receipt = run_oci(
     timeout_seconds=300,
 )
 assert receipt["returncode"] == 0 and not receipt["timed_out"]
-
-from passage_eval.campaign.candidate.binding import bind_container_evidence
-bind_container_evidence("/data/session")
 ```
 
-Both functions return JSON-serializable dictionaries. Large rootfs archives and
+Both functions return JSON-serializable dictionaries. As with the CLI, a
+successful `run_oci` already binds `oci-run.json` into the session's `run.json`;
+`passage_eval.campaign.candidate.binding.bind_container_evidence` repeats that
+binding idempotently, and `verify_container_evidence` checks it. Large rootfs archives and
 per-run trees belong on a data volume. Review this procedure when the image,
 runc version, host namespace policy, CDI specification or allowed GPU changes.
 The campaign operator owns execution scheduling and resource budgets.

@@ -49,9 +49,9 @@ independent host scoring. See the
 [1.0.0 release and installation guide](docs/release.md) for source installation,
 artifact verification and the separate runtime prerequisites.
 
-The [final presentation schemes](docs/presentation.md) show dataset construction,
-the evaluation contract and the frozen SEG/REG pipelines, with unchanged copies
-of the final talk v17 and poster v9.
+Watch the [NeurIPS 2026 talk](https://thalesgroup.github.io/passage/presentation/)
+for a five-minute overview of the dataset, the evaluation contract and the first
+candidates, with its slides and script.
 
 The [dataset card](https://huggingface.co/datasets/thalesgroup/passage)
 describes the files, graph, label guarantees, splits and limitations. Data and
@@ -143,28 +143,23 @@ runnable CPU example, adapter, specification and matched comparison report.
 Freeze choices on calibration before test. The evaluator keeps reference labels
 outside the planner and scores the routes it timed; failed requests stay in the results.
 
-To package a complete procedure, start with the [CPU candidate example](examples/candidate-package/README.md)
-and [registration guide](docs/benchmark/candidate-registration.md). The common
-interface freezes artifact hashes, validates and registers a package, runs CPU or
-CUDA execution through an operator-provided runtime, and scores routes on the
-host. Registration alone neither publishes a package nor admits a result.
+### Enter the leaderboard
 
-**Dense-vision candidate references:**
+The PASSAGE leaderboard measures complete procedures on the 40,000-scene test
+split, on three edge targets: NVIDIA Jetson AGX Orin and Thor, and Intel Tiger
+Lake. Its main candidates pair a vision network with a frozen graph decoder:
 
 - [Seg — ConvNeXt V2 Atto](https://huggingface.co/thalesgroup/passage-seg-convnextv2-atto): path-mask segmentation with a raw-logit A* decoder.
 - [Reg — RepViT M1](https://huggingface.co/thalesgroup/passage-reg-repvit-m1): cost-to-go regression with Bellman descent and goal-rooted reconnection.
 
-These model repositories require authorized Hugging Face access; public model
-publication and access activation are separate pending steps. Their
-READMEs describe the 256×256 exports, inference commands and native-runtime
-requirements. See the [candidate definitions](https://thalesgroup.github.io/passage/benchmark/final-candidates/)
-and [evaluation protocol](https://thalesgroup.github.io/passage/benchmark/protocol/) for context.
-
-The private leaderboard's active SEG/REG view displays 27 TEST observations
-and three separate VALID pilot observations with `measured_unadmitted` status.
-Historical observations retain their original provenance. They are separate from this repository's local
-leaderboard storage and empty checked-in TEST entry table; they do not establish
-public availability or admitted results.
+Their model repositories currently require authorised Hugging Face access. To
+enter with your own planner, build it as a package on their model (the
+[CPU candidate example](examples/candidate-package/README.md) is the minimal
+one), check it locally and open a request: see
+[Submit a candidate](https://thalesgroup.github.io/passage/benchmark/candidate-registration/).
+Thales then runs the
+[official evaluation](https://thalesgroup.github.io/passage/benchmark/official-evaluation/)
+and publishes the result.
 
 ---
 

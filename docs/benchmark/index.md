@@ -1,5 +1,5 @@
 ---
-title: Benchmark Overview
+title: Benchmark
 icon: material/clipboard-check-outline
 ---
 
@@ -14,14 +14,16 @@ That package is what you hook up to your planner — whether
 it is a dense-vision model, a graph neural network, a
 reinforcement-learning policy, or a classical solver — to get a
 score with identified inputs, procedure, references and metric contract.
-This section of the documentation is the single entry point for that
-process. Start with [Evaluate your planner](contributing-a-method.md) to run
-`conform → run → score → compare → report`; use the protocol and API pages to
-interpret the results.
+This section is the single entry point for evaluating a planner:
 
-For a visual overview of the dataset, execution harness and SEG/REG pipelines,
-see the [final presentation schemes](../presentation.md), with the talk and
-poster PDFs.
+- **On your own machine:** [Evaluate your planner](contributing-a-method.md)
+  runs `conform → run → score → compare → report`; the protocol and API pages
+  explain the results.
+- **On the leaderboard:** [Submit a candidate](candidate-registration.md) turns
+  your planner into a package that Thales measures on the edge targets and
+  publishes, as described in [Official evaluation](official-evaluation.md).
+
+For a five-minute overview, watch the [NeurIPS 2026 talk](../presentation.md).
 
 !!! info "Terms used in the Benchmark pages"
 
@@ -46,7 +48,7 @@ poster PDFs.
 
 <div class="grid cards" markdown>
 
-- :material-format-list-numbered: **Evaluation Protocol**
+- :material-format-list-numbered: **Evaluation protocol**
 
     ---
 
@@ -58,37 +60,6 @@ poster PDFs.
 
     [:octicons-arrow-right-24: Read the protocol](protocol.md)
 
-- :material-package-variant-closed: **`passage-eval` package**
-
-    ---
-
-    Install, public API, and module-by-module guide for the evaluation
-    package. It is separate from the dataset generator, so the evaluation
-    rules can be fixed without changing the released data.
-
-    [:octicons-arrow-right-24: Read the package guide](passage-eval.md)
-
-- :material-rocket-launch: **Paired statistics**
-
-    ---
-
-    Complete six-metric comparison: pairing checks, shared geographic-block
-    draws, three-seed contrasts and declared paired-test evidence. To compare
-    planners with the CLI workflow, use
-    [Evaluate your planner](contributing-a-method.md).
-
-    [:octicons-arrow-right-24: Run the paired analysis](walkthrough.md)
-
-- :material-trophy-outline: **Leaderboard**
-
-    ---
-
-    The entry index for PASSAGE v1.0. Read the
-    [paper results](candidates.md) separately: they compare Seg, Reg and
-    physical A* on the complete 40,000-scene 256×256 public test split.
-
-    [:octicons-arrow-right-24: Open the leaderboard](leaderboard.md)
-
 - :material-account-plus-outline: **Evaluate your planner**
 
     ---
@@ -99,7 +70,34 @@ poster PDFs.
 
     [:octicons-arrow-right-24: Evaluate your planner](contributing-a-method.md)
 
-- :material-notebook-multiple: **Reproducible Notebooks**
+- :material-trophy-outline: **Leaderboard**
+
+    ---
+
+    One task profile, three edge targets, the complete 40,000-scene test split.
+    Seg and Reg are the main candidates, beside an exact A* reference.
+
+    [:octicons-arrow-right-24: Open the leaderboard](leaderboard/index.md)
+
+- :material-send-check-outline: **Submit a candidate**
+
+    ---
+
+    Build a frozen package, check it locally with the public tools, then request
+    the official evaluation run by Thales.
+
+    [:octicons-arrow-right-24: Submit a candidate](candidate-registration.md)
+
+- :material-chart-box-outline: **Paper results**
+
+    ---
+
+    The original study's 40,000-scene comparison of Seg, Reg and physical A*,
+    its finalists and the paired statistics.
+
+    [:octicons-arrow-right-24: Read the paper results](candidates/index.md)
+
+- :material-notebook-multiple: **Reproducible notebooks**
 
     ---
 
@@ -108,17 +106,25 @@ poster PDFs.
 
     [:octicons-arrow-right-24: Open the notebook track](notebooks/index.md)
 
-- :material-api: **API Reference**
+- :material-package-variant-closed: **`passage-eval` package**
 
     ---
 
-    Auto-generated docstrings for the public symbols of
-    `passage_eval.protocol`, `passage_eval.execution`,
-    `passage_eval.metrics`, `passage_eval.diagnostics`,
-    `passage_eval.trustworthiness`, `passage_eval.deployment` and
-    `passage_eval.sidecar`.
+    Install, public API, and module-by-module guide for the evaluation
+    package. It is separate from the dataset generator, so the evaluation
+    rules can be fixed without changing the released data.
 
-    [:octicons-arrow-right-24: Browse the API](api.md)
+    [:octicons-arrow-right-24: Read the package guide](passage-eval.md)
+
+- :material-sitemap: **Code architecture and API**
+
+    ---
+
+    How the generator and the evaluator are organised and tested, and the
+    reference generated from their docstrings.
+
+    [:octicons-arrow-right-24: Code architecture](../architecture/index.md) ·
+    [:octicons-arrow-right-24: API reference](api/index.md)
 
 </div>
 
@@ -147,7 +153,7 @@ You should reach for `passage-eval` when:
 
 You **do not** need `passage-eval` if you only want to *load* the dataset (see
 the [Dataset](../dataset/index.md) page) or *generate* samples (see
-[Dataset Generation](../guide/index.md)).
+[Generation](../guide/index.md)).
 
 ---
 
@@ -159,7 +165,7 @@ task and objective. The exact A* reference supplies the cost and geometry
 comparators. Intermediate outputs such as logits, value fields and policies
 are useful for diagnostics.
 
-The [paper results](candidates.md) cover two dense-vision finalists
+The [paper results](candidates/index.md) cover two dense-vision finalists
 (path-mask segmentation and cost-to-go regression) and a physical A*
 reference. They are exploratory after prior exposure to the public test split
 and separate from leaderboard admission. Graph-neural-network and

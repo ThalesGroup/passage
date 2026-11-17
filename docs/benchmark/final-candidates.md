@@ -1,5 +1,5 @@
 ---
-title: Final candidates
+title: Paper finalists
 icon: material/pin
 ---
 
@@ -16,8 +16,13 @@ are [the candidate manifest](final-candidates.json) and
 The reference decoders live in
 `passage_eval.baselines.final_decoders`.
 
+To install and run the released candidates, use their model pages:
+[Seg](https://huggingface.co/thalesgroup/passage-seg-convnextv2-atto) and
+[Reg](https://huggingface.co/thalesgroup/passage-reg-repvit-m1). This page keeps
+the paper's frozen definitions.
+
 Both decoders use only the network output, the obstacle mask, the start and
-the goal. The [paper results](candidates.md) describe the locked comparison on
+the goal. The [paper results](candidates/index.md) describe the locked comparison on
 all 40,000 public 256×256 test scenes. The checkpoint and validation records
 below describe separate evidence and do not establish a leaderboard entry.
 
@@ -87,5 +92,5 @@ The candidate manifest preserves an earlier training plan. The camera-ready
 paper reports the procedures actually measured: outside 256×256, each grid
 size uses 1,024 public test scenes and one neural seed (2026), with
 preprocessing and decoder settings fixed from 256×256. Training budgets and
-other conditions differ by size. See [the paper results](candidates.md#other-resolutions-and-earlier-validation-results)
+other conditions differ by size. See [the paper results](candidates/index.md#other-resolutions-and-earlier-validation-results)
 for the limits of these indicative timings.

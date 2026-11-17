@@ -49,7 +49,6 @@ stats:
 
 ## <span aria-hidden="true">:material-terrain:</span> Why PASSAGE
 
-<div class="pg-why">
 <p class="pg-lede">Constrained path planning on real terrain underlies routing for
 search-and-rescue, robotics and airborne advisory systems, where rescue-helicopter
 crews fly through mountain passes, valleys and ridgelines. Existing public
@@ -57,14 +56,6 @@ benchmarks cover this only in part: synthetic grids give algorithmic control
 without geographic realism, and geographic data give real terrain without
 controllable obstacles or shared baselines (the
 <a href="#cite-passage">NeurIPS 2026 paper</a>, introduction).</p>
-<figure class="pg-figure pg-art">
-  <picture>
-    <source type="image/webp" srcset="assets/banner-768.webp 768w, assets/banner.webp 1536w" sizes="(max-width: 60em) 100vw, 560px">
-    <img src="assets/banner.png" width="1536" height="1024" alt="Illustration: a rescue helicopter over snow-covered mountains at sunset, titled PASSAGE, path solver dataset and generator" loading="lazy" decoding="async">
-  </picture>
-  <figcaption>Illustration: rescue-helicopter routing through mountain passes, valleys and ridgelines, the real-terrain setting that motivates PASSAGE.</figcaption>
-</figure>
-</div>
 
 PASSAGE is a dataset and benchmark for constrained path planning on real
 terrain: each scene is a square crop of the
@@ -79,9 +70,9 @@ the generator and the `passage-eval` evaluator are publicly released (code under
 MIT, data under the JAXA terms), so that classical planners, learned surrogates,
 graph networks and reinforcement learning can be scored on the same tasks.
 
-Explore the [final presentation schemes](presentation.md) for a visual overview
-of the dataset, evaluation harness and SEG/REG pipelines, with the talk and
-poster PDFs.
+Watch the [NeurIPS 2026 talk](presentation.md) for a five-minute overview of the
+dataset, the evaluation contract and the first candidates, with its slides and
+script.
 
 ## <span aria-hidden="true">:material-compass-outline:</span> From terrain to benchmark
 
@@ -152,8 +143,6 @@ Publish the prepared tree to a Hugging Face dataset repository that you name.
 | Licence | Code: MIT. Data: JAXA AW3D30 terms, see [`DATASET_LICENSE.md`](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/DATASET_LICENSE.md) |
 | Paper | *PASSAGE: A Real-Terrain Benchmark for Trustworthy Constrained Path Planning*, NeurIPS 2026, Track on Evaluations and Datasets |
 
-Illustrative validation previews are optional and are not included in every source distribution.
-
 ## <span aria-hidden="true">:material-star-outline:</span> What you get
 
 <div class="feature-grid pg-cols-4" markdown>
@@ -211,7 +200,7 @@ The scene parameters form an operational design domain, a term the paper borrows
 
 ### Tested
 
-865 tests with an 80 % coverage gate, deterministic seeding, pre-commit hooks and continuous integration.
+About 2,900 tests with an 80 % coverage gate, deterministic seeding, pre-commit hooks and continuous integration.
 </div>
 
 <div class="feature-card" markdown>
@@ -226,7 +215,15 @@ Each stage can run again on its own; input identities are checked before any reu
 
 ## <span aria-hidden="true">:material-trophy-outline:</span> Leaderboard
 
-{% include-markdown "_partials/leaderboard_main_index.md" %}
+The leaderboard measures complete planning procedures on the complete
+40,000-scene test split, on three edge targets: NVIDIA Jetson AGX Orin and Thor,
+and Intel Tiger Lake. Its two main candidates, **Seg** and **Reg**, pair a vision
+network with a frozen graph decoder. An exact A\* reference runs beside them on
+each target. Any planner can enter: build it as a package, check it locally, and
+Thales runs the official evaluation.
+
+[:material-trophy-outline: Leaderboard](benchmark/leaderboard/index.md){ .md-button .md-button--primary }
+[:material-send-check-outline: Submit a candidate](benchmark/candidate-registration.md){ .md-button }
 
 ## <span aria-hidden="true">:material-flash-outline:</span> Quick start
 
@@ -306,7 +303,7 @@ cite the paper, and name the dataset version you used (PASSAGE v1.0):
 <div class="feature-card" markdown>
 <span class="feature-icon" aria-hidden="true">:material-book-open-variant:</span>
 
-### [User guide](guide/index.md)
+### [Generation guide](guide/index.md)
 
 The pipeline step by step, from installation to the release tree.
 </div>
@@ -332,15 +329,15 @@ The evaluation protocol, the `passage-eval` package and how to evaluate a planne
 
 ### [Code architecture](architecture/index.md)
 
-Modules, data formats and test strategy.
+Modules, data flows and test strategy of the generator and the evaluator.
 </div>
 
 <div class="feature-card" markdown>
 <span class="feature-icon" aria-hidden="true">:material-book-multiple-outline:</span>
 
-### [API reference](api/index.md)
+### [API reference](benchmark/api/index.md)
 
-Documentation generated from the docstrings.
+Documentation generated from the docstrings of `passage_eval` and `passage`.
 </div>
 
 </div>
@@ -351,7 +348,7 @@ Documentation generated from the docstrings.
 - **[Hugging Face](https://huggingface.co/)** for the Datasets library and Hub infrastructure.
 - **[Thales Group](https://www.thalesgroup.com/)** for supporting this open research.
 
-## JAXA license and attribution
+## <span aria-hidden="true">:material-scale-balance:</span> JAXA license and attribution { #jaxa-license-and-attribution }
 
 The PASSAGE code is released under the [MIT License](https://github.com/ThalesGroup/passage/blob/main/LICENSE).
 **The elevation data every PASSAGE scene is built on are provided by JAXA under

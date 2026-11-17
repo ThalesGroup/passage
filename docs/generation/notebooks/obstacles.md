@@ -2,6 +2,7 @@
 title: "Obstacles: how much they cover and what they cost"
 hide:
   - toc
+icon: material/notebook-outline
 ---
 
 # Obstacles: how much they cover and what they cost

@@ -2,6 +2,7 @@
 title: "Getting started with PASSAGE"
 hide:
   - toc
+icon: material/notebook-outline
 ---
 
 # Getting started with PASSAGE

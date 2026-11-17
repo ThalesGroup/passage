@@ -2,6 +2,7 @@
 title: "Solving a task with the exact reference"
 hide:
   - toc
+icon: material/notebook-outline
 ---
 
 # Solving a task with the exact reference

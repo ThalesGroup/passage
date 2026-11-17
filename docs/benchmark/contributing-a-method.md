@@ -5,11 +5,6 @@ icon: material/account-plus-outline
 
 # Evaluate your planner
 
-For a complete versioned package, operator registration and container execution,
-follow [Register a candidate](candidate-registration.md). The local catalogue
-does not require a public submission service or an admission signature.
-
-
 The evaluator measures the complete procedure that emits a route, then scores that
 same persisted route against an independently qualified reference. This guide
 covers wrapping an existing classical, graph, policy or vision algorithm,
@@ -25,11 +20,11 @@ censored cost.
 > performance nor accelerator speed. Training and device measurements produce
 > their own identified artifacts.
 
-> **Official entries**
+> **Local results and leaderboard entries**
 >
-> The leaderboard submission service is not deployed yet. This guide covers
-> local evaluation: the commands below produce local results, not official
-> leaderboard entries.
+> This guide covers local evaluation: the commands below produce local results,
+> not leaderboard entries. To enter the leaderboard with a complete procedure,
+> follow [Submit a candidate](candidate-registration.md).
 
 ## 1. Implement the complete procedure
 
@@ -61,8 +56,10 @@ class MyPlanner:
 ```
 
 This sketch assumes your `solve` returns a route and counters; adapt its arguments
-to the real API. For a runnable external example, see Section 3.A. A plain
-`module:function` can also accept a request and return `PlanResult`.
+to the real API. For a runnable external example, see
+[Section 3.A](#3a-run-the-external-cpu-example). A plain `module:function` can
+also accept a request and return `PlanResult`; declare it with
+`inference_format: request`.
 
 A request contains calibrated metre elevation, obstacles, endpoints, graph and
 objective parameters, an optional normalized `(H,W,3)` tensor, and declared
@@ -81,7 +78,10 @@ timer for fallback would change the declared budget. Record `ok`, `no_path`,
 as appropriate. Each decoder and budget defines a separate procedure.
 
 Existing `Planner.predict_path(scene)` implementations and tensor/scene callables
-remain supported. Use `inference_format: request` for the new interface.
+remain supported. A class entry point is recognized by its `plan` or
+`predict_path` method. For a plain callable, `inference_format` selects the
+input: `request` (a `PlanRequest`), `tensor` (the default: the released
+normalized tensor) or `scene` (keyword arrays).
 
 The local in-process timer covers candidate-input preparation, inference, decoding, repair,
 fallback, device completion synchronization, route snapshot, legality and physical
@@ -155,8 +155,8 @@ For a deliberately new reference cohort, select
 label defects; it creates a different cohort and does not repair training labels.
 
 For learned methods, declare actual checkpoint files through `inference_kwargs`
-or `inference_kwargs_by_seed`; missing files fail admission and their hashes are
-recorded. Seeding inference does not retrain a checkpoint or prove determinism.
+or `inference_kwargs_by_seed`, under keys whose name contains `checkpoint` or
+`bundle`; missing files fail admission and their hashes are recorded. Seeding inference does not retrain a checkpoint or prove determinism.
 Batch sizes greater than one need their own supported, scored procedure; this
 complete-request runner currently admits batch size one.
 

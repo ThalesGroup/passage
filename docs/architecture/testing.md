@@ -1,5 +1,6 @@
 ---
 title: Testing Strategy
+icon: material/test-tube
 ---
 
 # Testing Strategy
@@ -20,16 +21,17 @@ Shared fixtures live in `tests/conftest.py` and `tests/passage_eval/conftest.py`
 | Configuration | `test_config.py`, `test_num_samples_per_resolution.py` |
 | Download | `test_download.py`, `test_download_extract.py`, `test_download_integrity.py`, `test_download_tile.py` |
 | Calibration | `test_calibrate.py`, `test_calibrate_integration.py`, `test_calibrate_no_overwrite.py`, `test_calibrate_provenance.py` |
-| Generation | `test_generate.py`, `test_generate_costmodels.py`, `test_generate_helpers.py`, `test_large_resolution.py`, `test_no_images.py`, `test_successor_generation.py` |
+| Generation | `test_generate.py`, `test_generate_costmodels.py`, `test_generate_helpers.py`, `test_hold_out_fail_closed.py`, `test_large_resolution.py`, `test_no_images.py`, `test_successor_generation.py` |
 | Obstacles | `test_obstacles.py`, `test_obstacle_generation.py`, `test_obstacles_distribution.py` |
 | Solvers | `test_pathfinding_utils.py`, `test_reference.py` |
-| Export and publication | `test_export_keep_configs.py`, `test_export_retries.py`, `test_prepare_hf.py`, `test_prepare_images_parquet.py`, `test_prepare_notebook_retry.py`, `test_successor_export.py`, `test_successor_publication.py` |
+| Export and publication | `test_export_keep_configs.py`, `test_export_retries.py`, `test_prepare_hf.py`, `test_prepare_images_parquet.py`, `test_prepare_notebook_retry.py`, `test_publication_preview_assets.py`, `test_source_checkout_provenance.py`, `test_successor_export.py`, `test_successor_publication.py` |
 | Full rebuild | `test_regenerate.py` |
+| Packaging | `test_wheel_direct_contents.py` |
 | Dataset access, audit and qualification | `test_dataset_source.py`, `test_audit.py`, `test_authentication.py`, `test_qualification.py`, `test_qualification_runner.py`, `test_qualification_reports.py` |
 | Notebooks | `test_execute_notebook_uv_run.py`, `test_notebook_export.py`, `test_notebook_reports.py`, `test_notebook_templates.py` |
 | Plots | `test_plotting.py`, `test_visualization.py`, `test_trajectory_style.py` |
 
-The evaluator tests in `tests/passage_eval/` cover its contracts, metrics (`test_regret.py`, `test_geometric.py`, `test_reliability.py`), statistics, execution and timing, results format, CLI and the paper contract (`test_paper_contract.py`).
+The evaluator tests in `tests/passage_eval/` cover its contracts, metrics (`test_regret.py`, `test_geometric.py`, `test_reliability.py`), statistics, execution and timing, supervised and campaign execution, test admission, results format, CLI and the paper contract (`test_paper_contract.py`).
 
 ---
 
@@ -169,10 +171,10 @@ uv run pre-commit run --all-files
 
 ## CI Integration
 
-Tests run on GitHub Actions for pushes and pull requests to `main` or `develop`. See `.github/workflows/ci.yml` in the source checkout for details.
+On GitHub Actions, the documentation workflow (`.github/workflows/docs.yml`) runs for pushes and pull requests to `main` or `develop`. It calls the CI workflow (`.github/workflows/ci.yml`) unless the change touches only documentation files (Markdown pages and documentation assets); CI can also be started manually.
 
 The CI pipeline:
 
 1. **Lint** — `ruff check` and `ruff format --check` on `src/` and `tests/`
-2. **Test** — `pytest` with coverage, on Python 3.11 and 3.12
+2. **Test** — the `unittest` checks of `containers/candidate`, then `pytest` with coverage, on Python 3.11 and 3.12
 3. **Coverage gate** — the run fails if coverage drops below 80 %

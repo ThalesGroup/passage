@@ -1,10 +1,9 @@
 ---
 title: Paired statistics
-icon: material/rocket-launch
+icon: material/sigma
 ---
 
 # Paired statistics
-
 
 This page compares two planners on the six primary decoded-path metrics. Each
 planner has three trained checkpoints (seeds 1234, 2026 and 3407), scored on the
@@ -81,6 +80,16 @@ do not establish equal data or task conditions. `compare_primary_metrics` also
 checks the exact ordered task roster across both methods and all seeds. It
 requires at least two known geographic blocks. Unknown block identities cannot
 be replaced with task IDs to create an uncertainty estimate.
+
+The scorer fills `cluster_id` only from a block that the request metadata
+declares (`cluster_id`, `tile_id`, `source_footprint_id`, `source_tile_id`, or
+`cluster_id` and `tile_id` under `geographic`) or from the block table of a
+pinned roster. Released PASSAGE v1.0 rows declare
+none of these keys, so an in-process `bench` or `run` on them stores empty
+block identities, which `compare_primary_metrics` rejects. Derive the blocks
+from each task's source footprint (`metadata["provenance"]["source_windows"]`)
+with a frozen rule of `passage_eval.protocol.geographic_blocks`, and record
+that rule with the analysis.
 
 Failed paths retain their finite censored regret. Reliability metrics use every
 task. Geometry uses each method's own valid-path subset, so report both methods'

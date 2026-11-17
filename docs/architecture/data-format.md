@@ -1,5 +1,6 @@
 ---
 title: Data Format
+icon: material/file-table-outline
 ---
 
 # Data Format
@@ -143,18 +144,7 @@ Every released variant has the status `ok`, so every file holds a route. The gen
 
 ## Parquet Schema
 
-During export, scenes are packaged into **Apache Parquet** shards with Hugging Face `Features` typing. The columns are those of the dataset card's [Columns](../dataset/index.md#columns) table:
-
-| Column | Type | Content |
-| --- | --- | --- |
-| `id` | string | Scene index, zero-padded; unique within a configuration and split |
-| `tensor` | bytes | Zstd-compressed float32 array $(R, R, 3)$: normalized elevation, markers, obstacles |
-| `metadata` | struct | Split, calibration, source tiles, crop, markers, obstacles, seeds, solver parameters, and per-variant status and cost |
-| `metadata_json` | string | Complete metadata as JSON text |
-| `scene_receipt` | string | JSON receipt: seeds, source windows and hashes, attempts, terminal records |
-| `path_<solver>_free` | list of [row, col] | Reference route on free terrain |
-| `path_<solver>_obstacles` | list of [row, col] | Reference route with obstacles blocked |
-| `image_<solver>` | image | Rendered preview, `_samples` configurations only |
+During export, scenes are packaged into **Apache Parquet** shards with Hugging Face `Features` typing. The columns (`id`, `tensor`, `metadata`, `metadata_json`, `scene_receipt`, one `path_<solver>_free` and one `path_<solver>_obstacles` route per solver, and `image_<solver>` in the `_samples` configurations only) are described in the dataset card's [Columns](../dataset/index.md#columns) table. The `tensor` column holds the blob described in [Compression](#compression), and each route is the list of `[row, col]` cells of the matching CSV file.
 
 `<solver>` is `astar_elevation`, `astar_energy` or `astar_slope` (the `slope_uphill` objective). Every released variant has the status `ok` in `metadata.paths.<solver>.<free|obstacles>.status`, so no route is an empty list.
 
@@ -233,20 +223,4 @@ Each resolution has two Hugging Face configurations:
 | `<R>x<R>` | All scenes at resolution $R$, without images |
 | `<R>x<R>_samples` | 64 preview rows per split, with rendered images; they repeat scenes of the core configuration |
 
-The default configuration is `1024x1024_samples`. Core configurations are large (57 GB at 256×256, 533 GB at 4096×4096), so pin the verified revision and stream them:
-
-```python
-from datasets import load_dataset
-
-REVISION = "c09cc5a21a55a93e7c09d47368d5f5bf75cb8fae"  # verified PASSAGE v1.0 upload
-
-# Preview rows: small, 64 per split, with rendered images.
-rows = load_dataset("thalesgroup/passage", "256x256_samples",
-                    split="validation", revision=REVISION)
-
-# Core configuration: stream it instead of downloading it whole.
-core = load_dataset("thalesgroup/passage", "256x256", split="train",
-                    streaming=True, revision=REVISION)
-for row in core.take(4):
-    print(row["id"], row["metadata"]["split"])
-```
+The default configuration is `1024x1024_samples`. Core configurations are large (57 GB at 256×256, 533 GB at 4096×4096), so pin the release (the `v1.0` tag, commit `c09cc5a21a55a93e7c09d47368d5f5bf75cb8fae`) and stream them. The dataset card's [Quick start](../dataset/index.md#quick-start) loads preview rows, decodes a tensor and streams a core configuration.

@@ -1,5 +1,6 @@
 ---
 title: Cost Models
+icon: material/function-variant
 ---
 
 # Cost Models
@@ -47,7 +48,7 @@ $$
 c_{\mathrm{distance}}(u,v) = d_{uv}
 $$
 
-This is the baseline model. With A\* and a consistent heuristic, it gives the geometrically shortest 8-connected route. It is not used by the v1.0 release.
+This is the baseline model. With A\* and a consistent heuristic, it gives the geometrically shortest eight-connected route. It is not used by the v1.0 release.
 
 ---
 
@@ -132,7 +133,7 @@ On the same terrain and markers, the objectives give different routes:
 elevation           → prefers the low cells of the crop (valleys)
 slope_uphill        → avoids climbs, even at the price of a longer route
 energy              → balances distance and total climb in meters
-distance            → shortest 8-connected route (baseline)
+distance            → shortest eight-connected route (baseline)
 absolute_elevation  → stays close to sea level
 ```
 

@@ -1,10 +1,11 @@
 ---
 title: Module Reference
+icon: material/view-module-outline
 ---
 
 # Module Reference
 
-This reference covers the main modules of the `passage` package (`src/passage/`). The evaluator, `passage_eval` (`src/passage-eval/`), ships in the same distribution; see [`passage-eval` Package](../benchmark/passage-eval.md) and its [API reference](../benchmark/api.md).
+This reference covers the main modules of the `passage` package (`src/passage/`). The evaluator, `passage_eval` (`src/passage-eval/`), ships in the same distribution; see [`passage-eval` Package](../benchmark/passage-eval.md) and its [API reference](../benchmark/api/index.md).
 
 ---
 

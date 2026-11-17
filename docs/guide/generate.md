@@ -1,5 +1,6 @@
 ---
 title: "Step 3 — Generate Dataset"
+icon: material/cog-play-outline
 ---
 
 # Step 3 — Generate Dataset
@@ -227,7 +228,7 @@ outputs/dataset/
       calibration, tiles, code and `--num-samples`: the run refuses to resume
       when its provenance or scene roster has changed.
     - Run the generator from a git clone: its provenance records the commit of
-      the code.
+      the code, and generation stops when it cannot read that commit.
 
 !!! warning "Large resolutions"
     Crops at 2048 and 4096 hold many more cells per worker and use much more memory.

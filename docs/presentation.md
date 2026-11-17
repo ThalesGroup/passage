@@ -1,93 +1,163 @@
 ---
-title: Presentation schemes
-icon: material/presentation
+title: Presentation
+icon: material/presentation-play
 ---
 
-# Presentation schemes
+# PASSAGE at NeurIPS 2026
 
-These schemes explain how PASSAGE connects real terrain, reference routes,
-evaluation and learned candidates. They reproduce slides 3, 5 and 6 of the
-**final talk v17**, alongside the **final poster v9**, from the delivery dated
-**14 November 2026**. The images are unchanged slide renders.
+*PASSAGE: A Real-Terrain Benchmark for Trustworthy Constrained Path Planning* was
+accepted at NeurIPS 2026, in the Track on Evaluations and Datasets. In this
+five-minute talk, Geoffrey Delhomme (Thales Avionics) presents the dataset, the
+evaluation contract, the two vision-based candidates and their results on edge
+hardware. Watch the recording first; the second section follows the talk slide by
+slide, each with its speaker script.
 
-Download the full [talk v17 (PDF)](assets/presentation/passage_talk_v17_final.pdf)
-or [poster v9 (PDF)](assets/presentation/passage_poster_v9_final.pdf).
-The [provenance record](assets/presentation/provenance.json) identifies every
-copied source; [SHA-256 checksums](assets/presentation/SHA256SUMS) let you verify
-the downloads and images.
+## :material-play-circle-outline: Recorded talk
 
-## From terrain to six reference routes
+<div class="pg-video">
+  <iframe src="https://recorder-v3.slideslive.com/#/share?share=115719&amp;s=628ee4dc-6efc-43ae-b73d-1e8a629abbc8"
+          title="PASSAGE talk at NeurIPS 2026, recorded on SlidesLive"
+          loading="lazy" allow="autoplay; fullscreen; picture-in-picture; encrypted-media"
+          allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>
+</div>
 
-![Dataset scheme: JAXA AW3D30 terrain, super-ellipse obstacles and three input channels produce six exact A* reference routes, across three objectives with and without obstacles.](assets/presentation/dataset.png)
+[:material-open-in-new: Open the recording on SlidesLive](https://recorder-v3.slideslive.com/#/share?share=115719&s=628ee4dc-6efc-43ae-b73d-1e8a629abbc8){ .md-button .md-button--primary }
+[:material-file-pdf-box: Download the slides (PDF)](assets/presentation/passage-neurips-2026-talk.pdf){ .md-button }
 
-*Figure 1 — Dataset construction and reference solver, final talk v17, slide 3.*
+## :material-script-text-outline: Slides and script
 
-The source inventory covers 23,993 AW3D30 tiles at approximately 30 m sampling.
-Each scene combines elevation, start and goal markers, and synthetic Lamé
-super-ellipse obstacles in an `N × N × 3` tensor. Three objectives—elevation,
-uphill slope and an energy proxy—are each solved with and without obstacles.
-The resulting release contains 4.4 million scenes and 26.4 million exact
-reference routes. The grid-native, Numba-compiled A* operates on an implicit
-eight-neighbour grid.
+Each slide is followed by the speaker's script for that slide. Select a slide to
+enlarge it.
 
-The slide's 40% time reduction refers to the paper's Table 4 comparison on
-**one 256×256 scene**: 27.3 ms for the grid-native solver versus 45.6 ms for
-NetworkX A*, with its graph prebuilt. It is a scoped solver comparison.
-See the [dataset guide](dataset/index.md) for the released representation and
-[solver documentation](generation/solvers.md) for the reference graph.
+### 1. PASSAGE (cover)
 
-## Score the route, time the request
+![Slide 1: title slide, PASSAGE: A Real-Terrain Benchmark for Trustworthy Constrained Path Planning, by Geoffrey Delhomme, François Trap and Fateh Kaakai (Thales).](assets/presentation/slides/slide-01.webp)
 
-![Evaluation scheme: an ordinary request enters a target planner, which emits an ordered route and status; a separate host computes route quality, success, obstacle violations and latency metrics.](assets/presentation/evaluation.png)
+<div class="pg-script" markdown>
 
-*Figure 2 — Execution harness and route metrics, final talk v17, slide 5.*
+Hello everyone, I am Geoffrey Delhomme from Thales Avionics, and today I will present PASSAGE, a benchmark for trustworthy constrained path planning.
 
-Every planner implements `plan(request: PlanRequest) → PlanResult`.
-The target computes an ordered route and status; references stay outside the
-request and the host scores the emitted route. The complete request runs from
-raw in-memory inputs through preparation, inference or search, decoding,
-synchronization, repair and fallback. Independent host scoring is outside the
-paper's direct timing boundary.
+</div>
 
-Route metrics cover median and p90 cost regret, average symmetric surface
-distance (ASSD, normalised by the reference route's cell count), symmetric
-95th-percentile Hausdorff distance (H95, the larger directional p95 distance,
-in pixels), success within the declared budget, and obstacle violation rate.
-Success requires a legal route with finite recomputed cost. Failed routes
-receive a cost of one million times the reference
-cost; late legal routes count as timeout failures. Latency reports p50, p95 and
-p99 beside the same-target CPU A* reference. See the
-[evaluation protocol](benchmark/protocol.md) for the full metric and aggregation
-contract, or [evaluate your planner](benchmark/contributing-a-method.md).
+### 2. Learned Planners Need Trust Evidence
 
-## SEG and REG: supervision and frozen inference
+![Slide 2: the PASSAGE challenge, as good as A* and faster: learned planners need evidence on data, route quality and the timing of the complete request.](assets/presentation/slides/slide-02.webp)
 
-![Candidate scheme: SEG learns an A* route mask and decodes path logits with weighted A*; REG learns reverse-Dijkstra cost-to-go and decodes by Bellman descent with goal-rooted Dijkstra reconnection if needed.](assets/presentation/candidates.png)
+<div class="pg-script" markdown>
 
-*Figure 3 — Training supervision and inference for SEG and REG, final talk v17,
-slide 6. The route comparison illustrates one TRAIN scene.*
+Nowadays, rescue helicopters, rovers and drones are all routing over real terrain with obstacles. For complex tasks, routing algorithms are often expensive and hard to embed.
 
-**SEG** uses ConvNeXt V2 Atto with UPerNet to predict path logits. Training
-combines binary cross-entropy on the reference route mask with bottleneck and
-structured route-ranking terms. Weighted A* decodes the logits on the CPU,
-with calibration-selected parameters `w = 0.25` and `η = 1.5`.
+Our intent is to propose a common ground to evaluate and compare routing algorithms that are harnessing edge accelerated computing together with safety and trustworthiness concerns.
 
-**REG** uses RepViT M1.0 with UPerNet to predict cost-to-go, supervised by
-reverse Dijkstra on the same graph and goal. Its loss combines reachable-cell
-mean squared error, Bellman consistency, local-policy and optimal-set terms.
-CPU Bellman descent uses `κ = 8`; if descent stalls, goal-rooted geometric
-Dijkstra reconnects the route. Both decoders receive only the predicted field,
-obstacles, start and goal. Weights are learned on TRAIN; decoder settings are
-selected on CALIB and frozen for TEST. The
-[final candidate definitions](benchmark/final-candidates.md) give the equations,
-loss weights, checkpoint identities and decoder settings.
+This common ground is PASSAGE: a dataset and an evaluation harness inspired by the latest aerospace standards for the certification of AI onboard aircraft.
 
-The example is **TRAIN256 scene `0000001971`, seed 2026**. SEG's 356-cell route
-costs **+2.5%** and REG's 229-cell route costs **+16.2%** relative to the
-352-cell A* reference under the elevation objective on this scene. REG reaches
-the goal without reconnection here. These are qualitative, per-scene values;
-they are not aggregate TEST scores. The [paper results](benchmark/candidates.md)
-describe the separate 40,000-scene TEST comparison and its limitations.
+</div>
 
-These presentation assets explain the reported work; they introduce no new
-measurements and make no certification or regulatory-compliance claim.
+### 3. From Global Terrain to Six Reference Routes
+
+![Slide 3: JAXA AW3D30 terrain, start and goal markers and Lamé super-ellipse obstacles form three input channels; a grid-native A* stores six exact reference routes per scene.](assets/presentation/slides/slide-03.webp)
+
+<div class="pg-script" markdown>
+
+Let's start with the data. Each sample has three channels, like an RGB image:
+
+One first channel we embed real-terrain elevation drawn from the JAXA ALOS World 3D tiles
+
+On second channel, uniformly drawn start and goal points
+
+And on last channel we’ve generated obstacles from a Lamé super-ellipse generator, with shapes varying from the diamond to the rectangle.
+
+As a reference, we've selected the A* algorithm, with three empirically calibrated cost models.
+
+</div>
+
+### 4. Release, Splits and Trustworthiness by Design
+
+![Slide 4: the release in numbers (4.4 M scenes, 26.4 M exact routes, 7 grid sizes, about 1.27 TB of Parquet), the train, validation, calibration and test splits with a South-American hold-out, and twelve data-quality attributes.](assets/presentation/slides/slide-04.webp)
+
+<div class="pg-script" markdown>
+
+We've computed 4.4 million scenes for 7 grid sizes from 64 to 4096, which makes nearly 1.2 TB that we shared openly on Hugging Face.
+
+We designed the dataset with 12 data-quality attributes inherited from the future Recommended Practice for machine learning certification in aeronautics.
+
+</div>
+
+### 5. One Contract: Score the Route, Time the Request
+
+![Slide 5: one evaluation contract: the planner receives an ordinary request and returns an ordered route and status; the host scores cost regret, ASSD, H95, success, obstacle violations and latency.](assets/presentation/slides/slide-05.png)
+
+<div class="pg-script" markdown>
+
+Along with the dataset, we release an evaluation harness based on a simple contract that each candidate shall comply with.
+
+To score them, we’ve defined task-centered metrics on the cost and shape of the candidate routes, along with their latency to compute them.
+
+</div>
+
+### 6. Our Candidates: SEG and REG
+
+![Slide 6: the SEG and REG candidates: their training losses, the two frozen inference pipelines and their route decoders.](assets/presentation/slides/slide-06.webp)
+
+<div class="pg-script" markdown>
+
+Now, our candidates.
+
+We propose two brand new approaches bridging vision-based neural networks to path planning.
+
+The first one, SEG, is inherited from semantic segmentation. It learns the reference path mask and keeps only the path-class logits. From there, a simple post processing stays at the top of the cost hill joining start to goal.
+
+The second candidate, REG, borrows depth-estimation techniques to compute aggregated cost maps. It then runs a Bellman descent along them, with a Dijkstra fallback in case of stall.
+
+Both are trained with a mix of native vision losses and custom path-planning losses, before calibrating their post-processing on the calibration dataset.
+
+</div>
+
+### 7. 256² Results: All Metrics and the Pareto Front
+
+![Slide 7: results on the 40,000-scene 256 × 256 test split on Orin, Thor and Tiger Lake: all metrics and the Pareto front against the CPU A* reference.](assets/presentation/slides/slide-07.png)
+
+<div class="pg-script" markdown>
+
+We’ve then evaluated these two candidates with the harness on three edge devices, alongside the A* reference latencies.
+
+The Pareto front retains SEG and REG on NVIDIA Orin and Thor, where the CPU/GPU trade-off favors them, and the A* reference on Intel Tiger Lake, where it is the opposite.
+
+On NVIDIA edge devices, for nearly 2% of extra cost, we reduce computation by nearly 60%!
+
+To our knowledge, it opens a new area for real-time embedded path planning.
+
+</div>
+
+### 8. Scaling to 4096 × 4096: Timing the Complete Request
+
+![Slide 8: median latency of the complete request from 64 × 64 to 4096 × 4096 cells on Thor GPU, Orin GPU and Tiger Lake iGPU, beside CPU A*.](assets/presentation/slides/slide-08.webp)
+
+<div class="pg-script" markdown>
+
+And more than that, this conclusion is reinforced when we consider higher-resolution. Indeed, as we can see the gains grow exponentially as resolution increases.
+
+</div>
+
+### 9. Conclusion, Future Work and the Challenge
+
+![Slide 9: take-aways, future work and the challenge, with QR codes to the dataset and the code.](assets/presentation/slides/slide-09.webp)
+
+<div class="pg-script" markdown>
+
+To conclude, PASSAGE is an open real-terrain benchmark for trustworthy constrained path planning, released on Hugging Face and GitHub, with an associated leaderboard with our two innovative vision-based candidates.
+
+In future work, we plan to assess GNN and RL-based planners and extend also the task at stake to kinodynamics, moving obstacles or multi-agent tasks.
+
+With this contribution, we also expect to foster trustworthiness concerns beyond safety-critical domains, in robotics or autonomous navigation to help make future AI applications safer for everyone, in everyday use.
+
+Thank you.
+
+</div>
+
+---
+
+The slide images and the PDF can be checked against their
+[SHA-256 checksums](assets/presentation/SHA256SUMS). The poster will be added to this
+page later. The talk reports the work described in the paper; it introduces no
+measurement beyond it and makes no certification or regulatory-compliance claim.

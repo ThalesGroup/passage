@@ -1,5 +1,6 @@
 ---
 title: "Steps 4-6 — Release"
+icon: material/package-up
 ---
 
 # Steps 4-6 — Release
@@ -78,7 +79,9 @@ and valid:
 6. execute the four per-resolution notebooks — `dataset`, `display`, `metrics`
    and `passage_eval_metrics`, from the templates `notebooks/_dataset.ipynb`,
    `_display.ipynb`, `_metrics.ipynb` and `_passage_eval_metrics.ipynb` — for
-   each selected resolution, and record them in `notebook-export-manifest.json`;
+   each selected resolution, and the study notebooks of `paper/notebooks/`
+   (published under `notebooks/paper/`), then record them in
+   `notebook-export-manifest.json`;
 7. write `README.md`, the dataset card;
 8. write `.gitattributes`;
 9. check Parquet compression, preview sizes, `croissant.json` and the README.
@@ -139,7 +142,8 @@ If the selected `<resolution>x<resolution>` or `<resolution>x<resolution>_sample
 times out.
 Set `HF_TOKEN` in the environment or in `.env.secret`; see
 [Hugging Face credentials](installation.md#configure-hugging-face-credentials).
-The command loads `.env` first and then `.env.secret`, if present.
+The command loads `.env` first and then `.env.secret`, if present; values in
+these files override variables already set in the environment.
 
 By default, `upload` targets `thalesgroup/passage`. For your own build,
 pass the same `--repo-id` to `export` and `upload` so the card and notebooks
@@ -182,7 +186,7 @@ Key flags for `upload`:
 flowchart TD
     A[Read dataset tree] --> B[Compress selected resolutions<br>into Parquet shards]
     B --> C[Copy assets, calibration<br>and notebooks]
-    C --> D[Execute the four notebooks<br>per selected resolution]
+    C --> D[Execute four notebooks per<br>selected resolution and the study notebooks]
     D --> E[Write README<br>and run the checks]
     E --> F[Upload prepared export tree<br>via upload_large_folder]
 
@@ -214,6 +218,7 @@ outputs/export/
 │   ├── solve.ipynb
 │   ├── astar_inference_timing.ipynb
 │   ├── passage-eval/
+│   ├── paper/                      # Executed study notebooks
 │   └── ...                         # Per-resolution templates
 ├── 256x256/
 │   ├── train/

@@ -219,58 +219,63 @@ extra:
 # Navigation
 # ---------------------------------------------------------------------------
 nav:
-  - "Home": index.md
-  - "Release and installation": release.md
-  - "Dataset": dataset/index.md
-  - "Presentation schemes": presentation.md
-  - "Dataset Generation":
-      - "Overview": guide/index.md
-      - "Installation": guide/installation.md
-      - "Workflow":
-          - "#1 | Download Tiles": guide/download.md
-          - "#2 | Calibrate Elevations": guide/calibrate.md
-          - "#3 | Generate Dataset": guide/generate.md
-          - "#4-6 | Release Pipeline": guide/export.md
-      - "Configuration": guide/configuration.md
-      - "Generation Process":
-          - "Overview": generation/index.md
-          - "Sampling Procedure": generation/sampling.md
-          - "Cost Models": generation/cost-models.md
-          - "Obstacle Generation": generation/obstacles.md
-          - "Solvers & Heuristics": generation/solvers.md
-          - "Interactive Notebooks":
-              - "Overview": generation/notebooks/index.md
-              - "Getting started": generation/notebooks/demo.md
-              - "Obstacles": generation/notebooks/obstacles.md
-              - "The three objectives": generation/notebooks/costmodel.md
-              - "Exact re-solve": generation/notebooks/solve.md
-              - "Timing a planner": generation/notebooks/astar-inference-timing.md
+  - "Home":
+      - index.md
+      - "Release and installation": release.md
+      - "Presentation": presentation.md
+      - "Policies":
+          - policies/index.md
+          - "Third-party notices": licenses/third-party.md
+          - "Notebook rendering and licences": licenses/notebook-exports.md
+  - "Dataset":
+      - dataset/index.md
+      - "Data format": architecture/data-format.md
+      - "Generation":
+          - guide/index.md
+          - "Installation": guide/installation.md
+          - "Workflow":
+              - "#1 | Download tiles": guide/download.md
+              - "#2 | Calibrate elevations": guide/calibrate.md
+              - "#3 | Generate the dataset": guide/generate.md
+              - "#4-6 | Release pipeline": guide/export.md
+          - "Configuration": guide/configuration.md
+          - "Generation process":
+              - generation/index.md
+              - "Sampling procedure": generation/sampling.md
+              - "Cost models": generation/cost-models.md
+              - "Obstacle generation": generation/obstacles.md
+              - "Solvers and heuristics": generation/solvers.md
+              - "Interactive notebooks":
+                  - generation/notebooks/index.md
+                  - "Getting started": generation/notebooks/demo.md
+                  - "Obstacles": generation/notebooks/obstacles.md
+                  - "The three objectives": generation/notebooks/costmodel.md
+                  - "Exact re-solve": generation/notebooks/solve.md
+                  - "Timing a planner": generation/notebooks/astar-inference-timing.md
   - "Benchmark":
-      - "Overview": benchmark/index.md
-      - "Evaluation Protocol": benchmark/protocol.md
-      - "passage-eval Package": benchmark/passage-eval.md
-      - "Leaderboard": benchmark/leaderboard.md
-      - "Paper results": benchmark/candidates.md
-      - "Final candidates": benchmark/final-candidates.md
+      - benchmark/index.md
+      - "Evaluation protocol": benchmark/protocol.md
       - "Evaluate your planner": benchmark/contributing-a-method.md
-      - "Register a candidate": benchmark/candidate-registration.md
-      - "Run an OCI candidate": benchmark/candidate-oci.md
-      - "Reproducible Notebooks":
-          - "Overview": benchmark/notebooks/index.md
+      - "Leaderboard":
+          - benchmark/leaderboard/index.md
+          - "Submit a candidate": benchmark/candidate-registration.md
+          - "Official evaluation": benchmark/official-evaluation.md
+          - "Rootless OCI runner": benchmark/candidate-oci.md
+      - "Paper results":
+          - benchmark/candidates/index.md
+          - "Paper finalists": benchmark/final-candidates.md
+          - "Paired statistics": benchmark/walkthrough.md
+      - "Reproducible notebooks":
+          - benchmark/notebooks/index.md
           - "Evaluator walkthrough": benchmark/notebooks/01-astar-walkthrough.md
           - "Validation notebook": benchmark/notebooks/02-paper-results.md
           - "Classical baselines": benchmark/notebooks/02-score-released-baselines.md
           - "Results format": benchmark/notebooks/03-leaderboard.md
-      - "Paired statistics (paper)": benchmark/walkthrough.md
-      - "API Reference": benchmark/api.md
-  - "Code Architecture":
-      - "Overview": architecture/index.md
-      - "Module Reference": architecture/modules.md
-      - "Data Format": architecture/data-format.md
-      - "Testing Strategy": architecture/testing.md
-  - "API":
-      - "Overview": api/index.md
-  - "Policies":
-      - "Overview": policies/index.md
-      - "Third-party notices": licenses/third-party.md
-      - "Notebook rendering and licences": licenses/notebook-exports.md
+      - "passage-eval package": benchmark/passage-eval.md
+      - "Code architecture":
+          - architecture/index.md
+          - "Module reference": architecture/modules.md
+          - "Testing strategy": architecture/testing.md
+      - "API reference":
+          - benchmark/api/index.md
+          - "passage (generator)": api/index.md

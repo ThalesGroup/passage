@@ -6,25 +6,22 @@ icon: material/package-check
 # Release 1.0.0 and installation
 
 PASSAGE **1.0.0 is the first official code release**. It includes the
-generator, evaluator and common candidate package interface: freeze, validate,
-register, CPU/CUDA worker execution, rootless OCI sessions and host scoring.
-The dataset has its own `v1.0` identity. A code version does not change the dataset
-revision declared in a candidate manifest.
+generator, the evaluator and the common candidate package interface: freeze,
+validate, register, CPU/CUDA worker execution, rootless OCI sessions and host
+scoring. The dataset has its own `v1.0` identity; a code version does not change
+the dataset revision that a candidate manifest declares.
 
-This page describes source installation and locally built, hash-checked artifacts.
-Obtain the source from [`ThalesGroup/passage`](https://github.com/ThalesGroup/passage)
-and record its exact commit; use the `v1.0.0` tag when available. Model access and
-runtime-image availability are separate prerequisites. No package-index
-installation or public CUDA image is assumed.
+This page installs the code from source and builds hash-checked artifacts. No
+package-index installation or public CUDA image is assumed.
 
-## Install the reviewed checkout
+## :material-source-branch: Install from the release tag
 
-Use Python 3.11.5 or later and [uv](https://docs.astral.sh/uv/). The supplied CPU
-candidate example requires Python 3.12, so use that minor for the full example.
-Obtain the reviewed 1.0.0 source checkout or complete source snapshot and record
-its commit or archive SHA-256. From its root:
+Use Python 3.11.5 or later and [uv](https://docs.astral.sh/uv/). The CPU
+candidate example declares Python 3.12, so use that minor to run it:
 
 ```bash
+git clone --branch v1.0.0 https://github.com/ThalesGroup/passage.git
+cd passage
 uv sync --frozen --python 3.12
 uv run --frozen python -c 'from importlib.metadata import version; assert version("passage") == "1.0.0"'
 uv run --frozen passage --help
@@ -32,18 +29,15 @@ uv run --frozen passage-eval candidate --help
 source .venv/bin/activate
 ```
 
-The root `uv.lock` pins the checkout environment. An extracted complete source
-snapshot must include that lock and `examples/candidate-package/`. A core wheel
-provides installed modules and command-line entry points; obtain the example
-source separately from the same reviewed source tree. Do not assume a wheel or
-source distribution contains every repository example.
+The root `uv.lock` pins this environment. A wheel provides the installed modules
+and command-line entry points but not the repository examples, so keep the
+source tree for `examples/candidate-package/`.
 
-## Build fresh core artifacts
+## :material-hammer-wrench: Build the core artifacts
 
-Maintainers build the reviewed source into a fresh output directory. The build
-requires uv and access to the declared setuptools build dependency, either already
-available or through the configured dependency source. It does not require Torch,
-a CUDA device, training repositories or a runtime image.
+Build the checkout into a fresh output directory. The build needs uv and the
+declared setuptools build dependency; it needs no Torch, CUDA device or runtime
+image.
 
 ```bash
 export PASSAGE_DIST="$(mktemp -d -t passage-1.0.0-dist.XXXXXXXX)"
@@ -55,21 +49,14 @@ uv build --out-dir "$PASSAGE_DIST"
 )
 ```
 
-Keep the source identity, build/check logs and checksums with the artifacts. The
-checksum file detects changed bytes; compare it with the maintainer's reviewed
-record when receiving an artifact. Merely generating a new checksum for an
-unknown wheel does not establish its provenance.
+Keep the source commit and the checksums with the artifacts. A checksum detects
+changed bytes; it does not by itself establish where an unknown wheel came from.
+A candidate image installs this wheel, so record its hash with the image.
 
-Historical private wheels include files named `passage-1.0.0-py3-none-any.whl`,
-and private runtime/measurement receipts also use 1.1.0. Preserve their filenames,
-versions and hashes. The freshly built official candidate must be identified by
-its new source identity and artifact hash; neither an old same-version filename
-nor renaming a 1.1.0 wheel makes it this release.
+## :material-package-down: Install the wheel in a separate environment
 
-## Install the exact wheel in a separate environment
-
-Set `PASSAGE_DIST` to the directory containing the supplied wheel and its reviewed
-`SHA256SUMS`. Verify it before installation, then use a fresh environment:
+Verify the wheel against its `SHA256SUMS`, then install it in a fresh
+environment:
 
 ```bash
 (cd "$PASSAGE_DIST" && sha256sum -c SHA256SUMS)
@@ -83,16 +70,14 @@ passage-eval candidate --help
 python -m passage_eval.campaign.candidate.worker --help
 ```
 
-This installs the exact core wheel and resolves its declared runtime dependencies.
-It does not reproduce the root lock or the private ML snapshot. Use the frozen
-checkout route when the root lock is required; retain an inventory of any
-separately installed runtime.
+This resolves the wheel's declared runtime dependencies, not the root lock. Use
+the checkout route above when you need the locked environment.
 
-## Run the CPU package example
+## :material-play-circle-outline: Run the CPU package example
 
-With the installed environment active, work from the matching complete source
-root and follow the [small classical example](https://github.com/ThalesGroup/passage/blob/main/examples/candidate-package/README.md).
-These commands check packaging without a model, GPU, Docker or data download:
+From the source tree, with the environment active, freeze and register the
+[small classical example](https://github.com/ThalesGroup/passage/blob/main/examples/candidate-package/README.md).
+These commands need no model, GPU, Docker or data download:
 
 ```bash
 export PASSAGE_WORK="$(mktemp -d -t passage-example.XXXXXXXX)"
@@ -104,13 +89,12 @@ passage-eval candidate register "$PASSAGE_WORK/package/candidate.json" \
   --catalog "$PASSAGE_WORK/catalog.json"
 ```
 
-Expect a validated manifest and a catalog entry. The example is unweighted
-breadth-first search, with no learned weights or claimed benchmark result.
+Expect a validated manifest and a catalog entry. The example is an unweighted
+breadth-first search, with no learned weights and no benchmark result.
 
-For a local worker check, first export a matching input-only NPZ using the
-[operator guide](benchmark/candidate-registration.md#operator-export-input-only-arrays-and-retain-the-matching-cohort).
-Keep its cohort and reference files on the host. Set `PASSAGE_INPUTS` to that NPZ
-and use a new output directory:
+To run a package on real scenes, export an input-only cohort as in
+[Submit a candidate](benchmark/candidate-registration.md#step-2-check-it-locally),
+then run the worker directly with a new output directory:
 
 ```bash
 python -m passage_eval.campaign.candidate.worker \
@@ -118,42 +102,19 @@ python -m passage_eval.campaign.candidate.worker \
   --inputs "$PASSAGE_INPUTS" --output "$PASSAGE_WORK/run-cpu" --device cpu
 ```
 
-The direct worker writes `journal.jsonl` and `run.json`; it is a local execution
-check without the container receipt. For a measured rootless session, prepare a
-compatible image/rootfs and follow the guide's OCI run, receipt binding and
-independent host scoring steps. The image must contain this exact core and match
-the candidate's Python minor. The
-[private ML runtime recipe](https://github.com/ThalesGroup/passage/blob/main/containers/candidate/README.md)
-additionally needs its authorized ARM64 environment snapshot and pinned base.
-CUDA execution requires compatible drivers, device exposure and an explicitly
-allowlisted GPU; a declared CUDA backend alone proves no execution.
+The direct worker writes `journal.jsonl` and `run.json`. It is a quick local
+check; a measured session uses the [rootless OCI runner](benchmark/candidate-oci.md),
+which adds the container receipt, followed by host scoring. CUDA execution needs
+compatible drivers, device exposure and an explicitly allowlisted GPU.
 
-## Check locally before the release decision
+## :material-check-all: Run the focused checks
 
-Maintainers should retain results for the candidate/evaluator tests, builder and
-example tests, version/lock agreement, wheel and source-distribution metadata,
-installation outside the checkout, and the freeze/validate/register/worker/score
-route. With the existing development and documentation dependencies available,
-these commands provide the focused checks:
+With the development and documentation dependencies installed, these commands
+cover the candidate interface, the example and the documentation:
 
 ```bash
 uv run --frozen pytest tests/candidates tests/passage_eval
-uv run --frozen python -m unittest discover -s containers/candidate -p 'test_*.py'
 uv run --frozen python -m unittest discover -s examples/candidate-package -p 'test_*.py'
 uv run --frozen ruff check src/passage-eval/campaign/candidate tests/candidates
 uv run --frozen --group docs mkdocs build --strict --site-dir "$PASSAGE_DIST/site"
 ```
-
-Confirm the actual test paths in the reviewed source if its layout changes.
-Record failures and unavailable checks; these commands are a checklist, not a
-claim that a particular artifact passed. Retain runtime configuration, platform
-manifest and OCI index digests separately when an image is built.
-
-The release owner must review these artifacts and approve the final source
-synchronization, tag and publication. Before that decision, verify public links
-against the final exported tree and check artifact availability and access.
-Model repositories, runtime images and the private leaderboard Space have
-separate access/publication gates. Its active SEG/REG view displays 27 TEST and
-three separate VALID pilot observations as `measured_unadmitted`; historical
-observations retain their provenance. They are separate from the repository's empty checked-in
-TEST entry table and do not become admitted results through a core release.

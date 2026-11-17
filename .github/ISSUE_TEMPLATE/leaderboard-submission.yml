@@ -1,0 +1,89 @@
+name: Leaderboard submission
+description: Ask Thales to evaluate a candidate package for the PASSAGE leaderboard.
+title: "[Leaderboard] <candidate_id>@<version>"
+labels: ["leaderboard-submission"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Read [Submit a candidate](https://thalesgroup.github.io/passage/benchmark/candidate-registration/)
+        first: this form assumes your package is frozen and passed the local check on 1,024
+        validation scenes. Thales answers in this issue at each stage of the
+        [official evaluation](https://thalesgroup.github.io/passage/benchmark/official-evaluation/).
+  - type: input
+    id: repository
+    attributes:
+      label: Package repository
+      description: URL of the model repository that holds the package.
+      placeholder: https://huggingface.co/<owner>/<candidate>
+    validations:
+      required: true
+  - type: input
+    id: revision
+    attributes:
+      label: Revision
+      description: The exact commit of that repository to evaluate.
+      placeholder: 40-character commit hash
+    validations:
+      required: true
+  - type: textarea
+    id: identities
+    attributes:
+      label: Package identities
+      description: One line per seed, `seed · candidate_id@version · manifest_sha256`, as reported by `passage-eval candidate freeze`.
+      placeholder: |
+        1234 · my-candidate-seed-1234@1.0.0 · <sha256>
+        2026 · my-candidate-seed-2026@1.0.0 · <sha256>
+        3407 · my-candidate-seed-3407@1.0.0 · <sha256>
+    validations:
+      required: true
+  - type: dropdown
+    id: targets
+    attributes:
+      label: Requested targets
+      multiple: true
+      options:
+        - NVIDIA Jetson AGX Orin
+        - NVIDIA Jetson AGX Thor
+        - Intel Tiger Lake (Core i7-1185GRE, Iris Xe)
+    validations:
+      required: true
+  - type: input
+    id: backends
+    attributes:
+      label: Backends and exports
+      description: Declared backends (cpu, cuda) and, for accelerated targets, the path of each ONNX export in the package.
+    validations:
+      required: true
+  - type: textarea
+    id: training
+    attributes:
+      label: Training declaration
+      description: Data splits used for training and for selecting settings, training recipe and compute, and any use of the test split.
+    validations:
+      required: true
+  - type: input
+    id: licence
+    attributes:
+      label: Licence
+      description: Licence of your code and weights, which lets Thales run the package and publish its results.
+    validations:
+      required: true
+  - type: textarea
+    id: check
+    attributes:
+      label: Local check
+      description: Attach `validation-row.json` from your local check and summarise the status counts.
+    validations:
+      required: true
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: Confirmations
+      options:
+        - label: The package receives ordinary inputs only; no reference route, optimal cost or other label enters it.
+          required: true
+        - label: Training used the training split only, and settings were selected on the calibration split.
+          required: true
+        - label: I agree that Thales may run this package and publish its results on the PASSAGE leaderboard.
+          required: true

@@ -6,9 +6,12 @@ icon: simple/huggingface
 
 # Dataset card
 
-This guide describes **PASSAGE v1.0**. The data, frozen
+This page describes **PASSAGE v1.0**. The data, the
 [dataset card](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/README.md)
-and release files are on the Hugging Face Hub.
+archived at the `v1.0` tag and the release files are on the Hugging Face Hub.
+The [data format](../architecture/data-format.md) page documents the files in
+detail, and the [generation guide](../guide/index.md) shows how to rebuild the
+scenes from the source tiles.
 
 ## Executive summary
 
@@ -37,7 +40,7 @@ evaluator are in the [code repository](https://github.com/ThalesGroup/passage).
 The guarantees below concern the computed reference labels. Model scores
 require their own declared data, decoder and evaluation conditions.
 
-**How to read this guide.** [At a glance](#at-a-glance) and the
+**How to read this page.** [At a glance](#at-a-glance) and the
 [Quick start](#quick-start) get you to a loaded scene in a few lines. The
 next three sections describe the files, what a row holds, and the cost model
 and label guarantees behind each route.
@@ -45,7 +48,7 @@ and label guarantees behind each route.
 benchmark. [Geography and splits](#geography-and-splits) and
 [How the scenes were made](#how-the-scenes-were-made) explain the split
 policy and the generation steps. [Notebooks](#notebooks) links the executed
-reports you can open on the Hub. The card ends with uses and limitations,
+reports you can open on the Hub. The page ends with uses and limitations,
 licence terms, maintenance and the citation.
 
 ---
@@ -202,6 +205,13 @@ the [Hub dataset card](https://huggingface.co/datasets/thalesgroup/passage/blob/
 `slope_uphill` objective). Every route joins start to goal, and its status in
 `metadata.paths.<solver>.<free|obstacles>.status` is `ok`.
 
+The metadata field `crosses_obstacles` is `false` for both the `free` and the
+`obstacles` variants. The generator writes it as a constant; it does not
+measure intersection with the obstacle channel, and free-terrain routes may
+cross that channel. Obstacle-aware routes obey the blocked-cell graph contract
+below; to check a free-terrain route against the mask, read the obstacle
+channel at its cells.
+
 ---
 
 ## Graph and label contract
@@ -229,6 +239,10 @@ reference label is a route of minimum cost:
 $$
 C(\pi) = \sum_{(u,v)\in\pi} c(u,v), \qquad c^{\star} = \min_{\pi} C(\pi)
 $$
+
+On a flat crop, \(h_{\max}=h_{\min}\), the `elevation` and `slope_uphill`
+costs are defined as \(d_{uv}\), which avoids a division by zero; the
+`energy` cost also equals \(d_{uv}\) in this case.
 
 The weights are \(w = 62.4\) for `elevation`, \(w = 8886.2\) for
 `slope_uphill` and \(w = 1125.3\) for `energy`. These costs are routing
@@ -305,8 +319,10 @@ each returned route and recomputes its cost with the step costs above.
 
 **Cost regret.** For task \(i\), let \(\hat{c}_i\) be the cost of the
 returned route and \(c_i^{\star}\) the reference cost. A route that does not
-connect start to goal, or that crosses an obstacle, receives the censored
-cost \(\hat{c}_i = 10^{6}\,c_i^{\star}\), hence a regret of 999,999:
+connect start to goal, crosses an obstacle or has a non-finite recomputed
+cost, and a complete request whose terminal status is not `ok` (for example a
+route returned after its declared budget), receive the censored cost
+\(\hat{c}_i = 10^{6}\,c_i^{\star}\), hence a regret of 999,999:
 
 $$
 r_i = \frac{\hat{c}_i - c_i^{\star}}{c_i^{\star}}
@@ -334,7 +350,7 @@ $$
 | `cost_regret_p90` | 90th percentile of the same regrets | lower |
 | `path_assd` | Mean ASSD over valid routes (connected and obstacle-free) | lower |
 | `path_hausdorff_p95` | Mean 95th-percentile Hausdorff distance over valid routes, in cells | lower |
-| `success_rate` | For path scoring, share of tasks whose route has at least two cells, is 8-connected and joins start to goal; for complete requests, share with terminal status `ok` | higher |
+| `success_rate` | For path scoring, share of tasks whose route has at least two cells, is eight-connected and joins start to goal; for complete requests, share with terminal status `ok` | higher |
 | `obstacle_violation_rate` | Share of tasks whose route crosses an obstacle cell | lower |
 
 Report the six values together; no composite score replaces them. A
@@ -344,7 +360,7 @@ Report results per resolution, objective and obstacle condition. The paper
 times the whole procedure from raw arrays in memory to the returned route,
 including decoding and fallbacks; independent host scoring is separate.
 See the [evaluation protocol](../benchmark/protocol.md) for local runner
-boundaries and [paper results](../benchmark/candidates.md) for the full
+boundaries and [paper results](../benchmark/candidates/index.md) for the full
 40,000-scene 256×256 comparison. The
 [`passage-eval` notebooks](https://huggingface.co/datasets/thalesgroup/passage/tree/v1.0/notebooks/passage-eval)
 show the evaluator on released tasks.
@@ -354,7 +370,7 @@ show the evaluator on released tasks.
 ## Geography and splits
 
 The [South America hold-out mask](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/assets/hold_out_mask.png)
-reserves 1,988 grid cells for `test`. Outside the mask, source tiles are
+reserves 1,988 one-degree cells for `test`. Outside the mask, source tiles are
 assigned to `train`, `calibration` or `validation` by seeded 5°×5° blocks.
 A crop is admitted only if its source tiles and one-tile guard ring belong
 to its split. Each scene receipt records its source windows, including
@@ -400,7 +416,7 @@ the 90/2/4/4 ratios describe scenes.
 3. **Scene.** Each scene uses its own seed, `blake2b(seed, resolution, index,
    split)`. It draws a centre tile and a target elevation, takes the nearest
    cell as the start, places the crop around it and draws the goal uniformly
-   among the other cells. Super-ellipse obstacles cover up to 30 % of the crop
+   among the other cells. Superellipse obstacles cover up to 30 % of the crop
    and avoid both markers. A crop whose obstacles disconnect start and goal is
    rejected, and the scene draws its next candidate crop. A scene may take up
    to 100 attempts.
@@ -415,6 +431,9 @@ Normalisation `nearest-angular-center-v1`, tie policy
 `float64-priority-then-row-major-node-strict-improvement-v1` and endpoint
 policy `one-distinct-pair-per-accepted-crop-disconnected-endpoints-rejected` are
 recorded in [publication-facts.json](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/release-receipts/publication-facts.json).
+The [generation guide](../guide/index.md) and the
+[generation process](../generation/index.md) pages describe each step and
+its configuration keys.
 
 > **Where the claims come from.** The scientific claims of this card derive
 > from [release verification](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/release-receipts/release-verification.json),
@@ -426,7 +445,7 @@ recorded in [publication-facts.json](https://huggingface.co/datasets/thalesgroup
 > calibration files, producer source archive, executed notebooks and one
 > Parquet scene receipt; [privacy-redactions.json](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/release-receipts/privacy-redactions.json)
 > lists every changed file with its original and published SHA-256. The
-> release tag binds the dataset files, the Hub dataset card and the executed notebooks
+> release tag binds the dataset files, the dataset card archived at `v1.0` and the executed notebooks
 > (see [Notebooks](#notebooks)). You do not need the receipts to use the data.
 
 The images in `assets/` are illustrations; for the released data, inspect the
@@ -437,7 +456,7 @@ The images in `assets/` are illustrations; for the released data, inspect the
 
 ## Notebooks
 
-The repository ships executed notebooks. Each one states the question it
+The dataset repository ships executed notebooks. Each one states the question it
 answers, explains every step, and ends with a summary computed from its own
 results. They open on the Hub with their outputs; their figures and a JSON
 record of their numbers are also saved under
@@ -475,9 +494,11 @@ the producer execution evidence; the artifact manifest binds the published noteb
 | [`notebooks/passage-eval/02_score_released_baselines.ipynb`](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/notebooks/passage-eval/02_score_released_baselines.ipynb) | Classical baselines (A\*, greedy, random walk) on the validation split |
 | [`notebooks/passage-eval/03_leaderboard.ipynb`](https://huggingface.co/datasets/thalesgroup/passage/blob/v1.0/notebooks/passage-eval/03_leaderboard.ipynb) | Recording results in the `passage-eval` format |
 
-> **Rerunning a notebook.** The notebooks run in the frozen environment of
-> the [code repository](https://github.com/ThalesGroup/passage)
-> (`uv run --frozen jupyter lab`). Each has one parameters cell: set
+> **Rerunning a notebook.** The notebooks run in the locked environment of
+> the [code repository](https://github.com/ThalesGroup/passage). The lock
+> provides the Jupyter kernel but not JupyterLab; add it for an interactive
+> session with `uv run --frozen --with jupyterlab jupyter lab`. Each notebook
+> has one parameters cell: set
 > `dataset_path` to a local copy of the dataset, or to `None` to read from the
 > Hub at the pinned `dataset_revision`. A per-resolution notebook runs at
 > another resolution by changing its `resolution` parameter.

@@ -45,7 +45,7 @@ signature as well as by content, and workers do not load bytecode that lies besi
 
 Version 0.4 adds timing profiles that can separate validation and recosting
 from supervised service time (section 5.G). Supervised profiles include IPC;
-the [paper results](candidates.md) use a direct raw-arrays-to-path measurement
+the [paper results](candidates/index.md) use a direct raw-arrays-to-path measurement
 without this supervised IPC boundary. The default stays the v3 boundary, in which the
 supervisor's validation and physical recost count against the candidate. `supervised_service_v1` (boundary v4)
 compares and scores the supervised service time and records validation and recosting separately. `supervised_service_rewarm_v1` (boundary v5) adds a re-warm after every mid-pass restart, outside the
