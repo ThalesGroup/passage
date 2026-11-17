@@ -33,7 +33,7 @@ Home page: a full-width hero above the Markdown content of docs/index.md.
 {% block tabs %}
   {{ super() }}
   <section class="pg-hero" aria-labelledby="pg-hero-title">
-    <div class="pg-hero__bg">{% include "partials/hero-terrain.svg" %}</div>
+    <div class="pg-hero__bg">{% include "partials/hero-terrain.svg" %}<canvas class="pg-hero__canvas" aria-hidden="true"></canvas></div>
     <div class="pg-hero__veil" aria-hidden="true"></div>
     <div class="md-grid pg-hero__inner">
       <p class="pg-eyebrow">Real-terrain benchmark for constrained path planning</p>

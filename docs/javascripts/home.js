@@ -23,7 +23,8 @@
  */
 /* MIT License — Copyright (c) 2026 THALES
  * Home page: count the release figures up when they enter the viewport.
- * All pages: a pointer-following spotlight on cards (fine pointers only).
+ * All pages: a pointer-following spotlight on cards (fine pointers only), and
+ * Escape closes an open tab menu (partials/tabs-item.html).
  * Works with Material's instant navigation (document$) and respects reduced motion.
  */
 (function () {
@@ -69,4 +70,23 @@
     var el = ev.target && ev.target.closest ? ev.target.closest(cards) : null;
     if (el && !el.contains(ev.relatedTarget)) { el.style.removeProperty("--mx"); el.style.removeProperty("--my"); }
   }, { passive: true });
+})();
+(function () {
+  // Tab menus open on hover or keyboard focus (extra.css). Escape closes the
+  // open one and returns focus to its tab; leaving the tab re-arms it.
+  document.addEventListener("keydown", function (ev) {
+    if (ev.key !== "Escape") return;
+    var tab = ev.target && ev.target.closest ? ev.target.closest(".pg-tab") : null;
+    if (!tab) tab = document.querySelector(".pg-tab:hover");
+    if (!tab) return;
+    tab.setAttribute("data-pg-closed", "");
+    var link = tab.querySelector(".md-tabs__link");
+    if (link && tab.contains(document.activeElement)) link.focus();
+  });
+  function rearm(ev) {
+    var tab = ev.target && ev.target.closest ? ev.target.closest(".pg-tab[data-pg-closed]") : null;
+    if (tab && !tab.contains(ev.relatedTarget)) tab.removeAttribute("data-pg-closed");
+  }
+  document.addEventListener("pointerout", rearm, { passive: true });
+  document.addEventListener("focusout", rearm);
 })();

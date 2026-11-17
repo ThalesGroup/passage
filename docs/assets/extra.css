@@ -578,8 +578,21 @@
   position: relative; margin: 0.9rem 0 0.2rem; width: min(100%, 1040px); border-radius: 20px; padding: 2px;
   background: conic-gradient(from var(--pg-banner-angle, 0deg), rgba(73, 224, 255, 0.95), rgba(124, 128, 255, 0.85), rgba(83, 184, 217, 0.25), rgba(73, 224, 255, 0.95));
   box-shadow: 0 0 34px rgba(73, 224, 255, 0.28), 0 0 90px rgba(124, 128, 255, 0.18), 0 28px 70px rgba(2, 4, 16, 0.55);
+  /* hero-sky.js leans the banner towards the pointer; the float uses `translate`. */
+  transform: perspective(1800px) rotateX(var(--pg-tilt-y, 0deg)) rotateY(var(--pg-tilt-x, 0deg));
+  transition: transform 0.7s var(--pn-ease);
   animation: pg-banner-spin 14s linear infinite, pg-banner-float 9s ease-in-out infinite alternate;
 }
+/* Pointer glare and a periodic light sheen across the artwork. */
+.pg-banner::before {
+  content: ""; position: absolute; inset: 2px; z-index: 1; border-radius: 18px; pointer-events: none;
+  background:
+    radial-gradient(38% 46% at var(--pg-glare-x, 50%) var(--pg-glare-y, 0%), rgba(255, 255, 255, calc(0.16 * var(--pg-glare-o, 0))), transparent 70%),
+    linear-gradient(105deg, transparent 42%, rgba(200, 245, 255, 0.12) 50%, transparent 58%) 160% 0 / 260% 100% no-repeat;
+  mix-blend-mode: screen;
+  animation: pg-sheen 11s ease-in-out 3s infinite;
+}
+@keyframes pg-sheen { 0%, 72% { background-position: 0 0, 160% 0; } 100% { background-position: 0 0, -60% 0; } }
 .pg-banner picture, .pg-banner img { display: block; width: 100%; height: auto; border-radius: 18px; }
 .pg-banner::after {
   content: ""; position: absolute; inset: 2px; border-radius: 18px; pointer-events: none;
@@ -587,8 +600,118 @@
 }
 @property --pg-banner-angle { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
 @keyframes pg-banner-spin { to { --pg-banner-angle: 360deg; } }
-@keyframes pg-banner-float { from { transform: translateY(0); } to { transform: translateY(-6px); } }
-@media (prefers-reduced-motion: reduce) { .pg-banner { animation: none; } }
+@keyframes pg-banner-float { from { translate: 0 0; } to { translate: 0 -6px; } }
+@media (prefers-reduced-motion: reduce) { .pg-banner, .pg-banner::before { animation: none; } .pg-banner { transform: none; } }
+
+/* Home hero background: hero-sky.js draws a night flight over a neon wireframe
+   terrain (stars, aurora, a route along the valley, search waves). The contour
+   SVG and the grid stay as the fallback without JavaScript. */
+.pg-hero__canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.pg-hero--live .hero-terrain, .pg-hero--live::after, .pg-hero--live .pg-hero__veil::before { display: none; }
+.pg-hero--live .pg-hero__veil {
+  background: linear-gradient(180deg, rgba(4, 6, 26, 0) 0%, rgba(4, 6, 26, 0.06) 34%, rgba(7, 11, 36, 0.34) 66%, rgba(7, 11, 36, 0.72) 86%, var(--md-default-bg-color) 100%);
+}
+[data-md-color-scheme="default"] .pg-hero--live .pg-hero__veil {
+  background: linear-gradient(180deg, rgba(4, 6, 26, 0) 0%, rgba(4, 6, 26, 0.06) 34%, rgba(7, 11, 36, 0.34) 66%, rgba(7, 11, 36, 0.66) 100%);
+}
+.pg-hero--live .pg-tagline { text-shadow: 0 1px 12px rgba(4, 6, 26, 0.9); }
+
+/* ------------------------------------------------- tab menus (wide screens)
+   Hovering a tab, or focusing it from the keyboard, opens a panel with its
+   first sub-level (partials/tabs-item.html). The header stays night in both
+   schemes, so the panel does too. */
+@media screen and (min-width: 76.25em) {
+  .md-tabs, .md-tabs__list { overflow: visible; contain: none; }
+  .md-tabs__item { position: relative; }
+  .pg-tab > .md-tabs__link::after {
+    content: ""; align-self: center; width: 0.3rem; height: 0.3rem; margin: -0.15rem 0 0 0.45rem;
+    border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; opacity: 0.55;
+    transform: rotate(45deg); transition: transform 0.3s var(--pn-ease), opacity 0.2s, margin 0.3s var(--pn-ease);
+  }
+  .pg-tab:is(:hover, :has(:focus-visible)):not([data-pg-closed]) > .md-tabs__link::after { transform: rotate(225deg); margin-top: 0.15rem; opacity: 1; }
+  .pg-tabmenu {
+    position: absolute; top: calc(100% - 0.15rem); left: -0.1rem; z-index: 6; width: max-content; min-width: 16rem; max-width: min(36rem, 86vw);
+    padding: 0.45rem; border-radius: 16px; border: 1px solid transparent; white-space: normal; text-align: left;
+    background:
+      linear-gradient(180deg, #0d133a, #070b24) padding-box,
+      linear-gradient(125deg, rgba(73, 224, 255, 0.9), rgba(83, 184, 217, 0.28) 42%, rgba(124, 128, 255, 0.85)) border-box;
+    /* Opaque on purpose: inside the blurred header, a translucent panel lets the page show through. */
+    box-shadow: 0 0 26px rgba(73, 224, 255, 0.2), 0 0 70px rgba(124, 128, 255, 0.14), 0 26px 60px rgba(2, 4, 16, 0.62);
+    opacity: 0; visibility: hidden; pointer-events: none; transform: translateY(10px) scale(0.97); transform-origin: 1.6rem 0;
+    transition: opacity 0.16s ease 0.14s, transform 0.22s var(--pn-ease) 0.14s, visibility 0s linear 0.36s;
+  }
+  /* Caret towards the tab, and an invisible bridge so the pointer can cross the gap. */
+  .pg-tabmenu::before {
+    content: ""; position: absolute; top: -6px; left: 1.35rem; width: 10px; height: 10px; transform: rotate(45deg);
+    background: #0d133a; border-left: 1px solid rgba(73, 224, 255, 0.9); border-top: 1px solid rgba(73, 224, 255, 0.9);
+    box-shadow: -3px -3px 10px rgba(73, 224, 255, 0.18);
+  }
+  .pg-tabmenu::after { content: ""; position: absolute; left: 0; right: 0; top: -0.9rem; height: 0.9rem; }
+  .pg-tab:is(:hover, :has(:focus-visible)):not([data-pg-closed]) > .pg-tabmenu {
+    opacity: 1; visibility: visible; pointer-events: auto; transform: none;
+    transition: opacity 0.2s ease 0.06s, transform 0.34s var(--pn-ease) 0.06s, visibility 0s linear 0.06s;
+  }
+  .md-tabs[hidden] .pg-tabmenu { display: none; }
+  .pg-tabmenu__list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.12rem; }
+  .pg-tabmenu--wide .pg-tabmenu__list { grid-template-columns: repeat(2, minmax(14.5rem, 1fr)); column-gap: 0.3rem; }
+  .pg-tabmenu__item {
+    margin: 0; opacity: 0; transform: translateY(6px);
+    transition: opacity 0.2s ease, transform 0.3s var(--pn-ease);
+  }
+  .pg-tab:is(:hover, :has(:focus-visible)):not([data-pg-closed]) .pg-tabmenu__item {
+    opacity: 1; transform: none; transition-delay: calc(0.08s + var(--i, 0) * 32ms);
+  }
+  .pg-tabmenu__link {
+    position: relative; display: flex; align-items: flex-start; gap: 0.6rem; padding: 0.5rem 0.65rem 0.5rem 0.6rem;
+    border-radius: 10px; color: var(--pn-ink-2); outline-offset: -2px;
+    transition: background 0.2s, color 0.2s, box-shadow 0.25s;
+  }
+  .pg-tabmenu__link::before {
+    content: ""; position: absolute; left: 0; top: 22%; bottom: 22%; width: 2px; border-radius: 2px;
+    background: var(--pn-grad-neon); box-shadow: 0 0 8px var(--pn-neon); transform: scaleY(0); transition: transform 0.25s var(--pn-ease);
+  }
+  .pg-tabmenu__link:is(:hover, :focus-visible) {
+    color: #fff; background: linear-gradient(90deg, rgba(73, 224, 255, 0.15), rgba(124, 128, 255, 0.06));
+    box-shadow: inset 0 0 0 1px rgba(73, 224, 255, 0.3);
+  }
+  .pg-tabmenu__link:is(:hover, :focus-visible)::before, .pg-tabmenu__item--active .pg-tabmenu__link::before { transform: scaleY(1); }
+  .pg-tabmenu__icon {
+    flex: none; display: grid; place-items: center; width: 1.75rem; height: 1.75rem; border-radius: 9px;
+    color: var(--pn-neon); background: rgba(73, 224, 255, 0.08); border: 1px solid rgba(73, 224, 255, 0.24);
+    transition: background 0.2s, box-shadow 0.25s, transform 0.3s var(--pn-ease), border-color 0.2s;
+  }
+  .pg-tabmenu__icon svg { display: block; width: 0.95rem; height: 0.95rem; fill: currentColor; }
+  .pg-tabmenu__link:is(:hover, :focus-visible) .pg-tabmenu__icon {
+    background: rgba(73, 224, 255, 0.18); border-color: rgba(73, 224, 255, 0.6); transform: scale(1.06);
+    box-shadow: 0 0 14px rgba(73, 224, 255, 0.45);
+  }
+  .pg-tabmenu__text { display: grid; gap: 0.12rem; min-width: 0; padding-top: 0.08rem; }
+  .pg-tabmenu__title { font: 600 0.66rem/1.3 var(--pn-font-ui); color: inherit; }
+  .pg-tabmenu__sub {
+    font-size: 0.55rem; line-height: 1.38; color: var(--pn-muted); max-width: 17rem;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  }
+  .pg-tabmenu__item--active .pg-tabmenu__link { color: #fff; }
+  .pg-tabmenu__item--active .pg-tabmenu__icon { border-color: rgba(73, 224, 255, 0.7); box-shadow: 0 0 10px rgba(73, 224, 255, 0.3); }
+
+  /* Sidebar: each level sits one step in, behind a faint guide; the branch of
+     the current page lights up. */
+  .md-nav--primary .md-nav__item--section > .md-nav { margin-left: 0; margin-right: 0; }
+  .md-nav--primary .md-nav[data-md-level]:not([data-md-level="0"]):not([data-md-level="1"]) > .md-nav__list {
+    margin-left: 0.35rem; padding-left: 0.45rem; border-left: 1px solid var(--pg-line);
+    transition: border-color 0.3s;
+  }
+  .md-nav--primary .md-nav__item--active > .md-nav[data-md-level]:not([data-md-level="0"]):not([data-md-level="1"]) > .md-nav__list {
+    border-left-color: color-mix(in srgb, var(--pg-cyan) 60%, transparent);
+  }
+  [data-md-color-scheme="slate"] .md-nav--primary .md-nav__item--active > .md-nav[data-md-level]:not([data-md-level="0"]):not([data-md-level="1"]) > .md-nav__list {
+    box-shadow: -1px 0 8px -4px var(--pg-cyan);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pg-tabmenu, .pg-tabmenu__item { transition: none !important; transform: none !important; }
+  .pg-tab > .md-tabs__link::after { transition: none !important; }
+}
 
 /* Presentation page: responsive 16:9 video in a neon frame, and speaker-script
    blocks under each slide. */
