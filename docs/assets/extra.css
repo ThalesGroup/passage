@@ -241,23 +241,13 @@
 .md-banner .md-banner__button { color: #eef6ff; }
 
 /* ------------------------------------------------------------------ hero */
+/* The hero has no background of its own: it sits on the page background of the
+   whole site (.pg-sky, below). */
 .pg-hero {
   --pg-cyan: var(--pn-neon); --pg-gold: var(--pn-warn); --pg-red: var(--pn-bad);
   position: relative; overflow: hidden; isolation: isolate; color: var(--pn-ink);
-  background:
-    radial-gradient(36% 48% at 82% 36%, rgba(73, 224, 255, 0.2) 0%, rgba(83, 184, 217, 0.1) 32%, rgba(124, 128, 255, 0.06) 58%, transparent 100%),
-    radial-gradient(42% 52% at 10% 78%, rgba(124, 128, 255, 0.16) 0%, transparent 72%),
-    linear-gradient(180deg, #04061a 0%, #0b1033 40%, #141a58 74%, #070b24 100%);
 }
-/* Light scheme: the night hero ends on a crisp neon edge instead of a fade. */
-[data-md-color-scheme="default"] .pg-hero {
-  border-bottom: 1px solid transparent;
-  border-image: linear-gradient(90deg, transparent, var(--pn-neon) 22%, var(--pn-indigo) 78%, transparent) 1;
-}
-[data-md-color-scheme="default"] .pg-hero__veil {
-  background: linear-gradient(180deg, rgba(4, 6, 26, 0.2) 0%, rgba(7, 11, 36, 0.4) 40%, rgba(7, 11, 36, 0.62) 100%);
-}
-/* Faint tactical grid, fading towards the edges. */
+/* Faint tactical grid, fading towards the edges, until the map is drawn. */
 .pg-hero::after {
   content: ""; position: absolute; inset: 0; z-index: -2; pointer-events: none;
   background-image:
@@ -266,11 +256,6 @@
   background-size: 40px 40px;
   -webkit-mask-image: radial-gradient(ellipse 75% 70% at 50% 42%, #000 35%, transparent 85%);
   mask-image: radial-gradient(ellipse 75% 70% at 50% 42%, #000 35%, transparent 85%);
-}
-.pg-hero__bg { position: absolute; inset: 0; z-index: -2; }
-.pg-hero__veil {
-  position: absolute; inset: 0; z-index: -1; pointer-events: none; overflow: hidden;
-  background: linear-gradient(180deg, rgba(4, 6, 26, 0.2) 0%, rgba(7, 11, 36, 0.4) 40%, rgba(7, 11, 36, 0.7) 78%, rgba(7, 11, 36, 0.9) 92%, var(--md-default-bg-color) 100%);
 }
 .pg-hero__inner { display: grid; justify-items: center; text-align: center; gap: 0.85rem; padding: 3.4rem 0.8rem 3.6rem; }
 .pg-eyebrow {
@@ -286,7 +271,7 @@
   content: ""; display: block; width: 3.2rem; height: 3px; margin: 0.55rem auto 0; border-radius: 2px;
   background: var(--pn-grad-neon); box-shadow: 0 0 12px rgba(73, 224, 255, 0.6);
 }
-.pg-tagline { margin: 0; max-width: 38rem; font-size: 0.8rem; line-height: 1.6; color: var(--pn-ink-2); text-wrap: balance; }
+.pg-tagline { margin: 0; max-width: 38rem; font-size: 0.8rem; line-height: 1.6; color: var(--pn-ink-2); text-wrap: balance; text-shadow: 0 1px 12px rgba(4, 6, 26, 0.9); }
 .pg-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.5rem; }
 .pg-btn {
   position: relative; overflow: hidden; display: inline-grid; place-items: center; min-height: 2.2rem;
@@ -572,20 +557,63 @@
   .pg-banner picture::after { animation: none; }
 }
 
-/* Home hero background: hero-atlas.js paints a topographic map once, in idle
-   steps, and animates only small layers on it (neon-atlas.css): PASSAGE scenes
-   and long routes. The grid stays as the fallback without JavaScript. Without
-   hardware acceleration the banner sheen stays off. */
-.pg-hero__atlas { position: absolute; inset: 0; }
-.pg-hero--lite .pg-banner picture::after { animation: none; }
-.pg-hero--live::after { display: none; }
-.pg-hero--live .pg-hero__veil {
-  background: linear-gradient(180deg, rgba(4, 6, 26, 0) 0%, rgba(4, 6, 26, 0.06) 34%, rgba(7, 11, 36, 0.34) 66%, rgba(7, 11, 36, 0.72) 86%, var(--md-default-bg-color) 100%);
+/* Page background, as on the leaderboard: neon-atlas.js paints a topographic
+   map once, in idle steps, and animates only a few small route layers on it
+   (neon-atlas.css). It is fixed behind every page and kept across instant
+   navigation; it is bright behind the home hero, dims as the page scrolls, and
+   stays dimmed behind the text of the other pages. Night map on slate, day map
+   on the light scheme. Its gradient shows until the map is drawn, and without
+   JavaScript. Without hardware acceleration the banner sheen stays off. */
+.pg-sky {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100vh; height: 100lvh; z-index: -1; pointer-events: none;
+  background:
+    radial-gradient(70% 30% at 50% 58%, rgba(73, 224, 255, 0.1), rgba(124, 128, 255, 0.04) 55%, transparent 100%),
+    linear-gradient(180deg, #04061a 0%, #0b1033 42%, #11174a 72%, #070b24 100%);
 }
-[data-md-color-scheme="default"] .pg-hero--live .pg-hero__veil {
-  background: linear-gradient(180deg, rgba(4, 6, 26, 0) 0%, rgba(4, 6, 26, 0.06) 34%, rgba(7, 11, 36, 0.34) 66%, rgba(7, 11, 36, 0.66) 100%);
+[data-md-color-scheme="default"] .pg-sky {
+  background:
+    radial-gradient(70% 30% at 50% 58%, rgba(83, 184, 217, 0.1), rgba(75, 79, 201, 0.03) 55%, transparent 100%),
+    linear-gradient(180deg, #e6eef9 0%, #eef3fa 42%, #e8eff9 72%, #f4f7fc 100%);
 }
-.pg-hero--live .pg-tagline { text-shadow: 0 1px 12px rgba(4, 6, 26, 0.9); }
+.pg-sky--live .pg-hero::after { display: none; }
+.pg-sky--lite .pg-banner picture::after { animation: none; }
+
+/* Light scheme: the hero sits on the day map, in the deep blues of the theme. */
+[data-md-color-scheme="default"] .pg-hero { color: #161a45; }
+[data-md-color-scheme="default"] .pg-hero::after {
+  background-image: linear-gradient(rgba(31, 99, 148, 0.07) 1px, transparent 1px), linear-gradient(90deg, rgba(31, 99, 148, 0.07) 1px, transparent 1px);
+}
+[data-md-color-scheme="default"] .pg-eyebrow { color: #1f6394; text-shadow: 0 0 10px rgba(244, 247, 252, 0.95); }
+[data-md-color-scheme="default"] .pg-title {
+  color: #11174a;
+  text-shadow: 0 0 2px rgba(255, 255, 255, 0.9), 0 0 22px rgba(244, 247, 252, 0.95), 0 0 46px rgba(83, 184, 217, 0.35);
+}
+[data-md-color-scheme="default"] .pg-tagline { color: #2b335f; text-shadow: 0 0 2px rgba(244, 247, 252, 0.9), 0 0 12px rgba(244, 247, 252, 0.95); }
+[data-md-color-scheme="default"] .pg-btn { color: #161a45; border-color: rgba(31, 99, 148, 0.42); background: rgba(255, 255, 255, 0.86); }
+[data-md-color-scheme="default"] .pg-btn:is(:hover, :focus-visible) {
+  color: #0b1033; border-color: #1f6394; box-shadow: 0 0 0 1px rgba(31, 99, 148, 0.25), 0 6px 18px rgba(31, 99, 148, 0.18);
+}
+[data-md-color-scheme="default"] .pg-btn--primary { color: #04061a; border: 0; background: var(--pn-grad-neon); box-shadow: 0 0 0 1px rgba(31, 99, 148, 0.3), 0 6px 18px rgba(31, 99, 148, 0.2); }
+[data-md-color-scheme="default"] .pg-hero :is(a, button):focus-visible { outline-color: #1f6394; }
+[data-md-color-scheme="default"] .pg-banner { box-shadow: 0 0 30px rgba(31, 99, 148, 0.2), 0 24px 60px rgba(17, 23, 74, 0.22); }
+[data-md-color-scheme="default"] .pg-neurips {
+  background: linear-gradient(rgba(255, 255, 255, 0.95), rgba(238, 244, 252, 0.95)) padding-box,
+    linear-gradient(110deg, #1f6394, var(--pn-sky) 45%, #4b4fc9) border-box;
+  box-shadow: 0 8px 26px rgba(17, 23, 74, 0.1);
+}
+[data-md-color-scheme="default"] .pg-neurips__icon svg { fill: #1f6394; filter: none; }
+[data-md-color-scheme="default"] .pg-neurips__text strong { color: #11174a; }
+[data-md-color-scheme="default"] .pg-neurips__text span { color: #46507a; }
+[data-md-color-scheme="default"] .pg-neurips__cite { color: #1f6394; }
+[data-md-color-scheme="default"] .pg-neurips__cite:hover { color: #0b1033; text-shadow: none; }
+[data-md-color-scheme="default"] .pg-pin__k { background: #1a2060; color: #eef6ff; border-color: #1a2060; }
+[data-md-color-scheme="default"] .pg-pin__v { background: rgba(255, 255, 255, 0.92); color: #1c2150; border-color: rgba(31, 99, 148, 0.35); }
+[data-md-color-scheme="default"] .pg-pins li > a:hover { box-shadow: 0 4px 14px rgba(31, 99, 148, 0.2); }
+[data-md-color-scheme="default"] .pg-stats > div { background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(238, 244, 252, 0.94)); border-color: #d3ddee; }
+[data-md-color-scheme="default"] .pg-stats > div:hover { border-color: rgba(31, 99, 148, 0.55); box-shadow: 0 6px 20px rgba(31, 99, 148, 0.14); }
+[data-md-color-scheme="default"] .pg-stats > div::before { background: linear-gradient(90deg, transparent, #1f6394, transparent); }
+[data-md-color-scheme="default"] .pg-stats dt { color: #46507a; }
+[data-md-color-scheme="default"] .pg-stats dd { color: #11174a; text-shadow: none; }
 
 /* ------------------------------------------------- tab menus (wide screens)
    Hovering a tab, or focusing it from the keyboard, opens a panel with its
