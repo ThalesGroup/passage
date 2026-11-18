@@ -192,10 +192,11 @@ markdown_extensions:
 extra_css:
   - https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap
   - assets/extra.css
+  - assets/neon-atlas.css
 
 extra_javascript:
   - javascripts/home.js
-  - javascripts/hero-sky.js
+  - javascripts/hero-atlas.js
   - javascripts/mermaid-zoom.js
   - javascripts/katex.js
 
