@@ -25,7 +25,8 @@ MIT License
 
 Copyright (c) 2026 THALES
 
-Home page: a full-width hero above the Markdown content of docs/index.md.
+Home page: a full-width hero above the Markdown content of docs/index.md, on
+the page background of the whole site (main.html).
 #}
 
 {% extends "main.html" %}
@@ -33,8 +34,6 @@ Home page: a full-width hero above the Markdown content of docs/index.md.
 {% block tabs %}
   {{ super() }}
   <section class="pg-hero" aria-labelledby="pg-hero-title">
-    <div class="pg-hero__bg"><div class="pg-hero__atlas" aria-hidden="true"></div></div>
-    <div class="pg-hero__veil" aria-hidden="true"></div>
     <div class="md-grid pg-hero__inner">
       <p class="pg-eyebrow">Real-terrain benchmark for constrained path planning</p>
       <h1 class="pg-title" id="pg-hero-title">PASSAGE</h1>

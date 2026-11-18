@@ -196,7 +196,7 @@ extra_css:
 
 extra_javascript:
   - javascripts/home.js
-  - javascripts/hero-atlas.js
+  - javascripts/neon-atlas.js
   - javascripts/mermaid-zoom.js
   - javascripts/katex.js
 
